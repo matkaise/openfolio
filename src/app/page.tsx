@@ -465,7 +465,7 @@ export default function PortfolioApp() {
           </button>
 
           <div className="mt-4 px-4 py-3 bg-slate-800 rounded-xl flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-400 to-blue-500 flex items-center justify-center font-bold text-white text-xs">
+            <div className="w-8 h-8 rounded-full bg-linear-to-tr from-emerald-400 to-blue-500 flex items-center justify-center font-bold text-white text-xs">
               {project?.name.substring(0, 2).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
@@ -1328,7 +1328,7 @@ const AnalysisContent = ({
                 </div>
               </div>
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                {displayedMonthlyReturns.map((m) => (
+                {displayedMonthlyReturns.map((m: { month: string; return: number }) => (
                   <div key={m.month} className="bg-slate-900/50 rounded-lg p-3 flex flex-col items-center justify-center hover:bg-slate-800 transition">
                     <span className="text-xs text-slate-500 mb-1">{m.month}</span>
                     <span className={`font-bold ${m.return >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>

@@ -103,11 +103,12 @@ export const TransactionModal = ({ isOpen, onClose }: TransactionModalProps) => 
 
             // Extract and merge securities from imported transactions
             parsedTx.forEach(tx => {
-                if (!updatedSecurities[tx.isin]) {
-                    updatedSecurities[tx.isin] = {
-                        isin: tx.isin,
-                        symbol: tx.isin, // May be ISIN, user might need to map later
-                        name: tx.name || tx.isin,
+                const isin = tx.isin;
+                if (isin && !updatedSecurities[isin]) {
+                    updatedSecurities[isin] = {
+                        isin: isin,
+                        symbol: isin, // May be ISIN, user might need to map later
+                        name: tx.name || isin,
                         currency: tx.currency,
                         quoteType: 'Stock', // Default
                         priceHistory: {}
@@ -198,7 +199,7 @@ export const TransactionModal = ({ isOpen, onClose }: TransactionModalProps) => 
             const isin = newTransaction.isin;
 
             // Ensure security exists
-            if (!updatedSecurities[isin]) {
+            if (isin && !updatedSecurities[isin]) {
                 updatedSecurities[isin] = {
                     isin,
                     symbol: isin, // Default to ISIN/Ticker
