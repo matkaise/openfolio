@@ -381,6 +381,12 @@ export default function PortfolioApp() {
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [timeRange, setTimeRange] = useState('1J');
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>('all');
+  const [analysisCache, setAnalysisCache] = useState<any>(null);
+
+  // Invalidate cache when project data changes
+  useEffect(() => {
+    setAnalysisCache(null);
+  }, [project]);
 
   // Sync Market Data on Load (and auto-repair)
   useEffect(() => {
@@ -411,7 +417,7 @@ export default function PortfolioApp() {
       case 'Portfolio':
         return <PortfolioList />;
       case 'Analyse':
-        return <AnalysisContent selectedPortfolioId={selectedPortfolioId} />;
+        return <AnalysisContent selectedPortfolioId={selectedPortfolioId} cachedData={analysisCache} onCacheUpdate={setAnalysisCache} />;
       case 'Dividenden':
         return <DividendenContent />;
       case 'Datenquellen':
@@ -1072,7 +1078,15 @@ const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: ()
   );
 };
 
-const AnalysisContent = ({ selectedPortfolioId }: { selectedPortfolioId: string }) => {
+const AnalysisContent = ({
+  selectedPortfolioId,
+  cachedData,
+  onCacheUpdate
+}: {
+  selectedPortfolioId: string,
+  cachedData?: any,
+  onCacheUpdate?: (data: any) => void
+}) => {
   const { project } = useProject();
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [showDrawdown, setShowDrawdown] = useState(false);
@@ -1086,36 +1100,55 @@ const AnalysisContent = ({ selectedPortfolioId }: { selectedPortfolioId: string 
   }, [project, selectedPortfolioId]);
 
   // Calculate portfolio history for MAX (for analysis metrics across years)
-  const historyData = useMemo(() => {
-    if (!project) return [];
-
-    return calculatePortfolioHistory(
-      filteredTransactions,
-      Object.values(project.securities || {}),
-      project.fxData.rates,
-      project.settings.baseCurrency,
-      'MAX', // Full history
-      'daily' // High precision for TWR/Drawdown
-    );
-  }, [project, filteredTransactions]);
-
-  // Calculate analysis metrics
-  const analysisMetrics = useMemo(() => {
-    return calculateAnalysisMetrics(historyData);
-  }, [historyData]);
-
-  // Manage loading state
-  useEffect(() => {
-    setIsCalculating(true);
-    const timer = setTimeout(() => setIsCalculating(false), 50);
-    return () => clearTimeout(timer);
-  }, [selectedPortfolioId]);
+  // Moved to effect to unblock UI
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [analysisMetrics, setAnalysisMetrics] = useState<any>(
+    { volatility: 0, sharpeRatio: 0, maxDrawdown: 0, maxDrawdownDate: '', availableYears: [], monthlyReturns: [] }
+  );
 
   useEffect(() => {
-    if (historyData.length > 0) {
+    if (!project) return;
+
+    // Check Cache
+    const cacheKey = `${project.id}-${selectedPortfolioId}`;
+    if (cachedData && cachedData.key === cacheKey) {
+      setHistoryData(cachedData.historyData);
+      setAnalysisMetrics(cachedData.analysisMetrics);
       setIsCalculating(false);
+      return;
     }
-  }, [historyData]);
+
+    // Start loading immediately
+    setIsCalculating(true);
+
+    // Defer heavy calculation to next tick to allow UI to render loading state
+    const timer = setTimeout(() => {
+      const data = calculatePortfolioHistory(
+        filteredTransactions,
+        Object.values(project.securities || {}),
+        project.fxData.rates,
+        project.settings.baseCurrency,
+        'MAX', // Full history
+        'daily' // High precision for TWR/Drawdown
+      );
+
+      const metrics = calculateAnalysisMetrics(data);
+
+      setHistoryData(data);
+      setAnalysisMetrics(metrics);
+
+      // Update Cache
+      if (onCacheUpdate) {
+        onCacheUpdate({ key: cacheKey, historyData: data, analysisMetrics: metrics });
+      }
+
+      setIsCalculating(false);
+    }, 100); // 100ms delay to ensure loading state is visible and UI feels responsive
+
+    return () => clearTimeout(timer);
+  }, [project, filteredTransactions, cachedData]);
+
+  // Removed old synchronous useMemos and redundant loading effects
 
   // Ensure selectedYear is valid when data changes
   useEffect(() => {
@@ -1342,11 +1375,9 @@ const AnalysisContent = ({ selectedPortfolioId }: { selectedPortfolioId: string 
               </div>
             </Card>
           </div>
-        </div>
-    </>
-  )
-}
-    </div >
+        </>
+      )}
+    </div>
   );
 };
 
