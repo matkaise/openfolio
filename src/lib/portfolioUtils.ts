@@ -90,50 +90,93 @@ export function calculateHoldings(
     };
 
     let globalRealizedPnL = 0;
-    // sort transactions by date asc
     const sortedTx = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    for (const tx of sortedTx) {
-        if (!tx.isin) continue;
-        const isin = tx.isin;
+    // Group transactions by ISIN for easier processing
+    const txByIsin: Record<string, Transaction[]> = {};
+    sortedTx.forEach(tx => {
+        if (!tx.isin) return;
+        if (!txByIsin[tx.isin]) txByIsin[tx.isin] = [];
+        txByIsin[tx.isin].push(tx);
+    });
 
+    // Process each security
+    const allIsins = new Set([...Object.keys(txByIsin), ...Object.keys(holdingsMap)]);
+
+    allIsins.forEach(isin => {
+        // Initialize if needed
         if (!holdingsMap[isin]) {
-            holdingsMap[isin] = { quantity: 0, invested: 0, investedOriginal: 0, realizedPnL: 0, isin, currency: tx.currency };
+            // Find currency from first tx or security
+            const firstTx = txByIsin[isin]?.[0];
+            const sec = securities.find(s => s.isin === isin);
+            holdingsMap[isin] = {
+                quantity: 0,
+                invested: 0,
+                investedOriginal: 0,
+                realizedPnL: 0,
+                isin,
+                currency: firstTx?.currency || sec?.currency || 'EUR'
+            };
         }
         const h = holdingsMap[isin];
+        const sec = securities.find(s => s.isin === isin);
 
-        // Invested amount in Target Base Currency
-        // Transaction Amount is in tx.currency
-        const shares = Math.abs(tx.shares || 0);
-        const amountOriginal = Math.abs(tx.amount); // Cash Flow in Original
-        const amountBase = convert(amountOriginal, tx.currency, baseCurrency, tx.date);
+        // Build Timeline: Transactions + Splits
+        const events: { date: string, type: 'Tx' | 'Split', data?: Transaction, ratio?: number }[] = [];
 
-        if (tx.type === 'Buy') {
-            h.quantity += shares;
-            h.invested += amountBase;
-            h.investedOriginal += amountOriginal;
-        } else if (tx.type === 'Sell') {
-            // Realized PnL logic
-            // Average Cost matches current Base Currency logic? 
-            // Yes, h.invested is in Base.
-            const avgCost = h.quantity > 0 ? h.invested / h.quantity : 0;
-            const costBasis = shares * avgCost;
+        // Add Transactions
+        if (txByIsin[isin]) {
+            txByIsin[isin].forEach(tx => events.push({ date: tx.date, type: 'Tx', data: tx }));
+        }
 
-            const pnl = amountBase - costBasis;
-            h.realizedPnL += pnl;
-            globalRealizedPnL += pnl;
+        // Add Splits from Security
+        if (sec && sec.splits) {
+            Object.entries(sec.splits).forEach(([date, ratio]) => {
+                events.push({ date, type: 'Split', ratio });
+            });
+        }
 
-            h.invested -= costBasis;
-            h.quantity -= shares;
+        // Sort Events
+        events.sort((a, b) => {
+            const timeA = new Date(a.date).getTime();
+            const timeB = new Date(b.date).getTime();
+            if (timeA !== timeB) return timeA - timeB;
+            // Split before Tx on same day
+            if (a.type === 'Split' && b.type !== 'Split') return -1;
+            if (a.type !== 'Split' && b.type === 'Split') return 1;
+            return 0;
+        });
 
-            // Handle floating point errors
-            if (h.quantity < 0.000001) {
-                h.quantity = 0;
-                h.invested = 0;
-                h.investedOriginal = 0;
+        // Process Timeline
+        for (const event of events) {
+            if (event.type === 'Split') {
+                const ratio = event.ratio || 1;
+                if (ratio > 0 && h.quantity > 0) { // Only split if we have shares!
+                    h.quantity = h.quantity * ratio;
+                }
+            } else if (event.type === 'Tx' && event.data) {
+                const tx = event.data;
+                const shares = Math.abs(tx.shares || 0);
+                const amountOriginal = Math.abs(tx.amount);
+                const amountBase = convert(amountOriginal, tx.currency, baseCurrency, tx.date);
+
+                if (tx.type === 'Buy') {
+                    h.quantity += shares;
+                    h.invested += amountBase;
+                    h.investedOriginal += amountOriginal;
+                } else if (tx.type === 'Sell') {
+                    const avgCost = h.quantity > 0 ? h.invested / h.quantity : 0;
+                    const costBasis = shares * avgCost;
+                    const pnl = amountBase - costBasis;
+                    h.realizedPnL += pnl;
+                    globalRealizedPnL += pnl;
+                    h.invested -= costBasis;
+                    h.quantity -= shares;
+                    if (h.quantity < 0.000001) { h.quantity = 0; h.invested = 0; h.investedOriginal = 0; }
+                }
             }
         }
-    }
+    });
 
     const result: Holding[] = [];
 
@@ -215,6 +258,18 @@ export function calculatePortfolioHistory(
         const sortedTx = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         firstTxDate = new Date(sortedTx[0].date);
     }
+
+    // Pre-calculate splits per ISIN for price adjustment
+    const splitsMap: Record<string, { date: Date, ratio: number }[]> = {};
+    // Use splits from Securities now
+    securities.forEach(sec => {
+        if (sec.splits) {
+            splitsMap[sec.isin] = Object.entries(sec.splits).map(([d, r]) => ({
+                date: new Date(d),
+                ratio: r
+            }));
+        }
+    });
 
     switch (timeRange) {
         case '1M':
@@ -310,6 +365,29 @@ export function calculatePortfolioHistory(
         return sec.priceHistory[closestDate] || 0;
     };
 
+    // Helper to get Split-Adjusted Price for chart consistency
+    // Yahoo prices are already split-adjusted (backwards).
+    // Our holdings are point-in-time (not adjusted yet).
+    // So if we are in 2021 (pre-split), we have few shares, but price is tiny.
+    // We must "Un-adjust" the price by multiplying by all FUTURE split ratios.
+    const getAdjustedPriceAtDate = (isin: string, targetDate: Date): number => {
+        const rawPrice = getPriceAtDate(isin, targetDate);
+        if (rawPrice === 0) return 0;
+
+        const splits = splitsMap[isin];
+        if (!splits) return rawPrice;
+
+        // Multiply by all splits that happen AFTER targetDate
+        let adjustmentFactor = 1;
+        for (const split of splits) {
+            if (split.date > targetDate) {
+                adjustmentFactor *= split.ratio;
+            }
+        }
+
+        return rawPrice * adjustmentFactor;
+    };
+
     // Helper to get FX rate at date (reuse logic from calculateHoldings)
     const getEurRate = (currency: string, date?: string): number => {
         if (currency === 'EUR') return 1;
@@ -346,7 +424,8 @@ export function calculatePortfolioHistory(
     };
 
     // Calculate portfolio value at each date point
-    const result: { date: string; value: number; invested: number }[] = [];
+    // Calculate portfolio value at each date point
+    const result: { date: string; value: number; invested: number; dividend: number }[] = [];
 
     for (const datePoint of datePoints) {
         // Use local date string to avoid timezone shifts (e.g. Jan 1 00:00 becoming Dec 31 23:00)
@@ -364,42 +443,72 @@ export function calculatePortfolioHistory(
         }> = {};
 
         // Process all transactions up to this date
-        const relevantTx = transactions
-            .filter(tx => new Date(tx.date) <= datePoint)
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        // Build timeline for this date snapshot
+        // We need to replay history up to 'datePoint'.
+        const activeIsins = new Set([...Object.keys(holdingsMap), ...transactions.filter(t => new Date(t.date) <= datePoint && t.isin).map(t => t.isin!)]);
 
-        for (const tx of relevantTx) {
-            if (!tx.isin) continue;
-            const isin = tx.isin;
-
+        activeIsins.forEach(isin => {
             if (!holdingsMap[isin]) {
-                holdingsMap[isin] = { quantity: 0, invested: 0, currency: tx.currency };
+                const firstTx = transactions.find(t => t.isin === isin);
+                const sec = securities.find(s => s.isin === isin);
+                holdingsMap[isin] = { quantity: 0, invested: 0, currency: firstTx?.currency || sec?.currency || 'EUR' };
             }
             const h = holdingsMap[isin];
+            const sec = securities.find(s => s.isin === isin);
 
-            const shares = Math.abs(tx.shares || 0);
-            const amountOriginal = Math.abs(tx.amount);
-            const amountBase = convert(amountOriginal, tx.currency, baseCurrency, tx.date);
+            // Events up to datePoint for this ISIN
+            // Optimize: This is N^3 effectively. Can be slow.
+            // But correct.
+            const events: { date: string, type: 'Tx' | 'Split', data?: Transaction, ratio?: number }[] = [];
 
-            if (tx.type === 'Buy') {
-                h.quantity += shares;
-                h.invested += amountBase;
-            } else if (tx.type === 'Sell') {
-                const avgCost = h.quantity > 0 ? h.invested / h.quantity : 0;
-                const costBasis = shares * avgCost;
-                h.invested -= costBasis;
-                h.quantity -= shares;
+            // Add Txs
+            transactions.filter(t => t.isin === isin && new Date(t.date) <= datePoint).forEach(tx => events.push({ date: tx.date, type: 'Tx', data: tx }));
 
-                if (h.quantity < 0.000001) {
-                    h.quantity = 0;
-                    h.invested = 0;
-                }
-            } else if (tx.type === 'Dividend') {
-                const amountOriginal = Math.abs(tx.amount);
-                const amountBase = convert(amountOriginal, tx.currency, baseCurrency, tx.date);
-                h.dividend = (h.dividend || 0) + amountBase;
+            // Add Splits
+            if (sec && sec.splits) {
+                Object.entries(sec.splits).forEach(([d, r]) => {
+                    if (new Date(d) <= datePoint) events.push({ date: d, type: 'Split', ratio: r });
+                });
             }
-        }
+
+            events.sort((a, b) => {
+                const timeA = new Date(a.date).getTime();
+                const timeB = new Date(b.date).getTime();
+                if (timeA !== timeB) return timeA - timeB;
+                if (a.type === 'Split' && b.type !== 'Split') return -1;
+                if (a.type !== 'Split' && b.type === 'Split') return 1;
+                return 0;
+            });
+
+            // Replay
+            // Note: This replay is inefficient inside the datePoint loop (re-calculating from 0 for every point).
+            // But refactoring to incremental calculation is too risky for now.
+            h.quantity = 0; h.invested = 0; h.dividend = 0; // Reset state for replay
+
+            for (const event of events) {
+                if (event.type === 'Split') {
+                    const ratio = event.ratio || 1;
+                    if (ratio > 0 && h.quantity > 0) h.quantity *= ratio;
+                } else if (event.type === 'Tx' && event.data) {
+                    const tx = event.data;
+                    if (tx.type === 'Buy') {
+                        const shares = Math.abs(tx.shares || 0);
+                        const amountBase = convert(Math.abs(tx.amount), tx.currency, baseCurrency, tx.date);
+                        h.quantity += shares;
+                        h.invested += amountBase;
+                    } else if (tx.type === 'Sell') {
+                        const shares = Math.abs(tx.shares || 0);
+                        const avgCost = h.quantity > 0 ? h.invested / h.quantity : 0;
+                        h.invested -= (shares * avgCost);
+                        h.quantity -= shares;
+                        if (h.quantity < 0.000001) { h.quantity = 0; h.invested = 0; }
+                    } else if (tx.type === 'Dividend') {
+                        const amountBase = convert(Math.abs(tx.amount), tx.currency, baseCurrency, tx.date);
+                        h.dividend = (h.dividend || 0) + amountBase;
+                    }
+                }
+            }
+        });
 
         // Calculate total value at this date
         let totalValue = 0;
@@ -441,7 +550,9 @@ export function calculatePortfolioHistory(
             const sec = securities.find(s => s.isin === isin);
             const securityCurrency = sec?.currency || h.currency;
 
-            const price = getPriceAtDate(isin, datePoint);
+            // Use ADJUSTED price (un-adjusted for future splits) to match point-in-time holdings
+            const price = getAdjustedPriceAtDate(isin, datePoint);
+
             const valueInSecurityCurrency = h.quantity * price;
             const valueInBaseCurrency = convert(valueInSecurityCurrency, securityCurrency, baseCurrency, dateStr);
 

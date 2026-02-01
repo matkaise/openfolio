@@ -1,0 +1,54 @@
+// Fixed monthly returns calculation logic
+// This replaces lines 418-442 in portfolioUtils.ts
+
+// Group by month and calculate returns
+// PROBLEM: The old code calculated returns for every data point and overwrote previous values
+// SOLUTION: Track start and end values for each month, then calculate once
+
+// Calculate daily returns for volatility (unchanged)
+for (let i = 1; i < historyData.length; i++) {
+    const prev = historyData[i - 1];
+    const curr = historyData[i];
+    
+    if (prev.value > 0) {
+        const dailyReturn = (curr.value - prev.value) / prev.value;
+        dailyReturns.push(dailyReturn);
+    }
+}
+
+// NEW: Build month-end tracking  
+const monthlyData: Record<string, { start: number; end: number; startDate: string; endDate: string }> = {};
+
+for (const point of historyData) {
+    const date = new Date(point.date);
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    
+    if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = {
+            start: point.value,
+            end: point.value,
+            startDate: point.date,
+            endDate: point.date
+        };
+    } else {
+        // Update end value if this date is later in the month
+        if (new Date(point.date) > new Date(monthlyData[monthKey].endDate)) {
+            monthlyData[monthKey].end = point.value;
+            monthlyData[monthKey].endDate = point.date;
+        }
+        // Update start value if this date is earlier in the month
+        if (new Date(point.date) < new Date(monthlyData[monthKey].startDate)) {
+            monthlyData[monthKey].start = point.value;
+            monthlyData[monthKey].startDate = point.date;
+        }
+    }
+}
+
+// Calculate monthly returns from start to end of each month
+for (const monthKey in monthlyData) {
+    const data = monthlyData[monthKey];
+    if (data.start > 0) {
+        const monthReturn = ((data.end - data.start) / data.start) * 100;
+        monthlyReturnsMap[monthKey] = monthReturn;
+    }
+}

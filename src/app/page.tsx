@@ -37,9 +37,6 @@ import {
   LogOut,
   FolderOpen
 } from 'lucide-react';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, ReferenceLine
-} from 'recharts';
 import { useMemo } from 'react';
 import { calculateHoldings, calculatePortfolioHistory } from '@/lib/portfolioUtils';
 import { calculateAnalysisMetrics } from '@/lib/analysisService';
@@ -48,6 +45,7 @@ import { ProjectLauncher } from '@/components/ProjectLauncher';
 import { DataSourcesContent } from '@/components/DataSourcesContent';
 import { TransactionModal } from '@/components/TransactionModal';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
+import { AllocationChart } from '@/components/AllocationChart';
 
 
 // --- Mock Data ---
@@ -76,12 +74,7 @@ const historyData = [
   { date: 'Dez', value: 142580 },
 ];
 
-const allocationData = [
-  { id: 1, name: 'ETFs (Welt)', value: 85000, color: 'bg-emerald-500', percentage: 60 },
-  { id: 2, name: 'Einzelaktien', value: 35000, color: 'bg-blue-500', percentage: 25 },
-  { id: 3, name: 'Krypto', value: 14000, color: 'bg-purple-500', percentage: 10 },
-  { id: 4, name: 'Cash / P2P', value: 8580, color: 'bg-slate-500', percentage: 5 },
-];
+
 
 const holdings = [
   { id: 1, name: 'Vanguard FTSE All-World', ticker: 'VWCE', type: 'ETF', value: 65400.20, shares: 620, change: 1.2, color: 'bg-orange-500' },
@@ -370,6 +363,7 @@ const LegacyTransactionModal = ({ isOpen, onClose }: { isOpen: boolean, onClose:
 };
 
 
+import { SecurityDetailModal } from '@/components/SecurityDetailModal';
 import { syncProjectQuotes, repairProjectSecurities } from '@/lib/marketDataService';
 
 // --- Main Application ---
@@ -379,8 +373,9 @@ export default function PortfolioApp() {
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-  const [timeRange, setTimeRange] = useState('1J');
+  const [timeRange, setTimeRange] = useState('1M');
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>('all');
+  const [selectedSecurityIsin, setSelectedSecurityIsin] = useState<string | null>(null);
   const [analysisCache, setAnalysisCache] = useState<any>(null);
 
   // Invalidate cache when project data changes
@@ -410,14 +405,18 @@ export default function PortfolioApp() {
     return <ProjectLauncher />;
   }
 
+  const handleCacheUpdate = (data: any) => {
+    setAnalysisCache(data);
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'Dashboard':
-        return <DashboardContent timeRange={timeRange} setTimeRange={setTimeRange} selectedPortfolioId={selectedPortfolioId} />;
+        return <DashboardContent timeRange={timeRange} setTimeRange={setTimeRange} selectedPortfolioId={selectedPortfolioId} onSelectSecurity={setSelectedSecurityIsin} />;
       case 'Portfolio':
-        return <PortfolioList />;
+        return <PortfolioList selectedPortfolioId={selectedPortfolioId} onSelectSecurity={setSelectedSecurityIsin} />;
       case 'Analyse':
-        return <AnalysisContent selectedPortfolioId={selectedPortfolioId} cachedData={analysisCache} onCacheUpdate={setAnalysisCache} />;
+        return <AnalysisContent selectedPortfolioId={selectedPortfolioId} cachedData={analysisCache} onCacheUpdate={handleCacheUpdate} />;
       case 'Dividenden':
         return <DividendenContent />;
       case 'Datenquellen':
@@ -557,10 +556,20 @@ export default function PortfolioApp() {
         </header>
 
         {/* Dynamic Content */}
-        <div className="p-6 max-w-7xl mx-auto w-full space-y-6 pb-20">
+        <div className="mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-8 space-y-6 w-full max-w-none" >
           {renderContent()}
-        </div>
+        </div >
 
+        {/* Security Detail Modal */}
+        {selectedSecurityIsin && project?.securities?.[selectedSecurityIsin] && (
+          <SecurityDetailModal
+            isOpen={!!selectedSecurityIsin}
+            onClose={() => setSelectedSecurityIsin(null)}
+            security={project.securities[selectedSecurityIsin]}
+            transactions={project.transactions}
+            currency={project.settings.baseCurrency}
+          />
+        )}
       </main>
 
       {/* Mobile Menu Overlay */}
@@ -589,7 +598,7 @@ export default function PortfolioApp() {
 
 // --- Sub-Components ---
 
-const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioId }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioId: string }) => {
+const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioId, onSelectSecurity }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioId: string, onSelectSecurity: (isin: string) => void }) => {
   const { project } = useProject();
   const [chartMode, setChartMode] = useState<'value' | 'performance'>('value');
 
@@ -790,6 +799,56 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioId }: { ti
     return { badgeValue, color };
   }, [displayData, chartMode]);
 
+  // Calculate Allocation Data
+  const allocationData = useMemo(() => {
+    const groups: Record<string, { value: number; count: number }> = {};
+    let totalValue = 0;
+
+    holdings.forEach(h => {
+      // Normalize type
+      let type = h.security.quoteType || 'Sonstige';
+      // Yahoo types normalization
+      const yahooTypeMap: Record<string, string> = {
+        'EQUITY': 'Einzelaktien',
+        'ETF': 'ETFs',
+        'CRYPTOCURRENCY': 'Krypto',
+        'MUTUALFUND': 'Fonds',
+        'FUTURE': 'Derivate',
+        'INDEX': 'Indizes',
+        'CURRENCY': 'Währungen'
+      };
+
+      const normalizedType = yahooTypeMap[type.toUpperCase()] || (type === 'Stock' ? 'Einzelaktien' : type);
+
+      if (!groups[normalizedType]) groups[normalizedType] = { value: 0, count: 0 };
+      groups[normalizedType].value += h.value;
+      groups[normalizedType].count += 1;
+      totalValue += h.value;
+    });
+
+    // Define colors
+    const colorMap: Record<string, string> = {
+      'Einzelaktien': '#3b82f6', // blue-500
+      'Aktie': '#3b82f6',
+      'ETFs': '#10b981', // emerald-500
+      'Krypto': '#a855f7', // purple-500
+      'Fonds': '#f97316', // orange-500
+      'Derivate': '#ef4444', // red-500
+      'Sonstige': '#64748b' // slate-500
+    };
+
+    return Object.entries(groups)
+      .map(([name, data]) => ({
+        id: name,
+        name,
+        value: data.value,
+        count: data.count,
+        percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0,
+        color: colorMap[name] || '#64748b'
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [holdings]);
+
   return (
     <>
       {/* KPI Grid */}
@@ -921,41 +980,44 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioId }: { ti
         </Card >
 
         {/* Allocation Chart */}
-        < Card >
-          <h3 className="font-semibold text-white mb-6">Allokation</h3>
-          <div className="flex flex-col items-center">
-            <div className="relative w-48 h-48">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                {/* Background Circle */}
-                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#1e293b" strokeWidth="12" />
-                {/* Segments - Simplified logic for demo */}
-                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#10b981" strokeWidth="12" strokeDasharray="60 100" strokeDashoffset="0" />
-                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#3b82f6" strokeWidth="12" strokeDasharray="25 100" strokeDashoffset="-60" />
-                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#a855f7" strokeWidth="12" strokeDasharray="10 100" strokeDashoffset="-85" />
-                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#64748b" strokeWidth="12" strokeDasharray="5 100" strokeDashoffset="-95" />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold text-white">4</span>
-                <span className="text-xs text-slate-500">Klassen</span>
-              </div>
+        <Card className="p-5">
+          <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
+            <PieChart size={18} className="text-emerald-500" />
+            Allokation
+          </h3>
+
+          <div className="flex flex-col items-center gap-6">
+            <div className="w-full h-52 relative">
+              {allocationData.length > 0 ? (
+                <AllocationChart
+                  data={allocationData}
+                  currency={project?.settings.baseCurrency || 'EUR'}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-slate-500 text-sm">
+                  Portfolio leer
+                </div>
+              )}
             </div>
 
-            <div className="w-full mt-6 space-y-3">
-              {allocationData.map(item => (
-                <div key={item.id} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center space-x-2">
-                    <span className={`w-3 h-3 rounded-full ${item.color}`}></span>
-                    <span className="text-slate-300">{item.name}</span>
+            <div className="w-full border-t border-slate-800/50 pt-4">
+              <div className="space-y-2 overflow-y-auto max-h-52 custom-scrollbar pr-2">
+                {allocationData.map(item => (
+                  <div key={item.id} className="flex items-center justify-between text-sm group hover:bg-slate-800/50 p-2 rounded-lg transition-colors cursor-default">
+                    <div className="flex items-center space-x-3">
+                      <span className="w-2.5 h-2.5 rounded-full shadow-sm shadow-black/50 ring-2 ring-slate-900" style={{ backgroundColor: item.color }}></span>
+                      <span className="text-slate-200 font-medium truncate max-w-[150px]">{item.name}</span>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider w-12 text-right">{item.percentage.toFixed(1)}%</span>
+                      <span className="font-bold text-white text-xs w-24 text-right">{item.value.toLocaleString('de-DE', { maximumFractionDigits: 0 })} {project?.settings.baseCurrency}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <span className="text-slate-400">{item.percentage}%</span>
-                    <span className="font-medium text-white w-20 text-right">{item.value.toLocaleString('de-DE')} €</span>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </Card >
+        </Card>
       </div >
 
       {/* Holdings List (Compact) */}
@@ -974,7 +1036,7 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioId }: { ti
             <div className="text-slate-400 text-sm p-4 text-center bg-slate-800/20 rounded-xl">Keine Positionen vorhanden.</div>
           ) : (
             holdings.slice(0, 5).map((stock) => (
-              <div key={stock.security.isin} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl flex items-center justify-between hover:bg-slate-800/80 transition cursor-pointer">
+              <div key={stock.security.isin} onClick={() => onSelectSecurity(stock.security.isin)} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl flex items-center justify-between hover:bg-slate-800/80 transition cursor-pointer">
                 <div className="flex items-center space-x-4">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs bg-slate-700`}>
                     {stock.security.name.slice(0, 2).toUpperCase()}
@@ -1031,44 +1093,15 @@ const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: ()
           </button>
         </div>
         <div className="h-80 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorDrawdown" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-              <XAxis
-                dataKey="date"
-                stroke="#94a3b8"
-                tick={{ fontSize: 12 }}
-                tickFormatter={d => new Date(d).toLocaleDateString('de-DE', { month: 'short', year: '2-digit' })}
-                minTickGap={40}
-              />
-              <YAxis
-                stroke="#f43f5e"
-                tick={{ fontSize: 12 }}
-                tickFormatter={v => `${v}%`}
-                domain={['auto', 0]}
-              />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }}
-                itemStyle={{ color: '#f43f5e' }}
-                formatter={(value: number | undefined) => [`${(value || 0).toFixed(1)}%`, 'Abstand zum Hoch']}
-                labelFormatter={(label) => new Date(label).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-              />
-              <Area
-                type="monotone"
-                dataKey="value"
-                stroke="#f43f5e"
-                strokeWidth={2}
-                fillOpacity={1}
-                fill="url(#colorDrawdown)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          <SimpleAreaChart
+            data={data}
+            color="#f43f5e"
+            height={320}
+            showAxes={true}
+            timeRange="MAX"
+            isPercentage={true}
+            tooltipLabel="Abstand zum Hoch"
+          />
         </div>
         <p className="text-slate-400 text-sm mt-4 text-center">
           Der Chart zeigt den prozentualen Rückgang vom jeweils letzten Höchststand (High-Water Mark) des Portfolios.
@@ -1249,9 +1282,9 @@ const AnalysisContent = ({
             </Card>
             <div
               onClick={() => setShowDrawdown(true)}
-              className="cursor-pointer hover:bg-slate-800 transition-colors group relative border border-transparent hover:border-slate-700 rounded-xl"
+              className="cursor-pointer hover:bg-slate-800 transition-colors group relative rounded-xl"
             >
-              <Card className="flex flex-col items-center justify-center p-4 bg-transparent border-none shadow-none">
+              <Card className="flex flex-col items-center justify-center p-4 hover:border-slate-600 transition-colors">
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <BarChart3 size={14} className="text-slate-500" />
                 </div>
@@ -1538,21 +1571,44 @@ const DividendenContent = () => (
 
 
 
-const PortfolioList = () => {
+const PortfolioList = ({ selectedPortfolioId, onSelectSecurity }: { selectedPortfolioId: string, onSelectSecurity: (isin: string) => void }) => {
   const { project } = useProject();
+
+  // Filter transactions based on selected Portfolio
+  const filteredTransactions = useMemo(() => {
+    if (!project) return [];
+    if (selectedPortfolioId === 'all') return project.transactions;
+    return project.transactions.filter(t => t.portfolioId === selectedPortfolioId);
+  }, [project, selectedPortfolioId]);
 
   const { holdings } = useMemo(() => {
     if (!project) return { holdings: [] };
+
+    // Extract latest quotes from securities history
+    const quotes: Record<string, number> = {};
+    if (project.securities) {
+      Object.values(project.securities).forEach(sec => {
+        if (sec.priceHistory) {
+          const dates = Object.keys(sec.priceHistory).sort();
+          if (dates.length > 0) {
+            const lastDate = dates[dates.length - 1];
+            quotes[sec.isin] = sec.priceHistory[lastDate];
+          }
+        }
+      });
+    }
+
     return calculateHoldings(
-      project.transactions,
+      filteredTransactions,
       Object.values(project.securities || {}),
-      undefined,
-      project.fxData.rates
+      quotes, // Pass real quotes
+      project.fxData.rates, // fxRates
+      project.settings.baseCurrency // Pass selected base currency
     );
-  }, [project]);
+  }, [project, filteredTransactions]);
 
   return (
-    <Card>
+    <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 w-full">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-bold text-white flex items-center gap-2">
           <Wallet size={20} className="text-emerald-500" />
@@ -1563,61 +1619,44 @@ const PortfolioList = () => {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="text-slate-500 text-xs uppercase border-b border-slate-700/50">
-              <th className="py-3 font-semibold w-1/3">Name</th>
-              <th className="py-3 font-semibold text-right">Anzahl</th>
-              <th className="py-3 font-semibold text-right">Kurs (Ø Kauf)</th>
-              <th className="py-3 font-semibold text-right">Wert</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {holdings.map((h) => (
-              <tr key={h.security.isin} className="group hover:bg-slate-800/30 transition">
-                <td className="py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded bg-slate-700 flex items-center justify-center font-bold text-xs text-white">
-                      {h.security.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="font-medium text-white">{h.security.name}</div>
-                      <div className="text-xs text-slate-500">{h.security.isin}</div>
-                    </div>
+      <div className="space-y-3">
+        {holdings.length === 0 ? (
+          <div className="text-slate-400 text-sm p-8 text-center bg-slate-800/20 rounded-xl">Keine Positionen vorhanden. Importiere deine Trades!</div>
+        ) : (
+          holdings.map((stock) => (
+            <div key={stock.security.isin} onClick={() => onSelectSecurity(stock.security.isin)} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl flex items-center justify-between hover:bg-slate-800/80 transition cursor-pointer">
+              <div className="flex items-center space-x-4">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs bg-slate-700`}>
+                  {stock.security.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h4 className="font-medium text-white">{stock.security.name}</h4>
+                  <div className="flex items-center space-x-2 text-xs text-slate-400 mt-0.5">
+                    <span className="bg-slate-700 px-1.5 rounded">{stock.security.quoteType || 'Aktie'}</span>
+                    <span>{stock.quantity} Stk.</span>
+                    <span className="text-slate-500">•</span>
+                    <span>Ø {stock.averageBuyPriceInOriginalCurrency.toLocaleString('de-DE', { style: 'currency', currency: stock.currency })}</span>
+                    <span className="text-slate-500">•</span>
+                    <span>Aktuell: {stock.currentPriceInOriginalCurrency.toLocaleString('de-DE', { style: 'currency', currency: stock.currency })}</span>
                   </div>
-                </td>
-                <td className="py-4 text-right text-slate-300 font-mono">
-                  {h.quantity}
-                </td>
-                <td className="py-4 text-right">
-                  <div className="text-slate-300 font-mono">
-                    {/* Calculated Avg Price in Base Currency */}
-                    {(h.averageBuyPrice).toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
-                  </div>
-                </td>
-                <td className="py-4 text-right">
-                  <div className="text-white font-medium font-mono">
-                    {h.value.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
-                  </div>
-                  {/* Placeholder for performance since we lack Quotes for now */}
-                  <div className="text-xs text-slate-500">
-                    {((h.value - (h.quantity * (h.averageBuyPrice || 0)))).toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })} G/V
-                  </div>
-                </td>
-              </tr>
-            ))}
+                </div>
+              </div>
 
-            {holdings.length === 0 && (
-              <tr>
-                <td colSpan={4} className="py-8 text-center text-slate-500">
-                  Noch keine Wertpapiere vorhanden. Importiere deine Trades!
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              <div className="text-right">
+                <p className="font-medium text-white">{stock.value.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}</p>
+                <div className="flex flex-col items-end">
+                  <p className={`text-xs ${(stock.totalReturn) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {stock.totalReturn > 0 ? '+' : ''}{stock.totalReturn.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
+                  </p>
+                  <p className={`text-xs ${(stock.totalReturnPercent) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {stock.totalReturnPercent > 0 ? '+' : ''}{stock.totalReturnPercent.toLocaleString('de-DE', { maximumFractionDigits: 2 })}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
-    </Card>
+    </div>
   );
 };
