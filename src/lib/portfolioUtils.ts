@@ -5,6 +5,10 @@ export interface Holding {
         isin: string;
         name: string;
         quoteType?: string;
+        sector?: string;
+        industry?: string;
+        region?: string;
+        country?: string;
     };
     quantity: number;
     averageBuyPrice: number; // in Base Currency
@@ -220,7 +224,11 @@ export function calculateHoldings(
             security: {
                 isin: sec.isin,
                 name: sec.name,
-                quoteType: sec.quoteType
+                quoteType: sec.quoteType,
+                sector: sec.sector,
+                industry: sec.industry,
+                region: sec.region,
+                country: sec.country
             },
             quantity: h.quantity,
             averageBuyPrice: invested / h.quantity, // Base

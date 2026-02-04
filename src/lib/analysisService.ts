@@ -153,16 +153,14 @@ export function calculateAnalysisMetrics(
 
             // Daily Return (Total Return)
             // Use standard Start-of-Day Cashflow assumption
-            // Include Dividends in the numerator (Total Return)
-            const prevDividend = prev.dividend || 0;
-            const currDividend = curr.dividend || 0;
-            const dailyDividend = currDividend - prevDividend;
+            // Daily Return (Total Return)
+            // Use standard Start-of-Day Cashflow assumption
 
             const costBasis = prev.value + cashFlow;
             let dailyReturn = 0;
 
             if (costBasis > 0) {
-                dailyReturn = (curr.value + dailyDividend - costBasis) / costBasis;
+                dailyReturn = (curr.value - costBasis) / costBasis;
             }
 
             currentIndex *= (1 + dailyReturn);

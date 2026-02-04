@@ -43,9 +43,11 @@ import { calculateAnalysisMetrics } from '@/lib/analysisService';
 import { useProject } from '@/contexts/ProjectContext';
 import { ProjectLauncher } from '@/components/ProjectLauncher';
 import { DataSourcesContent } from '@/components/DataSourcesContent';
-import { TransactionModal } from '@/components/TransactionModal';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { AllocationChart } from '@/components/AllocationChart';
+import { ImportContent } from '@/components/ImportContent';
+import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
+import { TransactionModal } from '@/components/TransactionModal';
 
 
 // --- Mock Data ---
@@ -101,21 +103,7 @@ const monthlyReturns = [
   { month: 'Dez', return: 1.5 },
 ];
 
-const sectorData = [
-  { name: 'Technologie', value: 42 },
-  { name: 'Finanzen', value: 18 },
-  { name: 'Gesundheitswesen', value: 12 },
-  { name: 'Zykl. Konsum', value: 10 },
-  { name: 'Industrie', value: 8 },
-  { name: 'Krypto', value: 10 },
-];
 
-const regionData = [
-  { name: 'Nordamerika', value: 62 },
-  { name: 'Europa', value: 18 },
-  { name: 'Asien / Pazifik', value: 12 },
-  { name: 'Schwellenländer', value: 8 },
-];
 
 // Dividend Data
 const dividendMonthly = [
@@ -374,9 +362,12 @@ export default function PortfolioApp() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [timeRange, setTimeRange] = useState('1M');
-  const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>('all');
+  const [selectedPortfolioIds, setSelectedPortfolioIds] = useState<string[]>([]); // Empty array = All
   const [selectedSecurityIsin, setSelectedSecurityIsin] = useState<string | null>(null);
   const [analysisCache, setAnalysisCache] = useState<any>(null);
+
+  // State for Import Flow
+  const [importTargetPortfolio, setImportTargetPortfolio] = useState<{ id: string; name: string; isNew: boolean } | null>(null);
 
   // Invalidate cache when project data changes
   useEffect(() => {
@@ -412,15 +403,30 @@ export default function PortfolioApp() {
   const renderContent = () => {
     switch (activeTab) {
       case 'Dashboard':
-        return <DashboardContent timeRange={timeRange} setTimeRange={setTimeRange} selectedPortfolioId={selectedPortfolioId} onSelectSecurity={setSelectedSecurityIsin} />;
+        return <DashboardContent timeRange={timeRange} setTimeRange={setTimeRange} selectedPortfolioIds={selectedPortfolioIds} onSelectSecurity={setSelectedSecurityIsin} />;
       case 'Portfolio':
-        return <PortfolioList selectedPortfolioId={selectedPortfolioId} onSelectSecurity={setSelectedSecurityIsin} />;
+        return <PortfolioList selectedPortfolioIds={selectedPortfolioIds} onSelectSecurity={setSelectedSecurityIsin} />;
       case 'Analyse':
-        return <AnalysisContent selectedPortfolioId={selectedPortfolioId} cachedData={analysisCache} onCacheUpdate={handleCacheUpdate} />;
+        return <AnalysisContent selectedPortfolioIds={selectedPortfolioIds} cachedData={analysisCache} onCacheUpdate={handleCacheUpdate} />;
       case 'Dividenden':
-        return <DividendenContent />;
+        return <DividendenContent selectedPortfolioIds={selectedPortfolioIds} />;
       case 'Datenquellen':
         return <DataSourcesContent />;
+      case 'Import':
+        return (
+          <ImportContent
+            onContinue={(portfolioId, isNew, newName) => {
+              // 1. Set the target for the modal
+              setImportTargetPortfolio({
+                id: portfolioId,
+                name: isNew ? (newName || 'Neues Depot') : (project?.portfolios.find(p => p.id === portfolioId)?.name || 'Unbekannt'),
+                isNew: isNew
+              });
+              // 2. Open the modal
+              setIsTransactionModalOpen(true);
+            }}
+          />
+        );
       default:
         return <div className="text-slate-400 p-8 text-center">In Entwicklung...</div>;
     }
@@ -518,19 +524,11 @@ export default function PortfolioApp() {
 
             {/* Portfolio Filter */}
             {project?.portfolios && project.portfolios.length > 0 && (
-              <div className="hidden sm:flex items-center space-x-2 bg-slate-800 rounded-lg px-2 py-1">
-                <span className="text-xs text-slate-400 font-medium">Depot:</span>
-                <select
-                  value={selectedPortfolioId}
-                  onChange={(e) => setSelectedPortfolioId(e.target.value)}
-                  className="bg-transparent text-sm font-bold text-white outline-none border-none focus:ring-0 cursor-pointer py-1 max-w-[150px]"
-                >
-                  <option value="all" className="bg-slate-800">Alle</option>
-                  {project.portfolios.map(p => (
-                    <option key={p.id} value={p.id} className="bg-slate-800">{p.name}</option>
-                  ))}
-                </select>
-              </div>
+              <MultiSelectDropdown
+                options={project.portfolios}
+                selectedIds={selectedPortfolioIds}
+                onChange={setSelectedPortfolioIds}
+              />
             )}
 
             <div className="relative hidden sm:block">
@@ -546,7 +544,7 @@ export default function PortfolioApp() {
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full border border-slate-900"></span>
             </button>
             <button
-              onClick={() => setIsTransactionModalOpen(true)}
+              onClick={() => setActiveTab('Import')}
               className="flex items-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-lg shadow-emerald-500/20 text-sm"
             >
               <Plus size={18} />
@@ -590,7 +588,11 @@ export default function PortfolioApp() {
       )}
 
       {/* Transaction Modal */}
-      <TransactionModal isOpen={isTransactionModalOpen} onClose={() => setIsTransactionModalOpen(false)} />
+      <TransactionModal
+        isOpen={isTransactionModalOpen}
+        onClose={() => setIsTransactionModalOpen(false)}
+        targetPortfolio={importTargetPortfolio}
+      />
 
     </div>
   );
@@ -598,16 +600,16 @@ export default function PortfolioApp() {
 
 // --- Sub-Components ---
 
-const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioId, onSelectSecurity }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioId: string, onSelectSecurity: (isin: string) => void }) => {
+const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectSecurity }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioIds: string[], onSelectSecurity: (isin: string) => void }) => {
   const { project } = useProject();
   const [chartMode, setChartMode] = useState<'value' | 'performance'>('value');
 
   // Filter transactions based on selected Portfolio
   const filteredTransactions = useMemo(() => {
     if (!project) return [];
-    if (selectedPortfolioId === 'all') return project.transactions;
-    return project.transactions.filter(t => t.portfolioId === selectedPortfolioId);
-  }, [project, selectedPortfolioId]);
+    if (selectedPortfolioIds.length === 0) return project.transactions; // All
+    return project.transactions.filter(t => selectedPortfolioIds.includes(t.portfolioId));
+  }, [project, selectedPortfolioIds]);
 
   const { holdings, realizedPnL } = useMemo(() => {
     if (!project) return { holdings: [], realizedPnL: 0 };
@@ -785,9 +787,7 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioId, onSele
       const lastPoint = displayData[displayData.length - 1];
 
       if (chartMode === 'value') {
-        if (firstPoint.value > 0) {
-          badgeValue = ((lastPoint.value - firstPoint.value) / firstPoint.value) * 100;
-        }
+        badgeValue = lastPoint.value - firstPoint.value;
       } else {
         badgeValue = lastPoint.value;
       }
@@ -847,6 +847,66 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioId, onSele
         color: colorMap[name] || '#64748b'
       }))
       .sort((a, b) => b.value - a.value);
+  }, [holdings]);
+
+  // Calculate Sector Data
+  const sectorData = useMemo(() => {
+    const groups: Record<string, number> = {};
+    let totalValue = 0;
+
+    holdings.forEach(h => {
+      const sector = h.security.sector || 'Unbekannt';
+      groups[sector] = (groups[sector] || 0) + h.value;
+      totalValue += h.value;
+    });
+
+    return Object.entries(groups)
+      .map(([name, value]) => ({
+        name,
+        value: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [holdings]);
+
+  // Calculate Region Data
+  const regionData = useMemo(() => {
+    const groups: Record<string, number> = {};
+    let totalValue = 0;
+
+    holdings.forEach(h => {
+      const region = h.security.region || h.security.country || 'Unbekannt';
+      groups[region] = (groups[region] || 0) + h.value;
+      totalValue += h.value;
+    });
+
+    return Object.entries(groups)
+      .map(([name, value]) => ({
+        name,
+        value: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+  }, [holdings]);
+
+  // Calculate Industry Data (Branche)
+  const industryData = useMemo(() => {
+    const groups: Record<string, number> = {};
+    let totalValue = 0;
+
+    holdings.forEach(h => {
+      const industry = h.security.industry || 'Unbekannt';
+      groups[industry] = (groups[industry] || 0) + h.value;
+      totalValue += h.value;
+    });
+
+    return Object.entries(groups)
+      .map(([name, value]) => ({
+        name,
+        value: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
   }, [holdings]);
 
   return (
@@ -962,7 +1022,11 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioId, onSele
               {displayData.length > 1 && (
                 <div className="bg-slate-800/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-slate-700/50">
                   <span className={`text-sm font-medium ${chartMetrics.badgeValue >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {chartMetrics.badgeValue >= 0 ? '+' : ''}{chartMetrics.badgeValue.toFixed(2)}% {timeRange}
+                    {chartMetrics.badgeValue >= 0 ? '+' : ''}
+                    {chartMode === 'value'
+                      ? chartMetrics.badgeValue.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })
+                      : `${chartMetrics.badgeValue.toFixed(2)}%`
+                    } {timeRange}
                   </span>
                 </div>
               )}
@@ -1112,11 +1176,11 @@ const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: ()
 };
 
 const AnalysisContent = ({
-  selectedPortfolioId,
+  selectedPortfolioIds,
   cachedData,
   onCacheUpdate
 }: {
-  selectedPortfolioId: string,
+  selectedPortfolioIds: string[],
   cachedData?: any,
   onCacheUpdate?: (data: any) => void
 }) => {
@@ -1128,9 +1192,96 @@ const AnalysisContent = ({
   // Filter transactions based on selected Portfolio (same as Dashboard)
   const filteredTransactions = useMemo(() => {
     if (!project) return [];
-    if (selectedPortfolioId === 'all') return project.transactions;
-    return project.transactions.filter(t => t.portfolioId === selectedPortfolioId);
-  }, [project, selectedPortfolioId]);
+    if (selectedPortfolioIds.length === 0) return project.transactions;
+    return project.transactions.filter(t => selectedPortfolioIds.includes(t.portfolioId));
+  }, [project, selectedPortfolioIds]);
+
+  // Calculate Holdings for Analysis (needed for Sector/Region)
+  const { holdings } = useMemo(() => {
+    if (!project) return { holdings: [] };
+
+    // Extract latest quotes from securities history
+    const quotes: Record<string, number> = {};
+    if (project.securities) {
+      Object.values(project.securities).forEach(sec => {
+        if (sec.priceHistory) {
+          const dates = Object.keys(sec.priceHistory).sort();
+          if (dates.length > 0) {
+            const lastDate = dates[dates.length - 1];
+            quotes[sec.isin] = sec.priceHistory[lastDate];
+          }
+        }
+      });
+    }
+
+    return calculateHoldings(
+      filteredTransactions,
+      Object.values(project.securities || {}),
+      quotes, // Pass real quotes
+      project.fxData.rates, // fxRates
+      project.settings.baseCurrency // Pass selected base currency
+    );
+  }, [project, filteredTransactions]);
+
+  // Calculate Sector Data
+  const sectorData = useMemo(() => {
+    const groups: Record<string, number> = {};
+    let totalValue = 0;
+
+    holdings.forEach(h => {
+      const sector = h.security.sector || 'Unbekannt';
+      groups[sector] = (groups[sector] || 0) + h.value;
+      totalValue += h.value;
+    });
+
+    return Object.entries(groups)
+      .map(([name, value]) => ({
+        name,
+        value: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [holdings]);
+
+  // Calculate Region Data
+  const regionData = useMemo(() => {
+    const groups: Record<string, number> = {};
+    let totalValue = 0;
+
+    holdings.forEach(h => {
+      const region = h.security.region || h.security.country || 'Unbekannt';
+      groups[region] = (groups[region] || 0) + h.value;
+      totalValue += h.value;
+    });
+
+    return Object.entries(groups)
+      .map(([name, value]) => ({
+        name,
+        value: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+  }, [holdings]);
+
+  // Calculate Industry Data (Branche)
+  const industryData = useMemo(() => {
+    const groups: Record<string, number> = {};
+    let totalValue = 0;
+
+    holdings.forEach(h => {
+      const industry = h.security.industry || 'Unbekannt';
+      groups[industry] = (groups[industry] || 0) + h.value;
+      totalValue += h.value;
+    });
+
+    return Object.entries(groups)
+      .map(([name, value]) => ({
+        name,
+        value: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+  }, [holdings]);
 
   // Calculate portfolio history for MAX (for analysis metrics across years)
   // Moved to effect to unblock UI
@@ -1143,7 +1294,7 @@ const AnalysisContent = ({
     if (!project) return;
 
     // Check Cache
-    const cacheKey = `${project.id}-${selectedPortfolioId}`;
+    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}`;
     if (cachedData && cachedData.key === cacheKey) {
       setHistoryData(cachedData.historyData);
       setAnalysisMetrics(cachedData.analysisMetrics);
@@ -1364,7 +1515,30 @@ const AnalysisContent = ({
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Industry Allocation */}
+            <Card>
+              <h3 className="font-semibold text-white flex items-center gap-2 mb-6">
+                <Banknote size={18} className="text-amber-400" />
+                Branchen
+              </h3>
+              <div className="space-y-4">
+                {industryData.map((industry) => (
+                  <div key={industry.name}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-slate-300">{industry.name}</span>
+                      <span className="text-slate-400">{industry.value}%</span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2">
+                      <div
+                        className="bg-amber-500 h-2 rounded-full"
+                        style={{ width: `${industry.value}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
             {/* Sector Allocation */}
             <Card>
               <h3 className="font-semibold text-white flex items-center gap-2 mb-6">
@@ -1390,22 +1564,58 @@ const AnalysisContent = ({
             </Card>
 
             {/* Diversification Score / Alert */}
+            {/* Diversification Score / Alert */}
             <Card className="flex flex-col justify-center">
-              <div className="flex items-start gap-4">
-                <div className="p-3 bg-yellow-500/10 rounded-xl">
-                  <AlertCircle size={32} className="text-yellow-500" />
-                </div>
-                <div>
-                  <h4 className="text-lg font-bold text-white">Klumpenrisiko erkannt</h4>
-                  <p className="text-slate-400 text-sm mt-1 leading-relaxed">
-                    Dein Portfolio hat eine starke Gewichtung im Sektor <strong>Technologie (42%)</strong>.
-                    Eine höhere Diversifikation könnte die Volatilität senken.
-                  </p>
-                  <button className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition">
-                    Details anzeigen
-                  </button>
-                </div>
-              </div>
+              {(() => {
+                const risks = [
+                  { type: 'Sektor', data: sectorData[0] },
+                  { type: 'Region', data: regionData[0] },
+                  { type: 'Branche', data: industryData[0] }
+                ]
+                  .filter(item => item.data && item.data.value > 30)
+                  .sort((a, b) => b.data.value - a.data.value);
+
+                if (risks.length > 0) {
+                  return (
+                    <div className="flex items-start gap-4">
+                      <div className="p-3 bg-yellow-500/10 rounded-xl max-h-min">
+                        <AlertCircle size={32} className="text-yellow-500" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-lg font-bold text-white mb-2">Klumpenrisiken erkannt</h4>
+                        <div className="space-y-3">
+                          {risks.map((risk, index) => (
+                            <div key={index} className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{risk.type}</span>
+                                <span className="text-xs font-bold text-rose-400">{risk.data.value}%</span>
+                              </div>
+                              <div className="text-white font-medium">{risk.data.name}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-slate-400 text-sm mt-3 leading-relaxed">
+                          Eine höhere Diversifikation in diesen Bereichen könnte die Volatilität senken.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-emerald-500/10 rounded-xl">
+                      <Check size={32} className="text-emerald-500" />
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-bold text-white">Gut diversifiziert</h4>
+                      <p className="text-slate-400 text-sm mt-1 leading-relaxed">
+                        Kein Bereich (Sektor, Region, Branche) dominiert das Portfolio übermäßig (über 30%).
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
             </Card>
           </div>
         </>
@@ -1415,171 +1625,687 @@ const AnalysisContent = ({
 };
 
 
-const DividendenContent = () => (
-  <div className="space-y-6">
-    {/* Top KPIs */}
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <Card className="flex items-center space-x-4">
-        <div className="p-3 bg-emerald-500/10 rounded-xl">
-          <PiggyBank size={28} className="text-emerald-500" />
-        </div>
-        <div>
-          <p className="text-sm text-slate-500">Erhalten 2023</p>
-          <p className="text-2xl font-bold text-white">1.135,00 €</p>
-          <p className="text-xs text-emerald-400 flex items-center mt-0.5">
-            <TrendingUp size={12} className="mr-1" /> +12% vs. Vorjahr
-          </p>
-        </div>
-      </Card>
-      <Card className="flex items-center space-x-4">
-        <div className="p-3 bg-blue-500/10 rounded-xl">
-          <Timer size={28} className="text-blue-500" />
-        </div>
-        <div>
-          <p className="text-sm text-slate-500">Erwartet (Restjahr)</p>
-          <p className="text-2xl font-bold text-white">235,00 €</p>
-          <p className="text-xs text-slate-400 mt-0.5">Basierend auf Historie</p>
-        </div>
-      </Card>
-      <Card className="flex items-center space-x-4">
-        <div className="p-3 bg-purple-500/10 rounded-xl">
-          <Activity size={28} className="text-purple-500" />
-        </div>
-        <div>
-          <p className="text-sm text-slate-500">Pers. Dividendenrendite</p>
-          <p className="text-2xl font-bold text-white">1,92 %</p>
-          <p className="text-xs text-slate-400 mt-0.5">Yield on Cost: 2,4%</p>
-        </div>
-      </Card>
-    </div>
 
-    {/* Dividend Chart (Year over Year) */}
-    <Card className="h-96 flex flex-col">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="font-semibold text-white flex items-center gap-2">
-          <BarChart3 size={18} className="text-emerald-400" />
-          Dividendenentwicklung
-        </h3>
-        <div className="flex gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 bg-slate-600 rounded-sm"></span>
-            <span className="text-slate-400">2022</span>
+
+
+const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: string[] }) => {
+  const { project, updateProject } = useProject();
+  const [chartView, setChartView] = useState<'monthly' | 'yearly'>('yearly'); // Default to yearly as requested "Last 5 Years"
+  const [historyRange, setHistoryRange] = useState<'5Y' | 'MAX'>('5Y');
+
+  // 1. Filter Transactions (same logic as other tabs)
+  const filteredTransactions = useMemo(() => {
+    if (!project) return [];
+    if (selectedPortfolioIds.length === 0) return project.transactions;
+    return project.transactions.filter(t => selectedPortfolioIds.includes(t.portfolioId));
+  }, [project, selectedPortfolioIds]);
+
+  // 2. Calculate Holdings (for Yield Calculation)
+  const { totalValue, totalInvested, holdings } = useMemo(() => {
+    if (!project) return { totalValue: 0, totalInvested: 0, holdings: [] };
+
+    // Quick Holdings Calcs (simplified compared to Dashboard)
+    const quotes: Record<string, number> = {};
+    if (project.securities) {
+      Object.values(project.securities).forEach(sec => {
+        if (sec.priceHistory) {
+          const dates = Object.keys(sec.priceHistory).sort();
+          if (dates.length > 0) quotes[sec.isin] = sec.priceHistory[dates[dates.length - 1]];
+        }
+      });
+    }
+
+    const { holdings } = calculateHoldings(
+      filteredTransactions,
+      Object.values(project.securities || {}),
+      quotes,
+      project.fxData.rates,
+      project.settings.baseCurrency
+    );
+
+    const val = holdings.reduce((sum, h) => sum + h.value, 0);
+    const inv = holdings.reduce((sum, h) => sum + (h.value - h.totalReturn), 0);
+    return { totalValue: val, totalInvested: inv, holdings };
+  }, [project, filteredTransactions]);
+
+  // 3. Process Dividends
+  const {
+    receivedCurrentYear,
+    receivedLastYear,
+    monthlyData,
+    recentDividends,
+    upcomingDividends,
+    personalYield,
+    yieldOnCost,
+    projectedRestYear,
+    annualData
+  } = useMemo(() => {
+    if (!project) return { receivedCurrentYear: 0, receivedLastYear: 0, monthlyData: [], recentDividends: [], upcomingDividends: [], personalYield: 0, yieldOnCost: 0, projectedRestYear: 0, annualData: [] };
+
+    const dividends = filteredTransactions.filter(t => t.type === 'Dividend');
+    const currentYear = new Date().getFullYear();
+    const lastYear = currentYear - 1;
+    const currentMonth = new Date().getMonth(); // 0 = Jan
+
+    let sumCurrent = 0;
+    let sumLast = 0;
+
+    // Config for 5 Year Monthly Comparison
+    const comparisonYears = Array.from({ length: 5 }, (_, i) => currentYear - i).reverse(); // [2021, 2022, 2023, 2024, 2025]
+    const monthlyHistoryMap: Record<string, number> = {}; // "Year-Month" -> Amount
+
+    // Group actual dividends
+    dividends.forEach(d => {
+      const date = new Date(d.date);
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const amount = d.amount;
+
+      if (year === currentYear) {
+        sumCurrent += amount;
+      } else if (year === lastYear) {
+        sumLast += amount;
+      }
+
+      // Populate 5-Year Map
+      if (year >= currentYear - 4) {
+        monthlyHistoryMap[`${year}-${month}`] = (monthlyHistoryMap[`${year}-${month}`] || 0) + amount;
+      }
+    });
+
+    // Helper: Get latest FX rate
+    const getLatestRate = (currency: string): number => {
+      if (currency === project.settings.baseCurrency) return 1;
+      const rates = project.fxData.rates[currency];
+      if (!rates) return 1; // Fallback
+      // Find latest date
+      const dates = Object.keys(rates).sort().reverse();
+      return rates[dates[0]] || 1;
+    };
+
+    // Helper: Convert to Base Currency
+    const convertToBase = (amount: number, currency: string) => {
+      if (currency === project.settings.baseCurrency) return amount;
+      const rateOrg = getLatestRate(currency);
+      const rateBase = getLatestRate(project.settings.baseCurrency);
+      // Convert to EUR then to Base
+      const inEur = amount / rateOrg;
+      return inEur * rateBase;
+    };
+
+    // --- FORECAST LOGIC (History & Upcoming Based) ---
+    let projectedAnnual = 0;
+    const forecastEvents: { date: Date, amount: number, name: string, ticker: string, debug?: string }[] = [];
+    const monthlyForecastMap: Record<number, number> = {}; // Month -> Amount
+
+    holdings.forEach((h: any) => {
+      const sec = project.securities?.[h.security.isin];
+      if (!sec) return;
+
+      const shares = h.quantity || 0;
+      if (shares === 0) return;
+
+      const secCurrency = sec.currency || 'EUR';
+      // const fxRate = getLatestRate(secCurrency);
+      // Rate is typically Base/Quote or Quote/Base? 
+      // Usually OpenParqet stores rate as "1 EUR = X USD". 
+      // If base is CHF and we have USD, we need USD->CHF.
+      // Assuming project.fxData stores rates relative to BASE (EUR usually).
+      // If Project Base is `CHF` and data is from ECB (EUR base), we need to be careful.
+      // Let's assume `calculateHoldings` logic handles FX already correctly.
+      // If `fxData.rates` contains `USD` it means `1 EUR = x USD`.
+      // If Project Base is `CHF` and Sec is `USD`:
+      // Convert USD -> EUR -> CHF.
+      // For simplicity here, I will check how `calculateHoldings` converts. 
+      // It likely uses `1 / rate` if `rate` is `EURUSD`.
+      // Let's assume standard "Divide by rate if rate is FC/EUR" logic if base is EUR.
+      // If `baseCurrency` is CHF, `fxData` might be rebased?
+      // Let's stick to a simple converter: 
+      // If we have EUR based rates: ValueInEUR = ValueInOrg / Rate(Org). ValueInTarget = ValueInEUR * Rate(Target).
+
+      // 1. Check Upcoming Dividends (Confirmed)
+      if (sec.upcomingDividends && Array.isArray(sec.upcomingDividends)) {
+        sec.upcomingDividends.forEach((ud: any) => {
+          const exDate = new Date(ud.exDate);
+          if (exDate.getFullYear() === currentYear && exDate > new Date()) {
+            let amount = ud.amount;
+            // If amount is missing, infer from latest history
+            if (!amount && sec.dividendHistory?.length) {
+              const sortedHist = [...sec.dividendHistory].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              amount = sortedHist[0].amount;
+            }
+
+            if (amount) {
+              const totalPayout = amount * shares;
+              const finalVal = convertToBase(totalPayout, secCurrency);
+
+              forecastEvents.push({
+                date: exDate,
+                amount: finalVal,
+                name: sec.name,
+                ticker: sec.symbol || sec.isin,
+                debug: `${shares}x ~${amount.toFixed(2)} ${secCurrency}`
+              });
+              monthlyForecastMap[exDate.getMonth()] = (monthlyForecastMap[exDate.getMonth()] || 0) + finalVal;
+              projectedAnnual += finalVal;
+            }
+          }
+        });
+      }
+
+      // 2. Project from History (If no upcoming for the period)
+      // Strategy: Look at Dividends from Previous Year (Last Year). 
+      // If a dividend was paid in Month M last year, and we haven't passed Month M this year (or we passed it but assume next year... wait, REST of year).
+      // Only look for months > currentMonth.
+      if (sec.dividendHistory && Array.isArray(sec.dividendHistory)) {
+        sec.dividendHistory.forEach((dh: any) => {
+          const dDate = new Date(dh.date);
+          if (dDate.getFullYear() === lastYear) {
+            // Check if this "slot" is in the future for current year
+            // e.g. Last year paid on Sept 15. Today is Feb. 
+            // We expect a payment in Sept this year.
+            const thisYearDate = new Date(currentYear, dDate.getMonth(), dDate.getDate());
+
+            // Only add if it's in the future AND we haven't already added a confirmed upcoming dividend for this month?
+            // (Simple dedup: if monthlyForecastMap has entry, maybe skip? No, multiple stocks pay in same month).
+            // Better: check if `forecastEvents` already has an entry for this stock in this month.
+
+            if (thisYearDate > new Date()) {
+              const hasUpcoming = forecastEvents.some(e => e.ticker === sec.symbol && e.date.getMonth() === dDate.getMonth());
+              if (!hasUpcoming) {
+                const totalPayout = dh.amount * shares;
+                const finalVal = convertToBase(totalPayout, secCurrency);
+
+                forecastEvents.push({
+                  date: thisYearDate, // Projected date
+                  amount: finalVal,
+                  name: sec.name,
+                  ticker: sec.symbol || sec.isin,
+                  debug: `Hist(${dDate.toLocaleDateString()}): ${shares}x ${dh.amount} ${secCurrency}`
+                });
+                monthlyForecastMap[dDate.getMonth()] = (monthlyForecastMap[dDate.getMonth()] || 0) + finalVal;
+                projectedAnnual += finalVal;
+              }
+            }
+          }
+        });
+      }
+    });
+
+    // Estimate Rest of Year
+    // Only sum the "future" forecast events
+    const estimatedRest = forecastEvents.filter(e => e.date > new Date()).reduce((sum, e) => sum + e.amount, 0);
+
+    // --- RECONSTRUCTED HISTORY (Actual & Theoretical Combined) ---
+    // Instead of naive "current shares * past div", we rebuild share count at each dividend date.
+    const theoreticalLast: Record<number, number> = {};
+    const theoreticalCurrent: Record<number, number> = {};
+    const monthlyTheoreticalMap: Record<string, number> = {}; // "Year-Month" -> Amount
+    const annualTheoreticalMap: Record<number, number> = {};  // Year -> Amount
+
+    // 1. Identify all securities involved in transactions
+    const relevantIsins = new Set(filteredTransactions.map(t => t.isin).filter(Boolean) as string[]);
+
+    // Group transactions by ISIN for fast lookup
+    const txByIsin: Record<string, any[]> = {};
+    filteredTransactions.forEach(t => {
+      const id = t.isin; // consistent ID
+      if (!id) return;
+      if (!txByIsin[id]) txByIsin[id] = [];
+      txByIsin[id].push(t);
+    });
+
+    relevantIsins.forEach((isin: string) => {
+      const sec = project.securities?.[isin];
+      // If security or history missing, we can't do anything
+      if (!sec || !sec.dividendHistory) return;
+
+      // Sort Dividend History (Oldest first) needed? No, just iterate.
+      // Sort Transactions (Oldest first) for running balance
+      const secTx = (txByIsin[isin] || []).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      // We only care about dividends in our relevant buckets (Comparison Years + Last/Current Year)
+      // Optimization: Pre-filter dividends? Or just check date.
+
+      sec.dividendHistory.forEach((dh: any) => {
+        const dDate = new Date(dh.date);
+        const month = dDate.getMonth();
+        const year = dDate.getFullYear();
+
+        // Optimization: Skip if year is older than our Max Range (e.g. 2000)
+        const minYear = Math.min(...comparisonYears, lastYear);
+        if (year < minYear - 1) return; // -1 buffer
+
+        // CALCULATE SHARES AT DATE (dDate)
+        // Sum buys/sells where date < dDate (Ex-Date usually determines entitlement, assuming dh.date is Ex-Date or Pay-Date close enough)
+        let sharesAtDate = 0;
+        for (const t of secTx) {
+          if (new Date(t.date) > dDate) break; // Transaction happened after dividend
+
+          const qty = Math.abs(t.shares || t.quantity || 0);
+          if (t.type === 'Buy' || t.type === 'Sparplan_Buy') {
+            sharesAtDate += qty;
+          } else if (t.type === 'Sell') {
+            sharesAtDate -= qty;
+          }
+        }
+
+        if (sharesAtDate <= 0.0001) return; // No shares held at this time
+
+        const secCurrency = sec.currency || 'EUR';
+        const amount = convertToBase(dh.amount * sharesAtDate, secCurrency);
+
+        // Populate Maps
+        monthlyTheoreticalMap[`${year}-${month}`] = (monthlyTheoreticalMap[`${year}-${month}`] || 0) + amount;
+        annualTheoreticalMap[year] = (annualTheoreticalMap[year] || 0) + amount;
+
+        if (year === lastYear) {
+          theoreticalLast[month] = (theoreticalLast[month] || 0) + amount;
+        } else if (year === currentYear) {
+          theoreticalCurrent[month] = (theoreticalCurrent[month] || 0) + amount;
+        }
+      });
+    });
+
+    // Prepare Chart Data
+    const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+
+    const chartData = monthNames.map((name, monthIndex) => {
+      // Create 5-year values
+      const yearsData = comparisonYears.map(year => {
+        // Use Actual if available, otherwise Theoretical
+        const actual = monthlyHistoryMap[`${year}-${monthIndex}`] || 0;
+        const theoretical = monthlyTheoreticalMap[`${year}-${monthIndex}`] || 0;
+
+        return {
+          year,
+          amount: actual > 0 ? actual : theoretical
+        };
+      });
+
+      return {
+        month: name,
+        years: yearsData
+      };
+    });
+
+    // Sort Forecast Events for List
+    const upcomingList = forecastEvents
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .map(e => ({
+        date: e.date.toLocaleDateString(),
+        name: e.name,
+        amount: e.amount,
+        ticker: e.ticker,
+        type: 'Prognose',
+        debug: e.debug
+      }));
+
+    // List Data (Past) - Unchanged
+    const recent = [...dividends]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5)
+      .map(d => ({
+        id: d.id,
+        name: d.name || d.isin,
+        date: new Date(d.date).toLocaleDateString('de-DE'),
+        amount: d.amount,
+        type: 'Ausschüttung'
+      }));
+
+    // Updated Yields
+    // Personal Yield = (Received YTD + Forecast Rest) / Total Value? 
+    // Or just (Forecast 12m) / Value?
+    // User wants "Personal Dividend Yield". Usually: (Projected Annual Income) / Invested Capital.
+    // Let's use (Sum(Last 12 Month Actuals) if available OR Projected Annual)
+    // Given we built `projectedAnnual` quite carefully:
+    const totalProjected = (sumCurrent + estimatedRest); // Mix of YTD actuals + Future Forecast
+    // Or we can construct strict "Forward Annual Dividend" sum.
+
+    const pYield = totalValue > 0 ? (totalProjected / totalValue) * 100 : 0;
+    const yoc = totalInvested > 0 ? (totalProjected / totalInvested) * 100 : 0;
+
+    // --- ANNUAL DATA (Yearly History) ---
+    const annualHistoryMap: Record<number, number> = {};
+    const yearsSet = new Set<number>();
+
+    // 1. From Transactions
+    dividends.forEach(d => {
+      const y = new Date(d.date).getFullYear();
+      annualHistoryMap[y] = (annualHistoryMap[y] || 0) + d.amount;
+      yearsSet.add(y);
+    });
+
+    // 2. From Theoretical History (to fill gaps for 5Y view if no data?)
+    // Actually, "last 5 years" usually means actuals. 
+    // If the user wants "Everything", we show 0 if nothing happened.
+    // Let's ensure we have at least last 5 years in the set if chartView is 5Y?
+    // Or just show what we have.
+    const currentYearNum = new Date().getFullYear();
+
+    // Merge Theoretical into Annual Map if Actual is missing?
+    // Or just use maximum?
+    // Let's iterate over theoretical years
+    Object.keys(annualTheoreticalMap).forEach(yStr => {
+      const y = parseInt(yStr);
+      if (!annualHistoryMap[y]) {
+        annualHistoryMap[y] = annualTheoreticalMap[y];
+        // Add to yearsSet if recent enough or if we want to show all theoretical history
+        if (y >= currentYearNum - 10) yearsSet.add(y);
+      }
+    });
+
+    for (let y = currentYearNum - 4; y <= currentYearNum; y++) {
+      yearsSet.add(y);
+    }
+
+    const sortedYears = Array.from(yearsSet).sort();
+    const annualData = sortedYears.map(year => ({
+      year,
+      amount: annualHistoryMap[year] || 0,
+      isCurrent: year === currentYearNum,
+      isForecast: year > currentYearNum // Future if any
+    }));
+
+    return {
+      receivedCurrentYear: sumCurrent,
+      receivedLastYear: sumLast,
+      monthlyData: chartData,
+      recentDividends: recent,
+      upcomingDividends: upcomingList,
+      personalYield: pYield,
+      yieldOnCost: yoc,
+      projectedRestYear: estimatedRest,
+      annualData
+    };
+  }, [project, filteredTransactions, totalValue, totalInvested, holdings]);
+
+  // Update Logic
+  const [isUpdating, setIsUpdating] = useState(false);
+  const handleScanDividends = async () => {
+    if (!project || isUpdating) return;
+    setIsUpdating(true);
+    try {
+      const securities = Object.values(project.securities || {});
+      // Find stored securities that are in current holdings AND missing dividendRate
+      // Or just update all holdings? Updating all is safer but slower.
+      // Let's filter for relevant ones.
+      const relevantIsins = new Set(holdings.map((h: any) => h.security.isin));
+      const toUpdate = securities.filter((s: any) => relevantIsins.has(s.isin));
+
+      let updatedCount = 0;
+      const newSecurities = { ...project.securities };
+
+      for (const sec of toUpdate) {
+        const symbol = (sec as any).symbol || (sec as any).isin;
+        // Skip if we already have good data? (Optional optimization)
+        // if ((sec as any).dividendRate) continue;
+
+        // Fetch
+        try {
+          const res = await fetch('/api/yahoo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbol })
+          });
+          const data = await res.json();
+
+          if (data && !data.error) {
+            // Update Security
+            newSecurities[sec.isin] = {
+              ...newSecurities[sec.isin],
+              annualDividendRate: data.annualDividendRate,
+              dividendYield: data.dividendYield,
+              quoteType: data.quoteType,
+            };
+            updatedCount++;
+          }
+        } catch (e) {
+          console.warn("Failed to update dividend for", symbol, e);
+        }
+      }
+
+      if (updatedCount > 0) {
+        updateProject(prev => ({
+          ...prev,
+          securities: newSecurities
+        }));
+        alert(`${updatedCount} Wertpapiere wurden mit Dividendendaten aktualisiert!`);
+      } else {
+        alert('Keine neuen Dividendendaten gefunden.');
+      }
+
+    } catch (err) {
+      console.error("Scan failed", err);
+      alert('Fehler beim Abrufen der Daten.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+
+  // Prepare Yearly Data for Display
+  const yearlyDisplayData = useMemo(() => {
+    if (!annualData) return [];
+    let data = annualData;
+    if (historyRange === '5Y') {
+      const currentYear = new Date().getFullYear();
+      data = annualData.filter(d => d.year >= currentYear - 4);
+    }
+    return data;
+  }, [annualData, historyRange]);
+
+
+  return (
+    <div className="space-y-6">
+      {/* Top KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="flex items-center space-x-4">
+          <div className="p-3 bg-emerald-500/10 rounded-xl">
+            <PiggyBank size={28} className="text-emerald-500" />
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 bg-emerald-500 rounded-sm"></span>
-            <span className="text-slate-400">2023</span>
+          <div>
+            <p className="text-sm text-slate-500">Erhalten {new Date().getFullYear()}</p>
+            <p className="text-2xl font-bold text-white">{receivedCurrentYear.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}</p>
+            <p className={`text-xs flex items-center mt-0.5 ${receivedCurrentYear >= receivedLastYear ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <TrendingUp size={12} className="mr-1" /> {receivedLastYear > 0 ? ((receivedCurrentYear - receivedLastYear) / receivedLastYear * 100).toFixed(1) : 0}% vs. Vorjahr
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 bg-emerald-500/40 rounded-sm border border-emerald-500/50 border-dashed"></span>
-            <span className="text-slate-400">Prognose</span>
+        </Card>
+        <Card className="flex items-center space-x-4">
+          <div className="p-3 bg-blue-500/10 rounded-xl">
+            <Timer size={28} className="text-blue-500" />
           </div>
-        </div>
+          <div>
+            <p className="text-sm text-slate-500">Erwartet (Restjahr)</p>
+            <p className="text-2xl font-bold text-white">{projectedRestYear.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}</p>
+            <p className="text-xs text-slate-400 mt-0.5">Prognose auf Basis von Positionen</p>
+          </div>
+        </Card>
+        <Card className="flex items-center space-x-4">
+          <div className="p-3 bg-purple-500/10 rounded-xl">
+            <Activity size={28} className="text-purple-500" />
+          </div>
+          <div>
+            <p className="text-sm text-slate-500">Pers. Dividendenrendite</p>
+            <p className="text-2xl font-bold text-white">{personalYield.toFixed(2)} %</p>
+            <p className="text-xs text-slate-400 mt-0.5">Yield on Cost: {yieldOnCost.toFixed(2)}%</p>
+          </div>
+        </Card>
       </div>
 
-      <div className="flex-1 w-full flex items-end justify-between gap-2 sm:gap-4 px-2">
-        {dividendMonthly.map((m, i) => {
-          const max = 350; // hardcoded scale for mockup
-          return (
-            <div key={i} className="flex-1 flex flex-col justify-end items-center h-full group relative">
-              {/* Bars Container */}
-              <div className="w-full flex justify-center items-end gap-1 h-full">
-                {/* Previous Year */}
-                <div
-                  className="w-1.5 sm:w-3 bg-slate-600 rounded-t-sm transition-all hover:bg-slate-500"
-                  style={{ height: `${(m.prev / max) * 100}%` }}
-                ></div>
-                {/* Current Year / Forecast */}
-                <div
-                  className={`w-1.5 sm:w-3 rounded-t-sm transition-all ${m.forecast ? 'bg-emerald-500/30 border border-emerald-500/50 border-dashed border-b-0' : 'bg-emerald-500 hover:bg-emerald-400'}`}
-                  style={{ height: `${((m.current || m.forecast || 0) / max) * 100}%` }}
-                ></div>
-              </div>
-              <span className="text-xs text-slate-500 mt-3">{m.month}</span>
-
-              {/* Hover Tooltip */}
-              <div className="absolute bottom-full mb-2 bg-slate-800 border border-slate-700 p-2 rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-24 text-center">
-                <div className="text-xs text-slate-400 mb-1">{m.month}</div>
-                <div className="text-sm font-bold text-white">{(m.current || m.forecast)} €</div>
-                <div className="text-xs text-slate-500">2022: {m.prev} €</div>
-              </div>
+      {/* Dividend Chart (Year over Year) */}
+      <Card className="h-96 flex flex-col">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="font-semibold text-white flex items-center gap-2">
+            <BarChart3 size={18} className="text-emerald-400" />
+            Dividendenentwicklung
+          </h3>
+          <div className="flex gap-4 items-center">
+            {/* View Toggles */}
+            <div className="flex bg-slate-900/50 p-1 rounded-lg">
+              <button
+                onClick={() => setChartView('monthly')}
+                className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${chartView === 'monthly' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+              >
+                Monatlich
+              </button>
+              <button
+                onClick={() => setChartView('yearly')}
+                className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${chartView === 'yearly' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+              >
+                Jährlich
+              </button>
             </div>
-          )
-        })}
-      </div>
-    </Card>
 
-    {/* Bottom Section: Calendar & History */}
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Upcoming Payments */}
-      <Card>
-        <h3 className="font-semibold text-white flex items-center gap-2 mb-4">
-          <CalendarCheck size={18} className="text-blue-400" />
-          Nächste Auszahlungen
-        </h3>
-        <div className="space-y-3">
-          {upcomingDividends.map((div) => (
-            <div key={div.id} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl hover:bg-slate-800 transition border border-transparent hover:border-slate-700">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-slate-900 ${div.color === 'bg-gray-100' ? 'text-black' : 'text-white'} ${div.color}`}>
-                  {div.ticker}
-                </div>
-                <div>
-                  <div className="font-medium text-white">{div.name}</div>
-                  <div className="text-xs text-slate-500 flex items-center gap-1">
-                    Ex-Date: {div.payDate}
+            {/* Range Toggles (Only for Yearly) */}
+            {chartView === 'yearly' && (
+              <div className="flex bg-slate-900/50 p-1 rounded-lg">
+                <button
+                  onClick={() => setHistoryRange('5Y')}
+                  className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${historyRange === '5Y' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  5J
+                </button>
+                <button
+                  onClick={() => setHistoryRange('MAX')}
+                  className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${historyRange === 'MAX' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  max
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 w-full flex items-end justify-between gap-2 sm:gap-4 px-2">
+          {chartView === 'monthly' ? (
+            // --- MONTHLY VIEW (Last 5 Years) ---
+            monthlyData.map((m, i) => {
+              // Find global max for scale
+              const allAmounts = monthlyData.flatMap(d => d.years.map(y => y.amount));
+              const maxVal = Math.max(...allAmounts, 1);
+              const max = maxVal * 1.1;
+
+              return (
+                <div key={i} className="flex-1 flex flex-col justify-end items-center h-full group relative">
+                  <div className="w-full flex justify-center items-end gap-px sm:gap-1 h-full px-0.5">
+                    {m.years.map((yData, idx) => (
+                      <div
+                        key={yData.year}
+                        className={`flex-1 rounded-t-sm transition-all relative
+                                ${yData.year === new Date().getFullYear() ? 'bg-emerald-500' : 'bg-slate-700 hover:bg-slate-600'}
+                            `}
+                        style={{ height: `${(yData.amount / max) * 100}%` }}
+                      >
+                      </div>
+                    ))}
+                  </div>
+                  <span className="text-[10px] sm:text-xs text-slate-500 mt-3 truncate w-full text-center">{m.month}</span>
+
+                  {/* Hover Tooltip (Detailed) */}
+                  <div className="absolute bottom-full mb-2 bg-slate-800 border border-slate-700 p-2 rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 w-48 text-left">
+                    <div className="text-xs text-slate-400 mb-2 font-bold border-b border-slate-700 pb-1">{m.month} Historie</div>
+                    {m.years.slice().reverse().map(yData => (
+                      <div key={yData.year} className="flex justify-between text-xs mb-0.5">
+                        <span className={yData.year === new Date().getFullYear() ? "text-emerald-400 font-bold" : "text-slate-400"}>{yData.year}</span>
+                        <span className="text-white font-medium">{yData.amount.toFixed(2)} €</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
-              <div className="text-right">
-                <div className="font-medium text-white">{div.amount.toFixed(2)} €</div>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${div.status === 'Bestätigt' ? 'border-emerald-500/50 text-emerald-400 bg-emerald-500/10' : 'border-slate-600 text-slate-400'}`}>
-                  {div.status}
-                </span>
-              </div>
-            </div>
-          ))}
+              )
+            })
+          ) : (
+            // --- YEARLY VIEW ---
+            (() => {
+              const maxVal = Math.max(...yearlyDisplayData.map(d => d.amount));
+              const max = maxVal > 0 ? maxVal * 1.1 : 100;
+
+              return yearlyDisplayData.map((d) => (
+                <div key={d.year} className="flex-1 flex flex-col justify-end items-center h-full group relative">
+                  <div
+                    className={`w-4 sm:w-8 rounded-t-lg transition-all ${d.isCurrent ? 'bg-emerald-500' : 'bg-slate-600 hover:bg-slate-500'}`}
+                    style={{ height: `${(d.amount / max) * 100}%` }}
+                  ></div>
+                  <span className="text-xs text-slate-500 mt-3">{d.year}</span>
+
+                  <div className="absolute bottom-full mb-2 bg-slate-800 border border-slate-700 p-2 rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 min-w-[80px] text-center">
+                    <div className="text-xs text-slate-400 mb-1">{d.year}</div>
+                    <div className="text-sm font-bold text-white">{d.amount.toFixed(2)} €</div>
+                  </div>
+                </div>
+              ));
+            })()
+          )}
         </div>
       </Card>
 
-      {/* Recent History */}
-      <Card>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-semibold text-white flex items-center gap-2">
-            <Wallet size={18} className="text-slate-400" />
-            Zahlungshistorie
-          </h3>
-          <button className="text-xs text-emerald-400 hover:text-emerald-300">Alle</button>
-        </div>
-        <div className="space-y-0">
-          {recentDividends.map((div, i) => (
-            <div key={div.id} className={`flex items-center justify-between py-3 ${i !== recentDividends.length - 1 ? 'border-b border-slate-700/50' : ''}`}>
-              <div>
-                <div className="text-sm font-medium text-slate-200">{div.name}</div>
-                <div className="text-xs text-slate-500">{div.date} • {div.type}</div>
-              </div>
-              <div className="text-emerald-400 font-medium text-sm">
-                +{div.amount.toFixed(2)} €
-              </div>
+      {/* Bottom Section: Calendar & History */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Upcoming Payments */}
+        <Card>
+          <div className="flex justify-between items-start mb-4">
+            <h3 className="font-semibold text-white flex items-center gap-2">
+              <CalendarCheck size={18} className="text-blue-400" />
+              Nächste Auszahlungen
+            </h3>
+            <button
+              onClick={handleScanDividends}
+              disabled={isUpdating}
+              className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-1 rounded transition-colors disabled:opacity-50"
+            >
+              {isUpdating ? 'Lade Daten...' : '🔄 Daten prüfen'}
+            </button>
+          </div>
+          <div className="space-y-3">
+            <div className="text-slate-400 text-sm p-4 text-center">
+              Keine bestätigten Ex-Dates.
+              <br />
+              <span className="text-xs text-slate-500">Prognose basiert auf aktuellen Positionen.</span>
             </div>
-          ))}
-        </div>
-      </Card>
+          </div>
+        </Card>
+
+        {/* Recent History */}
+        <Card>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold text-white flex items-center gap-2">
+              <Wallet size={18} className="text-slate-400" />
+              Zahlungshistorie
+            </h3>
+          </div>
+          <div className="space-y-0">
+            {recentDividends.map((div, i) => (
+              <div key={div.id} className={`flex items-center justify-between py-3 ${i !== recentDividends.length - 1 ? 'border-b border-slate-700/50' : ''}`}>
+                <div>
+                  <div className="text-sm font-medium text-slate-200">{div.name}</div>
+                  <div className="text-xs text-slate-500">{div.date} • {div.type}</div>
+                </div>
+                <div className="text-emerald-400 font-medium text-sm">
+                  +{div.amount.toFixed(2)} €
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 
 
 
-const PortfolioList = ({ selectedPortfolioId, onSelectSecurity }: { selectedPortfolioId: string, onSelectSecurity: (isin: string) => void }) => {
+const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPortfolioIds: string[], onSelectSecurity: (isin: string) => void }) => {
   const { project } = useProject();
 
   // Filter transactions based on selected Portfolio
   const filteredTransactions = useMemo(() => {
     if (!project) return [];
-    if (selectedPortfolioId === 'all') return project.transactions;
-    return project.transactions.filter(t => t.portfolioId === selectedPortfolioId);
-  }, [project, selectedPortfolioId]);
+    if (selectedPortfolioIds.length === 0) return project.transactions;
+    return project.transactions.filter(t => selectedPortfolioIds.includes(t.portfolioId));
+  }, [project, selectedPortfolioIds]);
 
   const { holdings } = useMemo(() => {
     if (!project) return { holdings: [] };
