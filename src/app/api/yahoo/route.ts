@@ -119,10 +119,12 @@ export async function POST(req: NextRequest) {
                 });
             }
 
+            const resolvedCurrency = meta.currency || quoteResult.currency || summaryDetail.currency;
+
             return NextResponse.json({
                 history,
                 splits,
-                currency: meta.currency,
+                currency: resolvedCurrency,
                 symbol: meta.symbol,
                 price: meta.regularMarketPrice,
                 // Enhanced Data from Quote
