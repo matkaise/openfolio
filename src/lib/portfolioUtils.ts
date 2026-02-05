@@ -588,6 +588,7 @@ export interface AnalysisMetrics {
     maxDrawdown: number; // %
     maxDrawdownDate: string;
     drawdownHistory?: { date: string; value: number }[]; // Full history for underwater chart
+    twrSeries?: { date: string; value: number }[]; // Full TWR series (source of truth)
     monthlyReturns: { month: string; return: number }[];
     monthlyReturnsMap?: Record<string, number>; // Full history map for navigation
     availableYears?: number[];
@@ -731,3 +732,51 @@ export function calculateAnalysisMetrics(
         monthlyReturns
     };
 }
+
+/**
+ * Calculate Time-Weighted Return (TWR) Series
+ * Used for charts to show pure performance over time, filtering out cashflows.
+ */
+export function calculateTWRSeries(
+    historyData: { date: string; value: number; invested: number }[]
+): { date: string; value: number }[] {
+    if (!historyData || historyData.length === 0) return [];
+
+    const result: { date: string; value: number }[] = [];
+
+    // Start baseline
+    result.push({ date: historyData[0].date, value: 0 });
+
+    let index = 1.0;
+
+    for (let i = 1; i < historyData.length; i++) {
+        const prev = historyData[i - 1];
+        const curr = historyData[i];
+
+        // Cashflow Detection
+        const prevInvested = prev.invested || 0;
+        const currInvested = curr.invested || 0;
+        const cashFlow = currInvested - prevInvested;
+
+        // TWR Formula: (End - (Start + CF)) / (Start + CF)
+        // Check for edge case: Start + CF = 0
+        const denominator = prev.value + cashFlow;
+
+        let periodicReturn = 0;
+        if (denominator !== 0) {
+            periodicReturn = (curr.value - denominator) / denominator; // Raw scalar (e.g. 0.01 for 1%)
+        }
+
+        // Chain the return
+        index *= (1 + periodicReturn);
+
+        // Store percentage ((1.05 -> 5%))
+        result.push({
+            date: curr.date,
+            value: (index - 1) * 100
+        });
+    }
+
+    return result;
+}
+

@@ -38,7 +38,7 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { useMemo } from 'react';
-import { calculateHoldings, calculatePortfolioHistory } from '@/lib/portfolioUtils';
+import { calculateHoldings, calculatePortfolioHistory, type Holding } from '@/lib/portfolioUtils';
 import { calculateAnalysisMetrics } from '@/lib/analysisService';
 import { useProject } from '@/contexts/ProjectContext';
 import { ProjectLauncher } from '@/components/ProjectLauncher';
@@ -48,6 +48,7 @@ import { AllocationChart } from '@/components/AllocationChart';
 import { ImportContent } from '@/components/ImportContent';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { TransactionModal } from '@/components/TransactionModal';
+import { ReturnChartModal } from '@/components/ReturnChartModal';
 
 
 // --- Mock Data ---
@@ -608,7 +609,7 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
   const filteredTransactions = useMemo(() => {
     if (!project) return [];
     if (selectedPortfolioIds.length === 0) return project.transactions; // All
-    return project.transactions.filter(t => selectedPortfolioIds.includes(t.portfolioId));
+    return project.transactions.filter(t => t.portfolioId && selectedPortfolioIds.includes(t.portfolioId));
   }, [project, selectedPortfolioIds]);
 
   const { holdings, realizedPnL } = useMemo(() => {
@@ -851,19 +852,23 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
 
   // Calculate Sector Data
   const sectorData = useMemo(() => {
-    const groups: Record<string, number> = {};
+    const groups: Record<string, { value: number; holdings: Holding[] }> = {};
     let totalValue = 0;
 
     holdings.forEach(h => {
       const sector = h.security.sector || 'Unbekannt';
-      groups[sector] = (groups[sector] || 0) + h.value;
+      if (!groups[sector]) groups[sector] = { value: 0, holdings: [] };
+      groups[sector].value += h.value;
+      groups[sector].holdings.push(h);
       totalValue += h.value;
     });
 
     return Object.entries(groups)
-      .map(([name, value]) => ({
+      .map(([name, group]) => ({
         name,
-        value: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0
+        value: totalValue > 0 ? Math.round((group.value / totalValue) * 100) : 0,
+        totalValue: group.value,
+        holdings: group.holdings.sort((a, b) => b.value - a.value)
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
@@ -871,19 +876,23 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
 
   // Calculate Region Data
   const regionData = useMemo(() => {
-    const groups: Record<string, number> = {};
+    const groups: Record<string, { value: number; holdings: Holding[] }> = {};
     let totalValue = 0;
 
     holdings.forEach(h => {
       const region = h.security.region || h.security.country || 'Unbekannt';
-      groups[region] = (groups[region] || 0) + h.value;
+      if (!groups[region]) groups[region] = { value: 0, holdings: [] };
+      groups[region].value += h.value;
+      groups[region].holdings.push(h);
       totalValue += h.value;
     });
 
     return Object.entries(groups)
-      .map(([name, value]) => ({
+      .map(([name, group]) => ({
         name,
-        value: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0
+        value: totalValue > 0 ? Math.round((group.value / totalValue) * 100) : 0,
+        totalValue: group.value,
+        holdings: group.holdings.sort((a, b) => b.value - a.value)
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
@@ -891,19 +900,23 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
 
   // Calculate Industry Data (Branche)
   const industryData = useMemo(() => {
-    const groups: Record<string, number> = {};
+    const groups: Record<string, { value: number; holdings: Holding[] }> = {};
     let totalValue = 0;
 
     holdings.forEach(h => {
       const industry = h.security.industry || 'Unbekannt';
-      groups[industry] = (groups[industry] || 0) + h.value;
+      if (!groups[industry]) groups[industry] = { value: 0, holdings: [] };
+      groups[industry].value += h.value;
+      groups[industry].holdings.push(h);
       totalValue += h.value;
     });
 
     return Object.entries(groups)
-      .map(([name, value]) => ({
+      .map(([name, group]) => ({
         name,
-        value: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0
+        value: totalValue > 0 ? Math.round((group.value / totalValue) * 100) : 0,
+        totalValue: group.value,
+        holdings: group.holdings.sort((a, b) => b.value - a.value)
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
@@ -1175,6 +1188,137 @@ const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: ()
   );
 };
 
+const HoldingsGroupModal = ({
+  isOpen,
+  onClose,
+  title,
+  holdings,
+  currency,
+  groupValue,
+  portfolioValue
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  holdings: Holding[];
+  currency: string;
+  groupValue: number;
+  portfolioValue: number;
+}) => {
+  if (!isOpen) return null;
+
+  const sortedHoldings = [...holdings].sort((a, b) => b.value - a.value);
+  const safeGroupValue = groupValue || sortedHoldings.reduce((sum, h) => sum + h.value, 0);
+  const groupShare = portfolioValue > 0 ? (safeGroupValue / portfolioValue) * 100 : 0;
+  const formatCurrency = (value: number) => value.toLocaleString('de-DE', { style: 'currency', currency });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+      <div
+        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className="text-xl font-bold text-white">{title}</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              {sortedHoldings.length} Positionen - {groupShare.toFixed(1)}% vom Portfolio
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
+            <X className="text-slate-400 hover:text-white" />
+          </button>
+        </div>
+
+        <div className="max-h-[60vh] overflow-y-auto divide-y divide-slate-800">
+          {sortedHoldings.map(h => {
+            const percentOfGroup = safeGroupValue > 0 ? (h.value / safeGroupValue) * 100 : 0;
+            return (
+              <div key={h.security.isin} className="py-3 flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm text-white font-medium truncate">{h.security.name}</p>
+                  <p className="text-xs text-slate-400 truncate">
+                    {h.security.isin}{h.security.quoteType ? ` - ${h.security.quoteType}` : ''}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-white">{formatCurrency(h.value)}</p>
+                  <p className="text-xs text-slate-400">{percentOfGroup.toFixed(1)}% der Gruppe</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const RiskMetricModal = ({
+  isOpen,
+  onClose,
+  title,
+  series,
+  color,
+  isPercentage,
+  tooltipLabel
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  series: { date: string; value: number }[];
+  color: string;
+  isPercentage: boolean;
+  tooltipLabel: string;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+      <div
+        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+            <Activity className="text-emerald-500" />
+            {title}
+          </h3>
+          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
+            <X className="text-slate-400 hover:text-white" />
+          </button>
+        </div>
+
+        <div className="h-80 w-full">
+          {series.length > 0 ? (
+            <SimpleAreaChart
+              data={series}
+              color={color}
+              height={320}
+              showAxes={true}
+              timeRange="MAX"
+              currency={isPercentage ? 'EUR' : ''}
+              isPercentage={isPercentage}
+              tooltipLabel={tooltipLabel}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-slate-500">
+              Keine Daten fÃ¼r diesen Zeitraum verfÃ¼gbar.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const toDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const AnalysisContent = ({
   selectedPortfolioIds,
   cachedData,
@@ -1189,11 +1333,33 @@ const AnalysisContent = ({
   const [showDrawdown, setShowDrawdown] = useState(false);
   const [isCalculating, setIsCalculating] = useState(true);
 
+  // New View States
+  const [returnViewMode, setReturnViewMode] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
+  const [selectedTileData, setSelectedTileData] = useState<{
+    title: string;
+    series: { date: string; value: number }[];
+    timeRange: string;
+  } | null>(null);
+  const [groupOverlay, setGroupOverlay] = useState<{
+    title: string;
+    holdings: Holding[];
+    groupValue: number;
+  } | null>(null);
+  const [riskModal, setRiskModal] = useState<{
+    title: string;
+    series: { date: string; value: number }[];
+    color: string;
+    isPercentage: boolean;
+    tooltipLabel: string;
+  } | null>(null);
+
+  const riskFreeRate = 0.02;
+
   // Filter transactions based on selected Portfolio (same as Dashboard)
   const filteredTransactions = useMemo(() => {
     if (!project) return [];
     if (selectedPortfolioIds.length === 0) return project.transactions;
-    return project.transactions.filter(t => selectedPortfolioIds.includes(t.portfolioId));
+    return project.transactions.filter(t => t.portfolioId && selectedPortfolioIds.includes(t.portfolioId));
   }, [project, selectedPortfolioIds]);
 
   // Calculate Holdings for Analysis (needed for Sector/Region)
@@ -1225,19 +1391,23 @@ const AnalysisContent = ({
 
   // Calculate Sector Data
   const sectorData = useMemo(() => {
-    const groups: Record<string, number> = {};
+    const groups: Record<string, { value: number; holdings: Holding[] }> = {};
     let totalValue = 0;
 
     holdings.forEach(h => {
       const sector = h.security.sector || 'Unbekannt';
-      groups[sector] = (groups[sector] || 0) + h.value;
+      if (!groups[sector]) groups[sector] = { value: 0, holdings: [] };
+      groups[sector].value += h.value;
+      groups[sector].holdings.push(h);
       totalValue += h.value;
     });
 
     return Object.entries(groups)
-      .map(([name, value]) => ({
+      .map(([name, group]) => ({
         name,
-        value: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0
+        value: totalValue > 0 ? Math.round((group.value / totalValue) * 100) : 0,
+        totalValue: group.value,
+        holdings: group.holdings.sort((a, b) => b.value - a.value)
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
@@ -1245,19 +1415,23 @@ const AnalysisContent = ({
 
   // Calculate Region Data
   const regionData = useMemo(() => {
-    const groups: Record<string, number> = {};
+    const groups: Record<string, { value: number; holdings: Holding[] }> = {};
     let totalValue = 0;
 
     holdings.forEach(h => {
       const region = h.security.region || h.security.country || 'Unbekannt';
-      groups[region] = (groups[region] || 0) + h.value;
+      if (!groups[region]) groups[region] = { value: 0, holdings: [] };
+      groups[region].value += h.value;
+      groups[region].holdings.push(h);
       totalValue += h.value;
     });
 
     return Object.entries(groups)
-      .map(([name, value]) => ({
+      .map(([name, group]) => ({
         name,
-        value: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0
+        value: totalValue > 0 ? Math.round((group.value / totalValue) * 100) : 0,
+        totalValue: group.value,
+        holdings: group.holdings.sort((a, b) => b.value - a.value)
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
@@ -1265,36 +1439,113 @@ const AnalysisContent = ({
 
   // Calculate Industry Data (Branche)
   const industryData = useMemo(() => {
-    const groups: Record<string, number> = {};
+    const groups: Record<string, { value: number; holdings: Holding[] }> = {};
     let totalValue = 0;
 
     holdings.forEach(h => {
       const industry = h.security.industry || 'Unbekannt';
-      groups[industry] = (groups[industry] || 0) + h.value;
+      if (!groups[industry]) groups[industry] = { value: 0, holdings: [] };
+      groups[industry].value += h.value;
+      groups[industry].holdings.push(h);
       totalValue += h.value;
     });
 
     return Object.entries(groups)
-      .map(([name, value]) => ({
+      .map(([name, group]) => ({
         name,
-        value: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0
+        value: totalValue > 0 ? Math.round((group.value / totalValue) * 100) : 0,
+        totalValue: group.value,
+        holdings: group.holdings.sort((a, b) => b.value - a.value)
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
+  }, [holdings]);
+
+  const portfolioTotalValue = useMemo(() => {
+    return holdings.reduce((sum, h) => sum + h.value, 0);
   }, [holdings]);
 
   // Calculate portfolio history for MAX (for analysis metrics across years)
   // Moved to effect to unblock UI
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [analysisMetrics, setAnalysisMetrics] = useState<any>(
-    { volatility: 0, sharpeRatio: 0, maxDrawdown: 0, maxDrawdownDate: '', availableYears: [], monthlyReturns: [] }
+    { volatility: 0, sharpeRatio: 0, maxDrawdown: 0, maxDrawdownDate: '', availableYears: [], monthlyReturns: [], twrSeries: [] }
   );
+
+  const riskSeries = useMemo(() => {
+    const series = analysisMetrics?.twrSeries || [];
+    if (series.length < 2) return { volatility: [], sharpe: [] };
+
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const annualizationDays = 365;
+    const indexSeries = series.map(p => ({
+      date: p.date,
+      index: 1 + (p.value / 100)
+    }));
+
+    const dailyReturns: number[] = new Array(indexSeries.length).fill(0);
+    for (let i = 1; i < indexSeries.length; i++) {
+      const prev = indexSeries[i - 1].index;
+      const curr = indexSeries[i].index;
+      dailyReturns[i] = prev > 0 ? (curr / prev) - 1 : 0;
+    }
+
+    let windowStart = 1;
+    let sum = 0;
+    let sumSq = 0;
+    const volatility: { date: string; value: number }[] = [];
+    const sharpe: { date: string; value: number }[] = [];
+
+    for (let i = 1; i < indexSeries.length; i++) {
+      const r = dailyReturns[i];
+      sum += r;
+      sumSq += r * r;
+
+      while (windowStart < i) {
+        const daysDiff = (new Date(indexSeries[i].date).getTime() - new Date(indexSeries[windowStart].date).getTime()) / msPerDay;
+        if (daysDiff <= annualizationDays) break;
+        const rDrop = dailyReturns[windowStart];
+        sum -= rDrop;
+        sumSq -= rDrop * rDrop;
+        windowStart++;
+      }
+
+      const count = i - windowStart + 1;
+      if (count < 2) continue;
+
+      const windowSpanDays = (new Date(indexSeries[i].date).getTime() - new Date(indexSeries[windowStart].date).getTime()) / msPerDay;
+      if (windowSpanDays < annualizationDays) continue;
+
+      const mean = sum / count;
+      const variance = Math.max(0, (sumSq / count) - (mean * mean));
+      const dailyVol = Math.sqrt(variance);
+      const annualizedVol = dailyVol * Math.sqrt(annualizationDays) * 100;
+
+      const startIndexValue = indexSeries[Math.max(windowStart - 1, 0)].index;
+      const startDate = new Date(indexSeries[Math.max(windowStart - 1, 0)].date);
+      const endDate = new Date(indexSeries[i].date);
+      const yearsElapsed = (endDate.getTime() - startDate.getTime()) / (msPerDay * annualizationDays);
+
+      let annualizedReturn = 0;
+      if (yearsElapsed > 0 && startIndexValue > 0) {
+        annualizedReturn = Math.pow(indexSeries[i].index / startIndexValue, 1 / yearsElapsed) - 1;
+      }
+
+      const sharpeValue = annualizedVol > 0 ? (annualizedReturn - riskFreeRate) / (annualizedVol / 100) : 0;
+
+      volatility.push({ date: indexSeries[i].date, value: Math.round(annualizedVol * 10) / 10 });
+      sharpe.push({ date: indexSeries[i].date, value: Math.round(sharpeValue * 100) / 100 });
+    }
+
+    return { volatility, sharpe };
+  }, [analysisMetrics?.twrSeries, riskFreeRate]);
 
   useEffect(() => {
     if (!project) return;
 
     // Check Cache
-    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}`;
+    // Added version suffix to force invalidation after TWR refactor
+    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|v3`;
     if (cachedData && cachedData.key === cacheKey) {
       setHistoryData(cachedData.historyData);
       setAnalysisMetrics(cachedData.analysisMetrics);
@@ -1362,6 +1613,123 @@ const AnalysisContent = ({
     return result;
   }, [analysisMetrics, selectedYear]);
 
+  // Calculate Aggregated Returns (Quarterly / Yearly)
+  const aggregatedReturns = useMemo(() => {
+    if (!analysisMetrics?.monthlyReturnsMap) return { quarterly: [], yearly: [] };
+
+    const quarterNames = ['Q1', 'Q2', 'Q3', 'Q4'];
+    const quarterly = [];
+
+    // Quarterly for Selected Year
+    for (let q = 0; q < 4; q++) {
+      // Simple geometric linking of monthly returns for the quarter: (1+r1)(1+r2)(1+r3) - 1
+      // This is an approximation for Q-MWR but standard for composed periods.
+      let growingReturn = 1.0;
+      let hasData = false;
+
+      for (let m = 0; m < 3; m++) {
+        const monthIndex = q * 3 + m + 1;
+        const monthKey = `${selectedYear}-${String(monthIndex).padStart(2, '0')}`;
+        if (analysisMetrics.monthlyReturnsMap[monthKey] !== undefined) {
+          growingReturn *= (1 + (analysisMetrics.monthlyReturnsMap[monthKey] / 100));
+          hasData = true;
+        }
+      }
+
+      quarterly.push({
+        label: quarterNames[q],
+        return: hasData ? Math.round((growingReturn - 1) * 100 * 10) / 10 : 0,
+        hasData,
+        startDate: `${selectedYear}-${String(q * 3 + 1).padStart(2, '0')}-01`,
+        endDate: toDateKey(new Date(selectedYear, (q + 1) * 3, 0)) // Last day of quarter
+      });
+    }
+
+    // Yearly (All Years)
+    const yearly = (analysisMetrics.availableYears || []).map((year: number) => {
+      let growingReturn = 1.0;
+      let hasData = false;
+
+      // Aggregate all 12 months for that year
+      for (let m = 1; m <= 12; m++) {
+        const monthKey = `${year}-${String(m).padStart(2, '0')}`;
+        if (analysisMetrics.monthlyReturnsMap[monthKey] !== undefined) {
+          growingReturn *= (1 + (analysisMetrics.monthlyReturnsMap[monthKey] / 100));
+          hasData = true;
+        }
+      }
+
+      return {
+        year,
+        return: hasData ? Math.round((growingReturn - 1) * 100 * 10) / 10 : 0,
+        startDate: `${year}-01-01`,
+        endDate: `${year}-12-31`
+      };
+    });
+
+    return { quarterly, yearly };
+  }, [analysisMetrics, selectedYear]);
+
+  const openGroupOverlay = (title: string, group: { holdings: Holding[]; totalValue: number }) => {
+    if (!group?.holdings?.length) return;
+    setGroupOverlay({
+      title,
+      holdings: group.holdings,
+      groupValue: group.totalValue
+    });
+  };
+
+  // Build a period chart series from the single TWR source of truth
+  const buildPeriodSeries = (periodStart: string, periodEnd: string) => {
+    const series = analysisMetrics?.twrSeries || [];
+    if (!series.length) return [];
+
+    const startIndex = series.findIndex(p => p.date >= periodStart);
+    if (startIndex === -1) return [];
+
+    const baselineIndex = Math.max(startIndex - 1, 0);
+    let endIndex = series.length - 1;
+
+    for (let i = startIndex; i < series.length; i++) {
+      if (series[i].date > periodEnd) {
+        endIndex = i - 1;
+        break;
+      }
+    }
+
+    if (endIndex < baselineIndex) return [];
+
+    const baselineValue = series[baselineIndex].value;
+    const baselineIndexValue = 1 + (baselineValue / 100);
+    const slice = series.slice(baselineIndex, endIndex + 1);
+
+    if (baselineIndexValue === 0) {
+      return slice.map(p => ({ date: p.date, value: 0 }));
+    }
+
+    return slice.map(p => {
+      const currentIndexValue = 1 + (p.value / 100);
+      return {
+        date: p.date,
+        value: ((currentIndexValue / baselineIndexValue) - 1) * 100
+      };
+    });
+  };
+
+  // Helper to open chart modal
+  const handleTileClick = (periodStart: string, periodEnd: string, title: string) => {
+    if (!periodStart || !periodEnd) return;
+
+    const series = buildPeriodSeries(periodStart, periodEnd);
+    if (series.length === 0) return;
+
+    setSelectedTileData({
+      title,
+      series,
+      timeRange: returnViewMode === 'monthly' ? '1M' : returnViewMode === 'quarterly' ? '3M' : '1Y'
+    });
+  };
+
 
   // Helper to get volatility label
   const getVolatilityLabel = (vol: number) => {
@@ -1378,8 +1746,15 @@ const AnalysisContent = ({
     return { text: 'Schwach', color: 'text-rose-400' };
   };
 
-  const volLabel = getVolatilityLabel(analysisMetrics.volatility);
-  const sharpeLabel = getSharpeLabel(analysisMetrics.sharpeRatio);
+  const currentVolatility = riskSeries.volatility.length > 0
+    ? riskSeries.volatility[riskSeries.volatility.length - 1].value
+    : analysisMetrics.volatility;
+  const currentSharpe = riskSeries.sharpe.length > 0
+    ? riskSeries.sharpe[riskSeries.sharpe.length - 1].value
+    : analysisMetrics.sharpeRatio;
+
+  const volLabel = getVolatilityLabel(currentVolatility);
+  const sharpeLabel = getSharpeLabel(currentSharpe);
 
   const availableYears = analysisMetrics.availableYears || [];
   const hasPrevYear = availableYears.indexOf(selectedYear) < availableYears.length - 1;
@@ -1418,19 +1793,56 @@ const AnalysisContent = ({
             onClose={() => setShowDrawdown(false)}
             data={analysisMetrics.drawdownHistory || []}
           />
+          <RiskMetricModal
+            isOpen={!!riskModal}
+            onClose={() => setRiskModal(null)}
+            title={riskModal?.title || ''}
+            series={riskModal?.series || []}
+            color={riskModal?.color || '#10b981'}
+            isPercentage={riskModal?.isPercentage ?? true}
+            tooltipLabel={riskModal?.tooltipLabel || ''}
+          />
 
           {/* Risk Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="flex flex-col items-center justify-center p-4">
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Volatilität (1J)</p>
-              <span className="text-xl font-bold text-white">{analysisMetrics.volatility.toFixed(1)}%</span>
-              <span className={`text-xs mt-1 ${volLabel.color}`}>{volLabel.text}</span>
-            </Card>
-            <Card className="flex flex-col items-center justify-center p-4">
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Sharpe Ratio</p>
-              <span className="text-xl font-bold text-white">{analysisMetrics.sharpeRatio.toFixed(2)}</span>
-              <span className={`text-xs mt-1 ${sharpeLabel.color}`}>{sharpeLabel.text}</span>
-            </Card>
+            <div
+              onClick={() => setRiskModal({
+                title: 'Volatilität (1J)',
+                series: riskSeries.volatility,
+                color: '#f97316',
+                isPercentage: true,
+                tooltipLabel: 'Volatilität (annualisiert)'
+              })}
+              className="cursor-pointer hover:bg-slate-800 transition-colors group relative rounded-xl"
+            >
+              <Card className="flex flex-col items-center justify-center p-4 hover:border-slate-600 transition-colors">
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <BarChart3 size={14} className="text-slate-500" />
+                </div>
+                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Volatilität (1J)</p>
+                <span className="text-xl font-bold text-white">{currentVolatility.toFixed(1)}%</span>
+                <span className={`text-xs mt-1 ${volLabel.color}`}>{volLabel.text}</span>
+              </Card>
+            </div>
+            <div
+              onClick={() => setRiskModal({
+                title: 'Sharpe Ratio (1J)',
+                series: riskSeries.sharpe,
+                color: '#10b981',
+                isPercentage: false,
+                tooltipLabel: 'Sharpe Ratio'
+              })}
+              className="cursor-pointer hover:bg-slate-800 transition-colors group relative rounded-xl"
+            >
+              <Card className="flex flex-col items-center justify-center p-4 hover:border-slate-600 transition-colors">
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <BarChart3 size={14} className="text-slate-500" />
+                </div>
+                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Sharpe Ratio (1J)</p>
+                <span className="text-xl font-bold text-white">{currentSharpe.toFixed(2)}</span>
+                <span className={`text-xs mt-1 ${sharpeLabel.color}`}>{sharpeLabel.text}</span>
+              </Card>
+            </div>
             <div
               onClick={() => setShowDrawdown(true)}
               className="cursor-pointer hover:bg-slate-800 transition-colors group relative rounded-xl"
@@ -1454,41 +1866,121 @@ const AnalysisContent = ({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Monthly Heatmap */}
+            {/* Return Heatmap / Grid */}
             <Card className="lg:col-span-2">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="font-semibold text-white flex items-center gap-2">
-                  <Activity size={18} className="text-emerald-400" />
-                  Monatliche Rendite ({selectedYear})
-                </h3>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => navigateYear('prev')}
-                    disabled={!hasPrevYear}
-                    className={`p-1 rounded hover:bg-slate-800 transition-colors ${!hasPrevYear ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400'}`}
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                  <button
-                    onClick={() => navigateYear('next')}
-                    disabled={!hasNextYear}
-                    className={`p-1 rounded hover:bg-slate-800 transition-colors ${!hasNextYear ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400'}`}
-                  >
-                    <ChevronRight size={20} />
-                  </button>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+                <div className="flex items-center gap-4">
+                  <h3 className="font-semibold text-white flex items-center gap-2">
+                    <Activity size={18} className="text-emerald-400" />
+                    Rendite
+                    {returnViewMode !== 'yearly' && <span className="text-slate-500 font-normal">({selectedYear})</span>}
+                  </h3>
+
+                  {/* View Toggle */}
+                  <div className="flex bg-slate-900/50 p-1 rounded-lg">
+                    {(['monthly', 'quarterly', 'yearly'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setReturnViewMode(mode)}
+                        className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${returnViewMode === mode ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                      >
+                        {mode === 'monthly' ? 'Monat' : mode === 'quarterly' ? 'Quartal' : 'Jahr'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Year Navigation (Only for Monthly/Quarterly) */}
+                {returnViewMode !== 'yearly' && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigateYear('prev')}
+                      disabled={!hasPrevYear}
+                      className={`p-1 rounded hover:bg-slate-800 transition-colors ${!hasPrevYear ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400'}`}
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <button
+                      onClick={() => navigateYear('next')}
+                      disabled={!hasNextYear}
+                      className={`p-1 rounded hover:bg-slate-800 transition-colors ${!hasNextYear ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400'}`}
+                    >
+                      <ChevronRight size={20} />
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                {displayedMonthlyReturns.map((m: { month: string; return: number }) => (
-                  <div key={m.month} className="bg-slate-900/50 rounded-lg p-3 flex flex-col items-center justify-center hover:bg-slate-800 transition">
-                    <span className="text-xs text-slate-500 mb-1">{m.month}</span>
-                    <span className={`font-bold ${m.return >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {m.return > 0 ? '+' : ''}{m.return}%
+
+              <div className={`grid gap-3 ${returnViewMode === 'monthly' ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6' : returnViewMode === 'quarterly' ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'}`}>
+                {returnViewMode === 'monthly' && displayedMonthlyReturns.map((m: { month: string; return: number }, index: number) => {
+                  // Calculate mock dates for click
+                  const monthIndex = index + 1;
+                  const startDate = `${selectedYear}-${String(monthIndex).padStart(2, '0')}-01`;
+                  const endDate = toDateKey(new Date(selectedYear, monthIndex, 0));
+
+                  return (
+                    <div
+                      key={m.month}
+                      onClick={() => handleTileClick(startDate, endDate, `${m.month} ${selectedYear}`)}
+                      className="bg-slate-900/50 rounded-lg p-3 flex flex-col items-center justify-center hover:bg-slate-800 transition cursor-pointer group relative"
+                    >
+                      <span className="text-xs text-slate-500 mb-1">{m.month}</span>
+                      <span className={`font-bold ${m.return >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {m.return > 0 ? '+' : ''}{m.return}%
+                      </span>
+                      <div className="absolute inset-0 border-2 border-emerald-500/0 group-hover:border-emerald-500/20 rounded-lg transition-all"></div>
+                    </div>
+                  );
+                })}
+
+                {returnViewMode === 'quarterly' && aggregatedReturns.quarterly.map((q) => (
+                  <div
+                    key={q.label}
+                    onClick={() => handleTileClick(q.startDate, q.endDate, `${q.label} ${selectedYear}`)}
+                    className="bg-slate-900/50 rounded-lg p-4 flex flex-col items-center justify-center hover:bg-slate-800 transition cursor-pointer group relative"
+                  >
+                    <span className="text-xs text-slate-500 mb-1 uppercase tracking-wider">{q.label}</span>
+                    <span className={`text-lg font-bold ${q.return >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {q.return > 0 ? '+' : ''}{q.return}%
                     </span>
+                    <div className="absolute inset-0 border-2 border-emerald-500/0 group-hover:border-emerald-500/20 rounded-lg transition-all"></div>
+                  </div>
+                ))}
+
+                {returnViewMode === 'yearly' && aggregatedReturns.yearly.map((y) => (
+                  <div
+                    key={y.year}
+                    onClick={() => handleTileClick(y.startDate, y.endDate, `Jahr ${y.year}`)}
+                    className="bg-slate-900/50 rounded-lg p-4 flex flex-col items-center justify-center hover:bg-slate-800 transition cursor-pointer group relative"
+                  >
+                    <span className="text-xs text-slate-500 mb-1">{y.year}</span>
+                    <span className={`text-lg font-bold ${y.return >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {y.return > 0 ? '+' : ''}{y.return}%
+                    </span>
+                    <div className="absolute inset-0 border-2 border-emerald-500/0 group-hover:border-emerald-500/20 rounded-lg transition-all"></div>
                   </div>
                 ))}
               </div>
             </Card>
+
+            <ReturnChartModal
+              isOpen={!!selectedTileData}
+              onClose={() => setSelectedTileData(null)}
+              series={selectedTileData?.series || []}
+              title={selectedTileData?.title || ''}
+              currency={project?.settings.baseCurrency || 'EUR'}
+              timeRange={selectedTileData?.timeRange}
+            />
+
+            <HoldingsGroupModal
+              isOpen={!!groupOverlay}
+              onClose={() => setGroupOverlay(null)}
+              title={groupOverlay?.title || ''}
+              holdings={groupOverlay?.holdings || []}
+              currency={project?.settings.baseCurrency || 'EUR'}
+              groupValue={groupOverlay?.groupValue || 0}
+              portfolioValue={portfolioTotalValue}
+            />
 
             {/* Region Allocation */}
             <Card>
@@ -1498,18 +1990,29 @@ const AnalysisContent = ({
               </h3>
               <div className="space-y-4">
                 {regionData.map((region) => (
-                  <div key={region.name}>
+                  <button
+                    key={region.name}
+                    type="button"
+                    onClick={() => openGroupOverlay(`Region: ${region.name}`, region)}
+                    className="w-full text-left group -mx-2 px-2 py-2 rounded-lg transition-all hover:bg-slate-800/60 hover:-translate-y-0.5 hover:shadow-lg/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 cursor-pointer"
+                  >
                     <div className="flex justify-between text-sm mb-1">
-                      <span className="text-slate-300">{region.name}</span>
-                      <span className="text-slate-400">{region.value}%</span>
+                      <span className="text-slate-300 group-hover:text-white transition-colors flex items-center gap-2">
+                        {region.name}
+                        <span className="text-[10px] uppercase tracking-wider text-slate-500 group-hover:text-slate-300 transition-colors">Details</span>
+                      </span>
+                      <span className="text-slate-400 flex items-center gap-1">
+                        {region.value}%
+                        <ChevronRight className="w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5" />
+                      </span>
                     </div>
                     <div className="w-full bg-slate-700 rounded-full h-2">
                       <div
-                        className="bg-blue-500 h-2 rounded-full"
+                        className="bg-blue-500 h-2 rounded-full transition-all group-hover:brightness-110"
                         style={{ width: `${region.value}%` }}
                       ></div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </Card>
@@ -1524,18 +2027,29 @@ const AnalysisContent = ({
               </h3>
               <div className="space-y-4">
                 {industryData.map((industry) => (
-                  <div key={industry.name}>
+                  <button
+                    key={industry.name}
+                    type="button"
+                    onClick={() => openGroupOverlay(`Branche: ${industry.name}`, industry)}
+                    className="w-full text-left group -mx-2 px-2 py-2 rounded-lg transition-all hover:bg-slate-800/60 hover:-translate-y-0.5 hover:shadow-lg/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 cursor-pointer"
+                  >
                     <div className="flex justify-between text-sm mb-1">
-                      <span className="text-slate-300">{industry.name}</span>
-                      <span className="text-slate-400">{industry.value}%</span>
+                      <span className="text-slate-300 group-hover:text-white transition-colors flex items-center gap-2">
+                        {industry.name}
+                        <span className="text-[10px] uppercase tracking-wider text-slate-500 group-hover:text-slate-300 transition-colors">Details</span>
+                      </span>
+                      <span className="text-slate-400 flex items-center gap-1">
+                        {industry.value}%
+                        <ChevronRight className="w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5" />
+                      </span>
                     </div>
                     <div className="w-full bg-slate-700 rounded-full h-2">
                       <div
-                        className="bg-amber-500 h-2 rounded-full"
+                        className="bg-amber-500 h-2 rounded-full transition-all group-hover:brightness-110"
                         style={{ width: `${industry.value}%` }}
                       ></div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </Card>
@@ -1547,18 +2061,29 @@ const AnalysisContent = ({
               </h3>
               <div className="space-y-4">
                 {sectorData.map((sector) => (
-                  <div key={sector.name}>
+                  <button
+                    key={sector.name}
+                    type="button"
+                    onClick={() => openGroupOverlay(`Sektor: ${sector.name}`, sector)}
+                    className="w-full text-left group -mx-2 px-2 py-2 rounded-lg transition-all hover:bg-slate-800/60 hover:-translate-y-0.5 hover:shadow-lg/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40 cursor-pointer"
+                  >
                     <div className="flex justify-between text-sm mb-1">
-                      <span className="text-slate-300">{sector.name}</span>
-                      <span className="text-slate-400">{sector.value}%</span>
+                      <span className="text-slate-300 group-hover:text-white transition-colors flex items-center gap-2">
+                        {sector.name}
+                        <span className="text-[10px] uppercase tracking-wider text-slate-500 group-hover:text-slate-300 transition-colors">Details</span>
+                      </span>
+                      <span className="text-slate-400 flex items-center gap-1">
+                        {sector.value}%
+                        <ChevronRight className="w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5" />
+                      </span>
                     </div>
                     <div className="w-full bg-slate-700 rounded-full h-2">
                       <div
-                        className="bg-purple-500 h-2 rounded-full"
+                        className="bg-purple-500 h-2 rounded-full transition-all group-hover:brightness-110"
                         style={{ width: `${sector.value}%` }}
                       ></div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </Card>
@@ -1637,7 +2162,7 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
   const filteredTransactions = useMemo(() => {
     if (!project) return [];
     if (selectedPortfolioIds.length === 0) return project.transactions;
-    return project.transactions.filter(t => selectedPortfolioIds.includes(t.portfolioId));
+    return project.transactions.filter(t => t.portfolioId && selectedPortfolioIds.includes(t.portfolioId));
   }, [project, selectedPortfolioIds]);
 
   // 2. Calculate Holdings (for Yield Calculation)
@@ -2304,7 +2829,7 @@ const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPor
   const filteredTransactions = useMemo(() => {
     if (!project) return [];
     if (selectedPortfolioIds.length === 0) return project.transactions;
-    return project.transactions.filter(t => selectedPortfolioIds.includes(t.portfolioId));
+    return project.transactions.filter(t => t.portfolioId && selectedPortfolioIds.includes(t.portfolioId));
   }, [project, selectedPortfolioIds]);
 
   const { holdings } = useMemo(() => {

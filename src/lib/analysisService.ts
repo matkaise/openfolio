@@ -1,5 +1,5 @@
 
-import { AnalysisMetrics } from './portfolioUtils';
+import { AnalysisMetrics, calculateTWRSeries } from './portfolioUtils';
 
 /**
  * Calculate portfolio analysis metrics
@@ -15,108 +15,130 @@ export function calculateAnalysisMetrics(
             sharpeRatio: 0,
             maxDrawdown: 0,
             maxDrawdownDate: '',
+            twrSeries: [],
             monthlyReturns: []
         };
     }
 
     // 1. Calculate monthly returns
+    // 1. Calculate monthly returns using TWR Series (Source of Truth)
+    // This ensures consistency with the detailed charts.
+    const twrSeries = calculateTWRSeries(historyData);
+
+    // Helper to find TWR value at a specific date
+    const getTwrValue = (d: string) => {
+        const found = twrSeries.find(item => item.date === d);
+        return found ? found.value : 0;
+    };
+
     const monthlyReturnsMap: Record<string, number> = {};
-    const dailyReturns: number[] = [];
+    const months: string[] = [];
+    const monthSet = new Set<string>();
 
-    // Calculate daily returns for volatility
-    for (let i = 1; i < historyData.length; i++) {
-        const prev = historyData[i - 1];
-        const curr = historyData[i];
-
-        if (prev.value > 0) {
-            const dailyReturn = (curr.value - prev.value) / prev.value;
-            dailyReturns.push(dailyReturn);
-        }
-    }
-
-    // Identify month start values for robust return calculation
-    // Now storing both Value and Invested capital
-    const monthStartPoints: Record<string, { value: number, invested: number }> = {};
-    const months: string[] = []; // Keep order
-
-    for (const point of historyData) {
-        const date = new Date(point.date);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-
-        // Pick the first data point encountered for each month
-        // Since historyData is sorted by date asc, this is the earliest point (e.g. 1st of month)
-        if (!monthStartPoints[monthKey]) {
-            monthStartPoints[monthKey] = {
-                value: point.value,
-                invested: point.invested || 0
-            };
+    // Identify months present in data
+    historyData.forEach(d => {
+        const monthKey = d.date.slice(0, 7); // YYYY-MM (timezone-safe)
+        if (!monthSet.has(monthKey)) {
+            monthSet.add(monthKey);
             months.push(monthKey);
         }
-    }
+    });
 
-    // Calculate return for each month using Period MWR logic
     for (let i = 0; i < months.length; i++) {
         const monthKey = months[i];
-        const startPoint = monthStartPoints[monthKey];
-        let startValue = startPoint.value;
-        const startInvested = startPoint.invested;
 
-        // CRITICAL FIX: If this is the very first month of the history, 
-        // check if we should base strictly on Invested Capital to capture Day 1 Alpha
-        // (Similar to MAX View logic: First Buy @ 100 vs Close @ 131 should be +31%)
-        if (i === 0 && startInvested > 0) {
-            // Check if this month start point is actually the history start point
-            // (It usually is, as Month 0 Start = History[0])
-            if (monthStartPoints[monthKey].value === historyData[0].value) {
-                startValue = startInvested;
+        // Find start and end dates for this month in the data
+        const currentMonthData = historyData.filter(d => d.date.startsWith(monthKey));
+
+        if (currentMonthData.length === 0) continue;
+
+        const endDate = currentMonthData[currentMonthData.length - 1].date;
+        const startDate = currentMonthData[0].date;
+
+        // TWR Cumulative Values (Percentages)
+        const endTwr = getTwrValue(endDate);
+
+        // Find previous month's end TWR to act as baseline
+        let startTwr = 0;
+        if (i > 0) {
+            const prevMonthKey = months[i - 1];
+            const prevMonthData = historyData.filter(d => d.date.startsWith(prevMonthKey));
+            if (prevMonthData.length > 0) {
+                const prevEndDate = prevMonthData[prevMonthData.length - 1].date;
+                startTwr = getTwrValue(prevEndDate);
+            } else {
+                startTwr = getTwrValue(startDate); // Fallback
             }
-        }
-
-        let endValue = 0;
-        let endInvested = 0;
-
-        if (i < months.length - 1) {
-            const nextMonthKey = months[i + 1];
-            endValue = monthStartPoints[nextMonthKey].value;
-            endInvested = monthStartPoints[nextMonthKey].invested;
         } else {
-            // For the last month, use the very last data point available
-            const lastPoint = historyData[historyData.length - 1];
-            endValue = lastPoint.value;
-            endInvested = lastPoint.invested || 0;
+            startTwr = 0;
         }
 
-        // MWR Formula: ((Val_End - Val_Start) - (Inv_End - Inv_Start)) / (Val_Start + (Inv_End - Inv_Start))
-        const deltaInvested = endInvested - startInvested;
-        const capitalAtWork = startValue + deltaInvested;
+        const indexEnd = 1 + (endTwr / 100);
+        const indexStart = 1 + (startTwr / 100);
 
-        let monthReturn = 0;
-        if (capitalAtWork > 0) {
-            const profitWithNewCash = (endValue - startValue) - deltaInvested;
-            monthReturn = (profitWithNewCash / capitalAtWork) * 100;
-        }
-
+        const monthReturn = ((indexEnd / indexStart) - 1) * 100;
         monthlyReturnsMap[monthKey] = monthReturn;
     }
 
-    // 2. Calculate Volatility (annualized)
-    let volatility = 0;
-    if (dailyReturns.length > 1) {
-        const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
-        const variance = dailyReturns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / dailyReturns.length;
-        const dailyVol = Math.sqrt(variance);
-        volatility = dailyVol * Math.sqrt(252) * 100;
+    // 2. Calculate Volatility (annualized, trailing 1Y using TWR)
+    const annualizationDays = 365; // data points are daily (incl. weekends)
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const twrIndexSeries = twrSeries.map(p => ({
+        date: p.date,
+        index: 1 + (p.value / 100)
+    }));
+
+    const lastTwrDate = new Date(twrIndexSeries[twrIndexSeries.length - 1].date);
+    const oneYearAgo = new Date(lastTwrDate);
+    oneYearAgo.setFullYear(lastTwrDate.getFullYear() - 1);
+
+    const firstInWindow = twrIndexSeries.findIndex(p => new Date(p.date) >= oneYearAgo);
+    const windowStart = Math.max(firstInWindow, 1);
+
+    let windowDailyReturns: number[] = [];
+    for (let i = windowStart; i < twrIndexSeries.length; i++) {
+        const prev = twrIndexSeries[i - 1].index;
+        const curr = twrIndexSeries[i].index;
+        if (prev > 0) {
+            windowDailyReturns.push((curr / prev) - 1);
+        }
     }
 
-    // 3. Calculate Sharpe Ratio
-    let sharpeRatio = 0;
-    if (historyData.length > 1 && historyData[0].value > 0) {
-        const totalReturn = (historyData[historyData.length - 1].value - historyData[0].value) / historyData[0].value;
-        const daysDiff = (new Date(historyData[historyData.length - 1].date).getTime() - new Date(historyData[0].date).getTime()) / (1000 * 60 * 60 * 24);
-        const yearsElapsed = daysDiff / 365;
+    // Fallback for short histories: use full series
+    let effectiveStartIndex = Math.max(windowStart - 1, 0);
+    if (windowDailyReturns.length < 2) {
+        windowDailyReturns = [];
+        effectiveStartIndex = 0;
+        for (let i = 1; i < twrIndexSeries.length; i++) {
+            const prev = twrIndexSeries[i - 1].index;
+            const curr = twrIndexSeries[i].index;
+            if (prev > 0) {
+                windowDailyReturns.push((curr / prev) - 1);
+            }
+        }
+    }
 
-        if (yearsElapsed > 0) {
-            const annualizedReturn = totalReturn / yearsElapsed;
+    let volatility = 0;
+    if (windowDailyReturns.length > 1) {
+        const mean = windowDailyReturns.reduce((a, b) => a + b, 0) / windowDailyReturns.length;
+        const variance = windowDailyReturns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / windowDailyReturns.length;
+        const dailyVol = Math.sqrt(variance);
+        volatility = dailyVol * Math.sqrt(annualizationDays) * 100;
+    }
+
+    // 3. Calculate Sharpe Ratio (trailing 1Y using TWR)
+    let sharpeRatio = 0;
+    if (twrIndexSeries.length > 1) {
+        const startIndex = effectiveStartIndex;
+        const startValue = twrIndexSeries[startIndex].index;
+        const endValue = twrIndexSeries[twrIndexSeries.length - 1].index;
+        const startDate = new Date(twrIndexSeries[startIndex].date);
+        const endDate = new Date(twrIndexSeries[twrIndexSeries.length - 1].date);
+        const daysDiff = (endDate.getTime() - startDate.getTime()) / msPerDay;
+        const yearsElapsed = daysDiff / annualizationDays;
+
+        if (yearsElapsed > 0 && startValue > 0) {
+            const annualizedReturn = Math.pow(endValue / startValue, 1 / yearsElapsed) - 1;
             const excessReturn = annualizedReturn - riskFreeRate;
             sharpeRatio = volatility > 0 ? excessReturn / (volatility / 100) : 0;
         }
@@ -193,11 +215,10 @@ export function calculateAnalysisMetrics(
 
     // Determine available years from data
     const availableYearsSet = new Set<number>();
-    historyData.forEach(d => availableYearsSet.add(new Date(d.date).getFullYear()));
+    historyData.forEach(d => availableYearsSet.add(Number(d.date.slice(0, 4))));
     const availableYears = Array.from(availableYearsSet).sort((a, b) => b - a); // Descending
 
-    const lastDate = new Date(historyData[historyData.length - 1].date);
-    const splitYear = lastDate.getFullYear();
+    const splitYear = Number(historyData[historyData.length - 1].date.slice(0, 4));
 
     for (let month = 0; month < 12; month++) {
         const monthKey = `${splitYear}-${String(month + 1).padStart(2, '0')}`;
@@ -215,6 +236,7 @@ export function calculateAnalysisMetrics(
         maxDrawdown: -Math.round(maxDrawdown * 10) / 10,
         maxDrawdownDate,
         drawdownHistory,
+        twrSeries,
         monthlyReturns,
         monthlyReturnsMap,
         availableYears
