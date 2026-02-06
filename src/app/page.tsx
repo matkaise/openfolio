@@ -415,13 +415,15 @@ export default function PortfolioApp() {
   const renderContent = () => {
     switch (activeTab) {
       case 'Dashboard':
-        return <DashboardContent timeRange={timeRange} setTimeRange={setTimeRange} selectedPortfolioIds={selectedPortfolioIds} onSelectSecurity={setSelectedSecurityIsin} />;
+        return <DashboardContent timeRange={timeRange} setTimeRange={setTimeRange} selectedPortfolioIds={selectedPortfolioIds} onSelectSecurity={setSelectedSecurityIsin} onShowPortfolio={() => setActiveTab('Portfolio')} />;
       case 'Portfolio':
         return <PortfolioList selectedPortfolioIds={selectedPortfolioIds} onSelectSecurity={setSelectedSecurityIsin} />;
       case 'Analyse':
         return <AnalysisContent selectedPortfolioIds={selectedPortfolioIds} cachedData={analysisCache} onCacheUpdate={handleCacheUpdate} />;
       case 'Dividenden':
         return <DividendenContent selectedPortfolioIds={selectedPortfolioIds} />;
+      case 'Transaktionen':
+        return <TransactionsContent selectedPortfolioIds={selectedPortfolioIds} />;
       case 'Datenquellen':
         return <DataSourcesContent />;
       case 'Import':
@@ -461,6 +463,7 @@ export default function PortfolioApp() {
           <SidebarItem icon={PieChart} label="Analyse" active={activeTab === 'Analyse'} onClick={() => setActiveTab('Analyse')} />
           <SidebarItem icon={Wallet} label="Wertpapiere" active={activeTab === 'Portfolio'} onClick={() => setActiveTab('Portfolio')} />
           <SidebarItem icon={Calendar} label="Dividenden" active={activeTab === 'Dividenden'} onClick={() => setActiveTab('Dividenden')} />
+          <SidebarItem icon={FileText} label="Transaktionen" active={activeTab === 'Transaktionen'} onClick={() => setActiveTab('Transaktionen')} />
           <SidebarItem icon={Database} label="Datenquellen" active={activeTab === 'Datenquellen'} onClick={() => setActiveTab('Datenquellen')} />
         </nav>
 
@@ -594,6 +597,7 @@ export default function PortfolioApp() {
             <SidebarItem icon={Wallet} label="Wertpapiere" active={activeTab === 'Portfolio'} onClick={() => { setActiveTab('Portfolio'); setMobileMenuOpen(false) }} />
             <SidebarItem icon={PieChart} label="Analyse" active={activeTab === 'Analyse'} onClick={() => { setActiveTab('Analyse'); setMobileMenuOpen(false) }} />
             <SidebarItem icon={Calendar} label="Dividenden" active={activeTab === 'Dividenden'} onClick={() => { setActiveTab('Dividenden'); setMobileMenuOpen(false) }} />
+            <SidebarItem icon={FileText} label="Transaktionen" active={activeTab === 'Transaktionen'} onClick={() => { setActiveTab('Transaktionen'); setMobileMenuOpen(false) }} />
             <SidebarItem icon={Database} label="Datenquellen" active={activeTab === 'Datenquellen'} onClick={() => { setActiveTab('Datenquellen'); setMobileMenuOpen(false) }} />
           </nav>
         </div>
@@ -612,7 +616,7 @@ export default function PortfolioApp() {
 
 // --- Sub-Components ---
 
-const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectSecurity }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioIds: string[], onSelectSecurity: (isin: string) => void }) => {
+const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectSecurity, onShowPortfolio }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioIds: string[], onSelectSecurity: (isin: string) => void, onShowPortfolio: () => void }) => {
   const { project } = useProject();
   const [chartMode, setChartMode] = useState<'value' | 'performance'>('value');
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
@@ -1320,7 +1324,7 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">Top Holding Performance</h3>
           <button
-            onClick={() => window.location.hash = 'portfolio'} // Or better routing
+            onClick={onShowPortfolio}
             className="text-sm text-emerald-400 hover:text-emerald-300 flex items-center"
           >
             Alles sehen <ChevronRight size={16} />
@@ -1596,6 +1600,189 @@ const DividendListModal = ({
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TransactionEditModal = ({
+  isOpen,
+  onClose,
+  transaction,
+  typeOptions,
+  currencies,
+  onSave,
+  onDelete
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  transaction: any | null;
+  typeOptions: string[];
+  currencies: string[];
+  onSave: (updated: any) => void;
+  onDelete: (target: any) => void;
+}) => {
+  const [type, setType] = useState('Buy');
+  const [date, setDate] = useState('');
+  const [shares, setShares] = useState('');
+  const [pricePerShare, setPricePerShare] = useState('');
+  const [currency, setCurrency] = useState('EUR');
+
+  useEffect(() => {
+    if (!transaction) return;
+    setType(transaction.type || 'Buy');
+    setDate(transaction.date || new Date().toISOString().split('T')[0]);
+    const rawShares = transaction.shares ?? transaction.quantity;
+    setShares(rawShares !== undefined && rawShares !== null ? Math.abs(rawShares).toString() : '');
+    const rawPrice = transaction.pricePerShare ?? transaction.price;
+    setPricePerShare(rawPrice !== undefined && rawPrice !== null ? Number(rawPrice).toString() : '');
+    setCurrency(transaction.currency || 'EUR');
+  }, [transaction]);
+
+  if (!isOpen || !transaction) return null;
+
+  const handleSave = () => {
+    const parsedShares = shares === '' ? (transaction.shares ?? transaction.quantity ?? undefined) : Number(shares);
+    const parsedPrice = pricePerShare === '' ? (transaction.pricePerShare ?? transaction.price ?? undefined) : Number(pricePerShare);
+
+    let finalShares = parsedShares;
+    if (parsedShares !== undefined && !Number.isNaN(parsedShares)) {
+      if (type === 'Sell') finalShares = -Math.abs(parsedShares);
+      else if (type === 'Buy' || type === 'Sparplan_Buy') finalShares = Math.abs(parsedShares);
+    }
+
+    let finalAmount = transaction.amount ?? undefined;
+    if (parsedPrice !== undefined && !Number.isNaN(parsedPrice) && parsedShares !== undefined && !Number.isNaN(parsedShares)) {
+      const rawTotal = Math.abs(parsedShares) * parsedPrice;
+      if (type === 'Buy' || type === 'Sparplan_Buy') finalAmount = -Math.abs(rawTotal);
+      else if (type === 'Sell' || type === 'Dividend') finalAmount = Math.abs(rawTotal);
+      else finalAmount = rawTotal;
+    }
+
+    const shareKey = transaction.shares !== undefined ? 'shares' : (transaction.quantity !== undefined ? 'quantity' : 'shares');
+
+    onSave({
+      ...transaction,
+      type,
+      date,
+      currency,
+      pricePerShare: parsedPrice,
+      [shareKey]: finalShares,
+      amount: finalAmount
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-white">Transaktion bearbeiten</h3>
+            <p className="text-xs text-slate-400 mt-1">{transaction.name || transaction.isin}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
+            <X className="text-slate-400 hover:text-white" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Typ</label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
+              {(typeOptions.length ? typeOptions : ['Buy', 'Sell', 'Dividend', 'Sparplan_Buy']).map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Datum</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Stück</label>
+            <input
+              type="number"
+              step="0.0001"
+              value={shares}
+              onChange={(e) => setShares(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Preis pro Stk.</label>
+            <input
+              type="number"
+              step="0.0001"
+              value={pricePerShare}
+              onChange={(e) => setPricePerShare(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Betrag</label>
+            <div className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-slate-200">
+              {(() => {
+                const parsedShares = Number(shares);
+                const parsedPrice = Number(pricePerShare);
+                if (Number.isNaN(parsedShares) || Number.isNaN(parsedPrice)) return '--';
+                const rawTotal = Math.abs(parsedShares) * parsedPrice;
+                const signed = (type === 'Buy' || type === 'Sparplan_Buy')
+                  ? -Math.abs(rawTotal)
+                  : (type === 'Sell' || type === 'Dividend')
+                    ? Math.abs(rawTotal)
+                    : rawTotal;
+                return signed.toLocaleString('de-DE', { style: 'currency', currency });
+              })()}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Währung</label>
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
+              {currencies.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-between items-center gap-3">
+          <button
+            onClick={() => {
+              if (!transaction) return;
+              if (window.confirm('Transaktion wirklich loeschen?')) {
+                onDelete(transaction);
+              }
+            }}
+            className="px-4 py-2 text-rose-300 hover:text-white hover:bg-rose-500/10 rounded-lg transition font-medium border border-rose-500/30"
+          >
+            Loeschen
+          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={onClose} className="px-4 py-2 text-slate-400 hover:text-white transition font-medium">Abbrechen</button>
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold shadow-lg shadow-emerald-500/20 transition"
+            >
+              Speichern
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -2903,6 +3090,7 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
     title: string;
     items: { id: string; name: string; date: string; amount: number; type: string }[];
   } | null>(null);
+  const [cumulativeRange, setCumulativeRange] = useState<'1M' | '6M' | 'YTD' | '1J' | '3J' | '5J' | 'MAX'>('1J');
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
   const formatCurrency = (value: number) => value.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency });
 
@@ -2951,7 +3139,8 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
     personalYield,
     yieldOnCost,
     projectedRestYear,
-    annualData
+    annualData,
+    combinedMonthlyMap
   } = useMemo(() => {
     if (!project) return { receivedCurrentYear: 0, receivedLastYear: 0, monthlyData: [], recentDividends: [], upcomingDividends: [], personalYield: 0, yieldOnCost: 0, projectedRestYear: 0, annualData: [] };
 
@@ -2966,6 +3155,7 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
     // Config for 5 Year Monthly Comparison
     const comparisonYears = Array.from({ length: 5 }, (_, i) => currentYear - i).reverse(); // [2021, 2022, 2023, 2024, 2025]
     const monthlyHistoryMap: Record<string, number> = {}; // "Year-Month" -> Amount
+    const monthlyHistoryAllMap: Record<string, number> = {}; // Full history map
 
     const convertToBaseAtDate = (amount: number, currency: string, date: string) => {
       if (currency === baseCurrency) return amount;
@@ -2991,6 +3181,9 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
       } else if (year === lastYear) {
         sumLast += amount;
       }
+
+      // Populate Full Map
+      monthlyHistoryAllMap[`${year}-${month}`] = (monthlyHistoryAllMap[`${year}-${month}`] || 0) + amount;
 
       // Populate 5-Year Map
       if (year >= currentYear - 4) {
@@ -3132,6 +3325,8 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
     const theoreticalCurrent: Record<number, number> = {};
     const monthlyTheoreticalMap: Record<string, number> = {}; // "Year-Month" -> Amount
     const annualTheoreticalMap: Record<number, number> = {};  // Year -> Amount
+    const monthlyTheoreticalAllMap: Record<string, number> = {}; // Full history map
+    const annualTheoreticalAllMap: Record<number, number> = {};  // Full history map
     const theoreticalRecent: { id: string; name: string; date: string; amount: number; type: string; sortKey: number }[] = [];
     const today = new Date();
 
@@ -3164,10 +3359,6 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
         const month = dDate.getMonth();
         const year = dDate.getFullYear();
 
-        // Optimization: Skip if year is older than our Max Range (e.g. 2000)
-        const minYear = Math.min(...comparisonYears, lastYear);
-        if (year < minYear - 1) return; // -1 buffer
-
         // CALCULATE SHARES AT DATE (dDate)
         // Sum buys/sells where date < dDate (Ex-Date usually determines entitlement, assuming dh.date is Ex-Date or Pay-Date close enough)
         let sharesAtDate = 0;
@@ -3187,9 +3378,16 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
         const secCurrency = sec.currency || 'EUR';
         const amount = convertToBase(dh.amount * sharesAtDate, secCurrency, dh.date);
 
-        // Populate Maps
-        monthlyTheoreticalMap[`${year}-${month}`] = (monthlyTheoreticalMap[`${year}-${month}`] || 0) + amount;
-        annualTheoreticalMap[year] = (annualTheoreticalMap[year] || 0) + amount;
+        // Populate Full Maps
+        monthlyTheoreticalAllMap[`${year}-${month}`] = (monthlyTheoreticalAllMap[`${year}-${month}`] || 0) + amount;
+        annualTheoreticalAllMap[year] = (annualTheoreticalAllMap[year] || 0) + amount;
+
+        // Populate 5-Year Maps
+        const minYear = Math.min(...comparisonYears, lastYear);
+        if (year >= minYear - 1) {
+          monthlyTheoreticalMap[`${year}-${month}`] = (monthlyTheoreticalMap[`${year}-${month}`] || 0) + amount;
+          annualTheoreticalMap[year] = (annualTheoreticalMap[year] || 0) + amount;
+        }
 
         if (dDate <= today) {
           theoreticalRecent.push({
@@ -3284,7 +3482,7 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
       yearsSet.add(y);
     });
 
-    // 2. From Theoretical History (to fill gaps for 5Y view if no data?)
+    // 2. From Theoretical History (to fill gaps)
     // Actually, "last 5 years" usually means actuals. 
     // If the user wants "Everything", we show 0 if nothing happened.
     // Let's ensure we have at least last 5 years in the set if chartView is 5Y?
@@ -3294,12 +3492,11 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
     // Merge Theoretical into Annual Map if Actual is missing?
     // Or just use maximum?
     // Let's iterate over theoretical years
-    Object.keys(annualTheoreticalMap).forEach(yStr => {
+    Object.keys(annualTheoreticalAllMap).forEach(yStr => {
       const y = parseInt(yStr);
       if (!annualHistoryMap[y]) {
-        annualHistoryMap[y] = annualTheoreticalMap[y];
-        // Add to yearsSet if recent enough or if we want to show all theoretical history
-        if (y >= currentYearNum - 10) yearsSet.add(y);
+        annualHistoryMap[y] = annualTheoreticalAllMap[y];
+        yearsSet.add(y);
       }
     });
 
@@ -3315,6 +3512,17 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
       isForecast: year > currentYearNum // Future if any
     }));
 
+    const combinedMonthlyMap: Record<string, number> = {};
+    const combinedKeys = new Set([
+      ...Object.keys(monthlyTheoreticalAllMap),
+      ...Object.keys(monthlyHistoryAllMap)
+    ]);
+    Array.from(combinedKeys).forEach(key => {
+      const actual = monthlyHistoryAllMap[key] || 0;
+      const theoretical = monthlyTheoreticalAllMap[key] || 0;
+      combinedMonthlyMap[key] = actual > 0 ? actual : theoretical;
+    });
+
     return {
       receivedCurrentYear: sumCurrent,
       receivedLastYear: sumLast,
@@ -3324,7 +3532,8 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
       personalYield: pYield,
       yieldOnCost: yoc,
       projectedRestYear: estimatedRest,
-      annualData
+      annualData,
+      combinedMonthlyMap
     };
   }, [project, filteredTransactions, totalValue, totalInvested, holdings]);
 
@@ -3338,6 +3547,92 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
     }
     return data;
   }, [annualData, historyRange]);
+
+  const cumulativeDividendData = useMemo(() => {
+    if (!combinedMonthlyMap || Object.keys(combinedMonthlyMap).length === 0) return [];
+
+    const endDate = new Date();
+    let startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    let months = 0;
+
+    const monthEntries = Object.entries(combinedMonthlyMap).map(([key, amount]) => {
+      const [y, m] = key.split('-').map(Number);
+      return { monthIndex: (y * 12) + m, amount };
+    });
+    const amountByMonth: Record<number, number> = {};
+    monthEntries.forEach(entry => {
+      amountByMonth[entry.monthIndex] = (amountByMonth[entry.monthIndex] || 0) + entry.amount;
+    });
+
+    const valueAt = (date: Date) => {
+      const target = (date.getFullYear() * 12) + date.getMonth();
+      return monthEntries.reduce((sum, entry) => sum + (entry.monthIndex <= target ? entry.amount : 0), 0);
+    };
+
+    switch (cumulativeRange) {
+      case '1M':
+        startDate = new Date(endDate);
+        startDate.setMonth(endDate.getMonth() - 1);
+        return [
+          { date: toDateKey(startDate), value: valueAt(startDate) },
+          { date: toDateKey(endDate), value: valueAt(endDate) }
+        ];
+      case '6M':
+        months = 6;
+        break;
+      case '1J':
+        months = 12;
+        break;
+      case '3J':
+        months = 36;
+        break;
+      case '5J':
+        months = 60;
+        break;
+      case 'YTD':
+        startDate = new Date(endDate.getFullYear(), 0, 1);
+        break;
+      case 'MAX': {
+        const allKeys = Object.keys(combinedMonthlyMap);
+        let minYear = Number.MAX_SAFE_INTEGER;
+        let minMonth = 11;
+        allKeys.forEach(key => {
+          const [y, m] = key.split('-').map(Number);
+          if (y < minYear || (y === minYear && m < minMonth)) {
+            minYear = y;
+            minMonth = m;
+          }
+        });
+        if (minYear !== Number.MAX_SAFE_INTEGER) {
+          startDate = new Date(minYear, minMonth, 1);
+        }
+        break;
+      }
+    }
+
+    if (months > 0) {
+      startDate = new Date(endDate.getFullYear(), endDate.getMonth() - (months - 1), 1);
+    }
+
+    const series: { date: string; value: number }[] = [];
+    const startMonthIndex = (startDate.getFullYear() * 12) + startDate.getMonth();
+    let running = valueAt(startDate) - (amountByMonth[startMonthIndex] || 0);
+    const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const endCursor = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+
+    while (cursor <= endCursor) {
+      const key = (cursor.getFullYear() * 12) + cursor.getMonth();
+      const amount = amountByMonth[key] || 0;
+      running += amount;
+      series.push({
+        date: `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-01`,
+        value: running
+      });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    return series;
+  }, [combinedMonthlyMap, cumulativeRange]);
 
 
   return (
@@ -3485,6 +3780,38 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
         </div>
       </Card>
 
+      {/* Cumulative Dividend Chart */}
+      <Card className="h-80 flex flex-col">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <h3 className="font-semibold text-white flex items-center gap-2">
+            <Coins size={18} className="text-blue-400" />
+            Kumulierte Dividenden
+          </h3>
+          <div className="flex flex-wrap gap-1 bg-slate-900/50 p-1 rounded-lg">
+            {(['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map(range => (
+              <button
+                key={range}
+                onClick={() => setCumulativeRange(range)}
+                className={`px-2 py-1 text-xs rounded-md font-medium transition-all ${cumulativeRange === range ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+              >
+                {range}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex-1 w-full">
+          <SimpleAreaChart
+            data={cumulativeDividendData}
+            color="#38bdf8"
+            height={240}
+            showAxes={true}
+            timeRange={cumulativeRange}
+            currency={baseCurrency}
+            tooltipLabel="Kumuliert"
+          />
+        </div>
+      </Card>
+
       {/* Bottom Section: Calendar & History */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Upcoming Payments */}
@@ -3614,6 +3941,7 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
 
 const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPortfolioIds: string[], onSelectSecurity: (isin: string) => void }) => {
   const { project } = useProject();
+  const [showClosedPositions, setShowClosedPositions] = useState(false);
 
   // Filter transactions based on selected Portfolio
   const filteredTransactions = useMemo(() => {
@@ -3646,6 +3974,81 @@ const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPor
       project.fxData.rates, // fxRates
       project.settings.baseCurrency // Pass selected base currency
     );
+  }, [project, filteredTransactions]);
+
+  const closedPositions = useMemo(() => {
+    if (!project) return [];
+
+    const baseCurrency = project.settings.baseCurrency || 'EUR';
+    const fxRates = project.fxData.rates;
+
+    const getEurRate = (currency: string, date?: string): number => {
+      if (currency === 'EUR') return 1;
+      const history = fxRates[currency];
+      if (!history) return 1;
+      if (date) {
+        const target = new Date(date).getTime();
+        const dates = Object.keys(history).sort();
+        let closest = dates[0];
+        for (const d of dates) {
+          const t = new Date(d).getTime();
+          if (t <= target) closest = d; else break;
+        }
+        return history[closest] || 1;
+      }
+      const dates = Object.keys(history).sort();
+      return history[dates[dates.length - 1]] || 1;
+    };
+
+    const convert = (amount: number, from: string, to: string, date?: string): number => {
+      if (from === to) return amount;
+      const rateFrom = getEurRate(from, date);
+      const amountEur = amount / rateFrom;
+      if (to === 'EUR') return amountEur;
+      const rateTo = getEurRate(to, date);
+      return amountEur * rateTo;
+    };
+
+    const txByIsin: Record<string, any[]> = {};
+    filteredTransactions.forEach(t => {
+      if (!t.isin) return;
+      if (!['Buy', 'Sell', 'Sparplan_Buy'].includes(t.type)) return;
+      if (!txByIsin[t.isin]) txByIsin[t.isin] = [];
+      txByIsin[t.isin].push(t);
+    });
+
+    const results = Object.keys(txByIsin).map(isin => {
+      const txs = txByIsin[isin].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      let qty = 0;
+      let realized = 0;
+      let lastDate = '';
+
+      txs.forEach(t => {
+        const shares = Math.abs(t.shares || t.quantity || 0);
+        if (t.type === 'Buy' || t.type === 'Sparplan_Buy') qty += shares;
+        if (t.type === 'Sell') qty -= shares;
+
+        const signedAmount = (t.amount < 0 ? -1 : 1) * Math.abs(t.amount || 0);
+        realized += convert(signedAmount, t.currency || baseCurrency, baseCurrency, t.date);
+        if (!lastDate || new Date(t.date) > new Date(lastDate)) lastDate = t.date;
+      });
+
+      return { isin, qty, realized, lastDate };
+    });
+
+    return results
+      .filter(r => Math.abs(r.qty) < 0.0001)
+      .map(r => {
+        const sec = project.securities?.[r.isin];
+        return {
+          isin: r.isin,
+          name: sec?.name || r.isin,
+          quoteType: sec?.quoteType || 'Aktie',
+          realized: r.realized,
+          lastDate: r.lastDate
+        };
+      })
+      .sort((a, b) => new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime());
   }, [project, filteredTransactions]);
 
   return (
@@ -3698,6 +4101,240 @@ const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPor
           ))
         )}
       </div>
+
+      <div className="mt-6 pt-6 border-t border-slate-700/50">
+        <button
+          onClick={() => setShowClosedPositions(v => !v)}
+          className="w-full flex items-center justify-between text-sm text-slate-300 hover:text-white transition-colors"
+        >
+          <span>Geschlossene Positionen ({closedPositions.length})</span>
+          <ChevronRight size={16} className={`transition-transform ${showClosedPositions ? 'rotate-90' : ''}`} />
+        </button>
+        {showClosedPositions && (
+          <div className="mt-4 space-y-3">
+            {closedPositions.length === 0 ? (
+              <div className="text-slate-500 text-sm text-center py-6 bg-slate-800/20 rounded-xl">Keine geschlossenen Positionen.</div>
+            ) : (
+              closedPositions.map(pos => (
+                <div key={pos.isin} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-white">{pos.name}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      <span className="bg-slate-700 px-1.5 rounded">{pos.quoteType}</span>
+                      <span className="text-slate-500"> â€¢ </span>
+                      <span>Letzter Trade: {new Date(pos.lastDate).toLocaleDateString('de-DE')}</span>
+                    </div>
+                  </div>
+                  <div className={`text-sm font-medium ${pos.realized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {pos.realized >= 0 ? '+' : ''}{pos.realized.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
+const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: string[] }) => {
+  const { project, updateProject } = useProject();
+  const [txSearch, setTxSearch] = useState('');
+  const [txType, setTxType] = useState('Alle');
+  const [txDateFrom, setTxDateFrom] = useState('');
+  const [txDateTo, setTxDateTo] = useState('');
+  const [editingTx, setEditingTx] = useState<any | null>(null);
+
+  const filteredTransactions = useMemo(() => {
+    if (!project) return [];
+    if (selectedPortfolioIds.length === 0) return project.transactions;
+    return project.transactions.filter(t => t.portfolioId && selectedPortfolioIds.includes(t.portfolioId));
+  }, [project, selectedPortfolioIds]);
+
+  const transactionTypes = useMemo(() => {
+    const types = new Set<string>();
+    filteredTransactions.forEach(t => {
+      if (t.type) types.add(t.type);
+    });
+    return ['Alle', ...Array.from(types).sort()];
+  }, [filteredTransactions]);
+
+  const currencies = useMemo(() => {
+    const manual = ['EUR', 'USD', 'CHF', 'GBP'];
+    const fromFx = project?.fxData.rates ? Object.keys(project.fxData.rates) : [];
+    return Array.from(new Set([...manual, ...fromFx])).sort();
+  }, [project]);
+
+  const portfolioNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    (project?.portfolios || []).forEach(p => {
+      map[p.id] = p.name;
+    });
+    return map;
+  }, [project?.portfolios]);
+
+  const visibleTransactions = useMemo(() => {
+    const query = txSearch.trim().toLowerCase();
+    const fromDate = txDateFrom ? new Date(`${txDateFrom}T00:00:00`) : null;
+    const toDate = txDateTo ? new Date(`${txDateTo}T23:59:59`) : null;
+    return filteredTransactions
+      .filter(t => txType === 'Alle' || t.type === txType)
+      .filter(t => {
+        if (!fromDate && !toDate) return true;
+        const d = new Date(`${t.date}T00:00:00`);
+        if (fromDate && d < fromDate) return false;
+        if (toDate && d > toDate) return false;
+        return true;
+      })
+      .filter(t => {
+        if (!query) return true;
+        const hay = (t.name || '') + ' ' + (t.isin || '') + ' ' + (t.type || '') + ' ' + (t.broker || '');
+        return hay.toLowerCase().includes(query);
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [filteredTransactions, txType, txSearch, txDateFrom, txDateTo]);
+
+  return (
+    <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 w-full">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+          <FileText size={20} className="text-emerald-500" />
+          Transaktionen
+        </h2>
+        <div className="text-sm text-slate-400">
+          {visibleTransactions.length}{visibleTransactions.length !== filteredTransactions.length ? ' / ' + filteredTransactions.length : ''} Eintraege
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row md:items-center gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+          <input
+            type="text"
+            value={txSearch}
+            onChange={(e) => setTxSearch(e.target.value)}
+            placeholder="ISIN, Name oder Typ suchen..."
+            className="w-full bg-slate-800 border border-slate-700/60 rounded-xl py-2 pl-9 pr-3 text-sm text-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none placeholder-slate-500"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">Typ</span>
+          <select
+            value={txType}
+            onChange={(e) => setTxType(e.target.value)}
+            className="bg-slate-800 border border-slate-700/60 rounded-lg py-2 px-3 text-sm text-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
+          >
+            {transactionTypes.map(type => (
+              <option key={type} value={type} className="bg-slate-800">{type}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row md:items-center gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">Von</span>
+          <input
+            type="date"
+            value={txDateFrom}
+            onChange={(e) => setTxDateFrom(e.target.value)}
+            className="bg-slate-800 border border-slate-700/60 rounded-lg py-2 px-3 text-sm text-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">Bis</span>
+          <input
+            type="date"
+            value={txDateTo}
+            onChange={(e) => setTxDateTo(e.target.value)}
+            className="bg-slate-800 border border-slate-700/60 rounded-lg py-2 px-3 text-sm text-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
+          />
+        </div>
+        <button
+          onClick={() => {
+            setTxSearch('');
+            setTxType('Alle');
+            setTxDateFrom('');
+            setTxDateTo('');
+          }}
+          className="md:ml-auto bg-slate-800 border border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-700/70 transition-colors rounded-lg py-2 px-3 text-sm"
+        >
+          Filter zurücksetzen
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        {visibleTransactions.length === 0 ? (
+          <div className="text-slate-400 text-sm p-8 text-center bg-slate-800/20 rounded-xl">Keine Transaktionen vorhanden.</div>
+        ) : (
+          visibleTransactions.map(tx => (
+            <div
+              key={tx.id}
+              onClick={() => setEditingTx(tx)}
+              className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl flex items-center justify-between hover:bg-slate-800/70 transition cursor-pointer"
+            >
+              <div>
+                <div className="text-sm font-medium text-white">{project?.securities?.[tx.isin || '']?.name || tx.name || tx.isin}</div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  <span className="bg-slate-700 px-1.5 rounded">{tx.type}</span>
+                  {tx.portfolioId && portfolioNameById[tx.portfolioId] ? (
+                    <>
+                      <span className="text-slate-500"> - </span>
+                      <span className="bg-slate-700/70 text-slate-200 px-1.5 rounded">
+                        {portfolioNameById[tx.portfolioId]}
+                      </span>
+                    </>
+                  ) : null}
+                  <span className="text-slate-500"> - </span>
+                  <span>{new Date(tx.date).toLocaleDateString('de-DE')}</span>
+                  {tx.shares || tx.quantity ? (
+                    <>
+                      <span className="text-slate-500"> - </span>
+                      <span>{Math.abs(tx.shares || tx.quantity || 0)} Stk.</span>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className={'text-sm font-medium ' + ((tx.amount || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
+                  {(tx.amount || 0) >= 0 ? '+' : ''}{Math.abs(tx.amount || 0).toLocaleString('de-DE', { style: 'currency', currency: tx.currency || project?.settings.baseCurrency || 'EUR' })}
+                </div>
+                <div className="text-xs text-slate-500">
+                  {tx.currency || project?.settings.baseCurrency || 'EUR'}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <TransactionEditModal
+        isOpen={!!editingTx}
+        onClose={() => setEditingTx(null)}
+        transaction={editingTx}
+        typeOptions={transactionTypes.filter(type => type !== 'Alle')}
+        currencies={currencies}
+        onSave={(updated) => {
+          if (!updateProject) return;
+          updateProject(prev => ({
+            ...prev,
+            transactions: prev.transactions.map(t => t.id === updated.id ? updated : t),
+            modified: new Date().toISOString()
+          }));
+          setEditingTx(null);
+        }}
+        onDelete={(target) => {
+          if (!updateProject) return;
+          updateProject(prev => ({
+            ...prev,
+            transactions: prev.transactions.filter(t => t.id !== target.id),
+            modified: new Date().toISOString()
+          }));
+          setEditingTx(null);
+        }}
+      />
     </div>
   );
 };
