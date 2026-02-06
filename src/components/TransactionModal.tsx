@@ -5,6 +5,7 @@ import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase } from 'l
 import { useProject } from '@/contexts/ProjectContext';
 import { Transaction, type Portfolio } from '@/types/domain';
 import { parseFlatexCsv } from '@/lib/csvParser';
+import { getCurrencyOptions } from '@/lib/fxUtils';
 
 interface TransactionModalProps {
     isOpen: boolean;
@@ -147,10 +148,8 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     };
 
     const currencies = useMemo(() => {
-        const manual = ['EUR', 'USD', 'CHF', 'GBP'];
-        const fromFx = project?.fxData.rates ? Object.keys(project.fxData.rates) : [];
-        return Array.from(new Set([...manual, ...fromFx])).sort();
-    }, [project]);
+        return getCurrencyOptions(project?.fxData);
+    }, [project?.fxData]);
 
     if (!isOpen) return null;
 

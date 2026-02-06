@@ -1,77 +1,28 @@
 import React, { useMemo, useState } from 'react';
 import { ChevronRight, Wallet } from 'lucide-react';
-import { calculateHoldings } from '@/lib/portfolioUtils';
+import { filterTransactionsByPortfolio, calculateProjectHoldings } from '@/lib/portfolioSelectors';
+import { convertCurrency } from '@/lib/fxUtils';
 import { useProject } from '@/contexts/ProjectContext';
+import { type TransactionLike } from '@/types/portfolioView';
 
 export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPortfolioIds: string[], onSelectSecurity: (isin: string) => void }) => {
   const { project } = useProject();
   const [showClosedPositions, setShowClosedPositions] = useState(false);
 
   // Filter transactions based on selected Portfolio
-  const filteredTransactions = useMemo(() => {
-    if (!project) return [];
-    if (selectedPortfolioIds.length === 0) return project.transactions;
-    return project.transactions.filter(t => t.portfolioId && selectedPortfolioIds.includes(t.portfolioId));
-  }, [project, selectedPortfolioIds]);
+  const filteredTransactions = useMemo(() => (
+    filterTransactionsByPortfolio(project, selectedPortfolioIds)
+  ), [project, selectedPortfolioIds]);
 
   const { holdings } = useMemo(() => {
     if (!project) return { holdings: [] };
-
-    // Extract latest quotes from securities history
-    const quotes: Record<string, number> = {};
-    if (project.securities) {
-      Object.values(project.securities).forEach(sec => {
-        if (sec.priceHistory) {
-          const dates = Object.keys(sec.priceHistory).sort();
-          if (dates.length > 0) {
-            const lastDate = dates[dates.length - 1];
-            quotes[sec.isin] = sec.priceHistory[lastDate];
-          }
-        }
-      });
-    }
-
-    return calculateHoldings(
-      filteredTransactions,
-      Object.values(project.securities || {}),
-      quotes, // Pass real quotes
-      project.fxData.rates, // fxRates
-      project.settings.baseCurrency // Pass selected base currency
-    );
+    return calculateProjectHoldings(project, filteredTransactions);
   }, [project, filteredTransactions]);
 
   const closedPositions = useMemo(() => {
     if (!project) return [];
 
     const baseCurrency = project.settings.baseCurrency || 'EUR';
-    const fxRates = project.fxData.rates;
-
-    const getEurRate = (currency: string, date?: string): number => {
-      if (currency === 'EUR') return 1;
-      const history = fxRates[currency];
-      if (!history) return 1;
-      if (date) {
-        const target = new Date(date).getTime();
-        const dates = Object.keys(history).sort();
-        let closest = dates[0];
-        for (const d of dates) {
-          const t = new Date(d).getTime();
-          if (t <= target) closest = d; else break;
-        }
-        return history[closest] || 1;
-      }
-      const dates = Object.keys(history).sort();
-      return history[dates[dates.length - 1]] || 1;
-    };
-
-    const convert = (amount: number, from: string, to: string, date?: string): number => {
-      if (from === to) return amount;
-      const rateFrom = getEurRate(from, date);
-      const amountEur = amount / rateFrom;
-      if (to === 'EUR') return amountEur;
-      const rateTo = getEurRate(to, date);
-      return amountEur * rateTo;
-    };
 
     const txByIsin: Record<string, TransactionLike[]> = {};
     filteredTransactions.forEach(t => {
@@ -93,7 +44,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
         if (t.type === 'Sell') qty -= shares;
 
         const signedAmount = (t.amount < 0 ? -1 : 1) * Math.abs(t.amount || 0);
-        realized += convert(signedAmount, t.currency || baseCurrency, baseCurrency, t.date);
+        realized += convertCurrency(project.fxData, signedAmount, t.currency || baseCurrency, baseCurrency, t.date);
         if (!lastDate || new Date(t.date) > new Date(lastDate)) lastDate = t.date;
       });
 

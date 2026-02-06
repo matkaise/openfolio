@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, Check, ChevronRight, PieChart, Wallet } from 'lucide-react';
-import { calculateHoldings, calculatePortfolioHistory } from '@/lib/portfolioUtils';
-import { CurrencyService } from '@/lib/currencyService';
+import { calculatePortfolioHistory } from '@/lib/portfolioUtils';
+import { buildMwrSeries } from '@/lib/performanceUtils';
+import { filterTransactionsByPortfolio, calculateProjectHoldings } from '@/lib/portfolioSelectors';
+import { convertCurrency } from '@/lib/fxUtils';
 import { useProject } from '@/contexts/ProjectContext';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { AllocationChart } from '@/components/AllocationChart';
@@ -15,36 +17,12 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
   const [dividendRange, setDividendRange] = useState<'YTD' | '1J'>('YTD');
 
   // Filter transactions based on selected Portfolio
-  const filteredTransactions = useMemo(() => {
-    if (!project) return [];
-    if (selectedPortfolioIds.length === 0) return project.transactions; // All
-    return project.transactions.filter(t => t.portfolioId && selectedPortfolioIds.includes(t.portfolioId));
-  }, [project, selectedPortfolioIds]);
+  const filteredTransactions = useMemo(() => (
+    filterTransactionsByPortfolio(project, selectedPortfolioIds)
+  ), [project, selectedPortfolioIds]);
 
   const { holdings, realizedPnL } = useMemo(() => {
-    if (!project) return { holdings: [], realizedPnL: 0 };
-
-    // Extract latest quotes from securities history
-    const quotes: Record<string, number> = {};
-    if (project.securities) {
-      Object.values(project.securities).forEach(sec => {
-        if (sec.priceHistory) {
-          const dates = Object.keys(sec.priceHistory).sort();
-          if (dates.length > 0) {
-            const lastDate = dates[dates.length - 1];
-            quotes[sec.isin] = sec.priceHistory[lastDate];
-          }
-        }
-      });
-    }
-
-    return calculateHoldings(
-      filteredTransactions,
-      Object.values(project.securities || {}),
-      quotes, // Pass real quotes
-      project.fxData.rates, // fxRates
-      project.settings.baseCurrency // Pass selected base currency
-    );
+    return calculateProjectHoldings(project, filteredTransactions);
   }, [project, filteredTransactions]);
 
   // Calculate portfolio history for chart
@@ -60,125 +38,21 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     );
   }, [project, filteredTransactions, timeRange]);
 
+  const performanceSeries = useMemo(() => {
+    if (historyData.length === 0) return [];
+    const start = historyData[0].date;
+    const end = historyData[historyData.length - 1].date;
+    return buildMwrSeries(historyData, start, end, {
+      includeDividends,
+      isFullRange: timeRange === 'MAX',
+      transactions: filteredTransactions
+    });
+  }, [historyData, includeDividends, timeRange, filteredTransactions]);
+
   const displayData = useMemo(() => {
     if (chartMode === 'value') return historyData;
-
-    // Performance mode: Calculate TWR (Time Weighted Return)
-    // This matches Value % change if no cashflows, and handles cashflows correctly without jumps.
-
-    if (historyData.length === 0) return [];
-    const getValue = (point: { value: number; dividend?: number }) =>
-      point.value + (includeDividends ? (point.dividend || 0) : 0);
-
-    // Period Money-Weighted Return (MWR) Logic
-    // Formula: ((Val_Curr - Val_Start) - (Inv_Curr - Inv_Start)) / (Val_Start + (Inv_Curr - Inv_Start))
-
-    // Get baseline values at start of period
-    const startPoint = historyData[0];
-    let startValue = getValue(startPoint);
-    const startInvested = startPoint.invested || 0;
-
-    // Detect if this is the start of the entire history (First Transaction)
-    // If so, we want to baseline against Initial Investment to capture Day 1 Alpha.
-    // This applies to MAX view OR any view (5J, 3J) that covers the inception date.
-    let isStartOfHistory = timeRange === 'MAX';
-
-    if (!isStartOfHistory && filteredTransactions.length > 0) {
-      const firstTxDateStr = filteredTransactions.reduce((min, t) => t.date < min ? t.date : min, '9999-12-31');
-      const firstTxTime = new Date(firstTxDateStr).setHours(0, 0, 0, 0);
-      const startTime = new Date(startPoint.date).setHours(0, 0, 0, 0);
-      // Allow 24h buffer for timezone diffs or exact match
-      if (Math.abs(startTime - firstTxTime) < 86400000) {
-        isStartOfHistory = true;
-      }
-    }
-
-    if (isStartOfHistory && startInvested > 0) {
-      startValue = startInvested;
-    }
-
-    return historyData.map((point, index) => {
-      // For the very first point: MWR starts at 0% usually.
-      // Special Case: If this is the Start of History (MAX/5J/etc covering inception),
-      // we want Standard MWR definition (Value - Invested) / Invested to show Day 1 Alpha immediately.
-      if (index === 0) {
-        if (isStartOfHistory) {
-          const inv = point.invested || 0;
-          const valueWithDividends = getValue(point);
-          if (inv > 0) return { ...point, value: ((valueWithDividends - inv) / inv) * 100 };
-          return { ...point, value: 0 };
-        }
-        return { ...point, value: 0 };
-      }
-
-      const currValue = getValue(point);
-      const currInvested = point.invested || 0;
-
-      const deltaInvested = currInvested - startInvested;
-      const capitalAtWork = startValue + deltaInvested;
-
-      let percent = 0;
-      if (capitalAtWork > 0) {
-        // Profit made strictly within this period = (Val_Curr - Val_Start) - Net_New_Cash
-        const profitPeriod = (currValue - startValue) - deltaInvested;
-        percent = (profitPeriod / capitalAtWork) * 100;
-      }
-
-      return {
-        ...point,
-        value: percent
-      };
-    });
-    /* 
-    const twrData = [];
-
-    // Initialize performance
-    let runningPerformance = 1.0;
-    let startPercent = 0;
-
-    // For MAX view: Capture the "Day 1" intraday/IPO performance relative to cost basis
-    // If I buy at 100 and close at 131, Day 1 is +31%.
-    if (timeRange === 'MAX' && historyData[0].invested > 0) {
-      runningPerformance = historyData[0].value / historyData[0].invested;
-      startPercent = (runningPerformance - 1) * 100;
-    }
-
-    twrData.push({ ...historyData[0], value: startPercent });
-
-    for (let i = 1; i < historyData.length; i++) {
-      const prev = historyData[i - 1];
-      const curr = historyData[i];
-
-      const prevValue = prev.value;
-      const currValue = curr.value;
-
-      const prevInvested = prev.invested || 0;
-      const currInvested = curr.invested || 0;
-
-      const cashFlow = currInvested - prevInvested;
-
-      // Robust TWR Formula for Daily Data:
-      // Assumes CashFlow happens at Start-Of-Day (or effectively before Close)
-      // This correctly handles the "First Buy" (Prev=0, CF=10k) and subsequent flows.
-      // R = EndValue / (StartValue + CashFlow) - 1
-
-      let periodReturn = 0;
-      const costBasis = prevValue + cashFlow;
-
-      if (costBasis > 0) {
-        periodReturn = (currValue / costBasis) - 1;
-      }
-
-      runningPerformance *= (1 + periodReturn);
-
-      twrData.push({
-        ...curr,
-        value: (runningPerformance - 1) * 100
-      });
-    }
-
-    */
-  }, [historyData, chartMode, timeRange, includeDividends, filteredTransactions]);
+    return performanceSeries;
+  }, [historyData, chartMode, performanceSeries]);
 
   const investedCapital = holdings.reduce((sum, h) => sum + (h.quantity * (h.averageBuyPrice || 0)), 0);
   const currentMaketValue = holdings.reduce((sum, h) => sum + h.value, 0);
@@ -226,31 +100,13 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     const currentYear = today.getFullYear();
     const dividendsTx = filteredTransactions.filter(t => t.type === 'Dividend');
 
-    const convertToBaseAtDate = (amount: number, currency: string, date: string) => {
-      if (currency === baseCurrency) return amount;
-      const rateFrom = CurrencyService.getRate(project.fxData, currency, date) || 1;
-      const amountEur = amount / rateFrom;
-      if (baseCurrency === 'EUR') return amountEur;
-      const rateTo = CurrencyService.getRate(project.fxData, baseCurrency, date) || 1;
-      return amountEur * rateTo;
-    };
+    const convertToBaseAtDate = (amount: number, currency: string, date: string) => (
+      convertCurrency(project.fxData, amount, currency, baseCurrency, date)
+    );
 
-    const getLatestRate = (currency: string): number => {
-      const fxBase = project.fxData.baseCurrency || 'EUR';
-      if (currency === fxBase) return 1;
-      const rates = project.fxData.rates[currency];
-      if (!rates) return 1;
-      const dates = Object.keys(rates).sort().reverse();
-      return rates[dates[0]] || 1;
-    };
-
-    const convertToBaseLatest = (amount: number, currency: string) => {
-      if (currency === baseCurrency) return amount;
-      const rateOrg = getLatestRate(currency);
-      const inEur = amount / rateOrg;
-      const rateBase = getLatestRate(baseCurrency);
-      return baseCurrency === 'EUR' ? inEur : inEur * rateBase;
-    };
+    const convertToBaseLatest = (amount: number, currency: string) => (
+      convertCurrency(project.fxData, amount, currency, baseCurrency)
+    );
 
     const monthKeys1J: string[] = [];
     const monthKeySet = new Set<string>();

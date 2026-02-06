@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, AlertCircle, Banknote, BarChart3, Check, ChevronLeft, ChevronRight, Globe, Loader2, X } from 'lucide-react';
 import { AreaChart, Area, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from 'recharts';
-import { calculateHoldings, calculatePortfolioHistory, type Holding, type AnalysisMetrics } from '@/lib/portfolioUtils';
+import { calculatePortfolioHistory, type Holding, type AnalysisMetrics } from '@/lib/portfolioUtils';
 import { calculateAnalysisMetrics } from '@/lib/analysisService';
+import { buildMwrSeries } from '@/lib/performanceUtils';
+import { filterTransactionsByPortfolio, calculateProjectHoldings } from '@/lib/portfolioSelectors';
+import { convertCurrency as convertFxCurrency } from '@/lib/fxUtils';
 import { useProject } from '@/contexts/ProjectContext';
 import { ReturnChartModal } from '@/components/ReturnChartModal';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
@@ -229,36 +232,13 @@ export const AnalysisContent = ({
 
   // Filter transactions based on selected Portfolio (same as Dashboard)
   const filteredTransactions = useMemo(() => {
-    if (!project) return [];
-    if (selectedPortfolioIds.length === 0) return project.transactions;
-    return project.transactions.filter(t => t.portfolioId && selectedPortfolioIds.includes(t.portfolioId));
+    return filterTransactionsByPortfolio(project, selectedPortfolioIds);
   }, [project, selectedPortfolioIds]);
 
   // Calculate Holdings for Analysis (needed for Sector/Region)
   const { holdings } = useMemo(() => {
     if (!project) return { holdings: [] };
-
-    // Extract latest quotes from securities history
-    const quotes: Record<string, number> = {};
-    if (project.securities) {
-      Object.values(project.securities).forEach(sec => {
-        if (sec.priceHistory) {
-          const dates = Object.keys(sec.priceHistory).sort();
-          if (dates.length > 0) {
-            const lastDate = dates[dates.length - 1];
-            quotes[sec.isin] = sec.priceHistory[lastDate];
-          }
-        }
-      });
-    }
-
-    return calculateHoldings(
-      filteredTransactions,
-      Object.values(project.securities || {}),
-      quotes, // Pass real quotes
-      project.fxData.rates, // fxRates
-      project.settings.baseCurrency // Pass selected base currency
-    );
+    return calculateProjectHoldings(project, filteredTransactions);
   }, [project, filteredTransactions]);
 
   // Calculate Sector Data
@@ -588,65 +568,6 @@ export const AnalysisContent = ({
     });
   };
 
-  // Build performance series using MWR-style logic (matches Dashboard)
-  const buildMwrSeries = useCallback((
-    sourceHistory: { date: string; value: number; invested: number; dividend?: number }[],
-    rangeStart: string,
-    rangeEnd: string
-  ) => {
-    if (!sourceHistory.length) return [];
-
-    const periodData = sourceHistory.filter(d => d.date >= rangeStart && d.date <= rangeEnd);
-    if (periodData.length === 0) return [];
-
-    const startPoint = periodData[0];
-    const getValue = (point: { value: number; dividend?: number }) =>
-      point.value + (includeDividends ? (point.dividend || 0) : 0);
-    let startValue = getValue(startPoint);
-    const startInvested = startPoint.invested || 0;
-
-    // Align with Dashboard performance logic (MWR-style)
-    let isStartOfHistory = performanceRange === 'MAX';
-
-    if (!isStartOfHistory && filteredTransactions.length > 0) {
-      const firstTxDateStr = filteredTransactions.reduce((min, t) => t.date < min ? t.date : min, '9999-12-31');
-      const firstTxTime = new Date(firstTxDateStr).setHours(0, 0, 0, 0);
-      const startTime = new Date(startPoint.date).setHours(0, 0, 0, 0);
-      if (Math.abs(startTime - firstTxTime) < 86400000) {
-        isStartOfHistory = true;
-      }
-    }
-
-    if (isStartOfHistory && startInvested > 0) {
-      startValue = startInvested;
-    }
-
-    return periodData.map((point, index) => {
-      if (index === 0) {
-        if (isStartOfHistory) {
-          const inv = point.invested || 0;
-          const valueWithDividends = getValue(point);
-          if (inv > 0) return { date: point.date, value: ((valueWithDividends - inv) / inv) * 100 };
-          return { date: point.date, value: 0 };
-        }
-        return { date: point.date, value: 0 };
-      }
-
-      const currValue = getValue(point);
-      const currInvested = point.invested || 0;
-      const deltaInvested = currInvested - startInvested;
-      const capitalAtWork = startValue + deltaInvested;
-
-      let percent = 0;
-      if (capitalAtWork > 0) {
-        const profitPeriod = (currValue - startValue) - deltaInvested;
-        percent = (profitPeriod / capitalAtWork) * 100;
-      }
-
-      return { date: point.date, value: percent };
-    });
-  }, [includeDividends, performanceRange, filteredTransactions]);
-
   const performanceRangeDates = useMemo(() => {
     const series = analysisMetrics?.twrSeries || [];
     if (!series.length) return { start: '', end: '' };
@@ -673,8 +594,12 @@ export const AnalysisContent = ({
 
   const portfolioPerformanceSeries = useMemo(() => {
     if (!performanceRangeDates.start || !performanceRangeDates.end) return [];
-    return buildMwrSeries(historyData, performanceRangeDates.start, performanceRangeDates.end);
-  }, [historyData, performanceRangeDates.start, performanceRangeDates.end, buildMwrSeries]);
+    return buildMwrSeries(historyData, performanceRangeDates.start, performanceRangeDates.end, {
+      includeDividends,
+      isFullRange: performanceRange === 'MAX',
+      transactions: filteredTransactions
+    });
+  }, [historyData, performanceRangeDates.start, performanceRangeDates.end, includeDividends, performanceRange, filteredTransactions]);
 
   useEffect(() => {
     const missingCurrency = benchmarkList.filter(b => !b.currency && !benchmarkCurrencyAttempts.current.has(b.symbol));
@@ -714,41 +639,6 @@ export const AnalysisContent = ({
     };
   }, [benchmarkList, isBenchmarkCurrencyLoading]);
 
-  const getFxRate = useCallback((currency: string, date?: string) => {
-    if (!project || !project.fxData?.rates) return 1;
-    if (currency === 'EUR') return 1;
-    const history = project.fxData.rates[currency];
-    if (!history) return 1;
-
-    if (date) {
-      const targetTime = new Date(date).getTime();
-      const availableDates = Object.keys(history).sort();
-      let closestDate = availableDates[0];
-      for (const d of availableDates) {
-        const dTime = new Date(d).getTime();
-        if (dTime <= targetTime) {
-          closestDate = d;
-        } else {
-          break;
-        }
-      }
-      return history[closestDate] || 1;
-    }
-
-    const dates = Object.keys(history).sort();
-    const latest = dates[dates.length - 1];
-    return history[latest] || 1;
-  }, [project]);
-
-  const convertCurrency = useCallback((amount: number, from: string, to: string, date?: string) => {
-    if (from === to) return amount;
-    const rateFrom = getFxRate(from, date);
-    const amountEur = amount / rateFrom;
-    if (to === 'EUR') return amountEur;
-    const rateTo = getFxRate(to, date);
-    return amountEur * rateTo;
-  }, [getFxRate]);
-
   const buildBenchmarkMwrHistory = useCallback((
     history: Record<string, number>,
     currency: string,
@@ -784,7 +674,7 @@ export const AnalysisContent = ({
       const rawPrice = history[priceDate];
       if (!rawPrice) continue;
 
-      const price = convertCurrency(rawPrice, currency, baseCurrency, priceDate);
+      const price = convertFxCurrency(project?.fxData, rawPrice, currency, baseCurrency, priceDate);
       if (!price || price <= 0) continue;
 
       const cashFlow = i === 0 ? cashflowData[i].invested : (cashflowData[i].invested - cashflowData[i - 1].invested);
@@ -798,7 +688,7 @@ export const AnalysisContent = ({
     }
 
     return synthetic;
-  }, [historyData, convertCurrency]);
+  }, [historyData, project?.fxData]);
 
   const buildBenchmarkSeries = useCallback((
     history: Record<string, number>,
@@ -808,8 +698,12 @@ export const AnalysisContent = ({
     baseCurrency: string
   ) => {
     const syntheticHistory = buildBenchmarkMwrHistory(history, currency, baseCurrency, start, end);
-    return buildMwrSeries(syntheticHistory, start, end);
-  }, [buildBenchmarkMwrHistory, buildMwrSeries]);
+    return buildMwrSeries(syntheticHistory, start, end, {
+      includeDividends: false,
+      isFullRange: performanceRange === 'MAX',
+      transactions: filteredTransactions
+    });
+  }, [buildBenchmarkMwrHistory, performanceRange, filteredTransactions]);
 
   const benchmarkSeries = useMemo(() => {
     if (!performanceRangeDates.start || !performanceRangeDates.end) return [];

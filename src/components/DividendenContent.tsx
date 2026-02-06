@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Activity, BarChart3, CalendarCheck, Coins, PiggyBank, Timer, TrendingUp, Wallet, X } from 'lucide-react';
-import { CurrencyService } from '@/lib/currencyService';
-import { calculateHoldings } from '@/lib/portfolioUtils';
+import { filterTransactionsByPortfolio, calculateProjectHoldings } from '@/lib/portfolioSelectors';
+import { convertCurrency } from '@/lib/fxUtils';
 import { useProject } from '@/contexts/ProjectContext';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { Card } from '@/components/ui/Card';
@@ -89,34 +89,14 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
   const formatCurrency = (value: number) => value.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency });
 
   // 1. Filter Transactions (same logic as other tabs)
-  const filteredTransactions = useMemo(() => {
-    if (!project) return [];
-    if (selectedPortfolioIds.length === 0) return project.transactions;
-    return project.transactions.filter(t => t.portfolioId && selectedPortfolioIds.includes(t.portfolioId));
-  }, [project, selectedPortfolioIds]);
+  const filteredTransactions = useMemo(() => (
+    filterTransactionsByPortfolio(project, selectedPortfolioIds)
+  ), [project, selectedPortfolioIds]);
 
   // 2. Calculate Holdings (for Yield Calculation)
   const { totalValue, totalInvested, holdings } = useMemo(() => {
     if (!project) return { totalValue: 0, totalInvested: 0, holdings: [] };
-
-    // Quick Holdings Calcs (simplified compared to Dashboard)
-    const quotes: Record<string, number> = {};
-    if (project.securities) {
-      Object.values(project.securities).forEach(sec => {
-        if (sec.priceHistory) {
-          const dates = Object.keys(sec.priceHistory).sort();
-          if (dates.length > 0) quotes[sec.isin] = sec.priceHistory[dates[dates.length - 1]];
-        }
-      });
-    }
-
-    const { holdings } = calculateHoldings(
-      filteredTransactions,
-      Object.values(project.securities || {}),
-      quotes,
-      project.fxData.rates,
-      project.settings.baseCurrency
-    );
+    const { holdings } = calculateProjectHoldings(project, filteredTransactions);
 
     const val = holdings.reduce((sum, h) => sum + h.value, 0);
     const inv = holdings.reduce((sum, h) => sum + (h.value - h.totalReturn), 0);
@@ -149,14 +129,9 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     const monthlyHistoryMap: Record<string, number> = {}; // "Year-Month" -> Amount
     const monthlyHistoryAllMap: Record<string, number> = {}; // Full history map
 
-    const convertToBaseAtDate = (amount: number, currency: string, date: string) => {
-      if (currency === baseCurrency) return amount;
-      const rateFrom = CurrencyService.getRate(project.fxData, currency, date) || 1;
-      const amountEur = amount / rateFrom;
-      if (baseCurrency === 'EUR') return amountEur;
-      const rateTo = CurrencyService.getRate(project.fxData, baseCurrency, date) || 1;
-      return amountEur * rateTo;
-    };
+    const convertToBaseAtDate = (amount: number, currency: string, date: string) => (
+      convertCurrency(project.fxData, amount, currency, baseCurrency, date)
+    );
     const convertDividendToBase = (amount: number, currency: string, date: string) => {
       return convertToBaseAtDate(amount, currency, date);
     };
@@ -184,29 +159,14 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     });
 
     // Helper: Get latest FX rate
-    const getLatestRate = (currency: string): number => {
-      const fxBase = project.fxData.baseCurrency || 'EUR';
-      if (currency === fxBase) return 1;
-      const rates = project.fxData.rates[currency];
-      if (!rates) return 1; // Fallback
-      // Find latest date
-      const dates = Object.keys(rates).sort().reverse();
-      return rates[dates[0]] || 1;
-    };
-
-    // Helper: Convert to Base Currency
     const convertToBase = (amount: number, currency: string, date?: string) => {
       const effectiveDate = date || project.fxData.lastUpdated || new Date().toISOString().split('T')[0];
       return convertToBaseAtDate(amount, currency, effectiveDate);
     };
 
-    const convertToBaseLatest = (amount: number, currency: string) => {
-      if (currency === baseCurrency) return amount;
-      const rateOrg = getLatestRate(currency);
-      const rateBase = getLatestRate(baseCurrency);
-      const inEur = amount / rateOrg;
-      return baseCurrency === 'EUR' ? inEur : inEur * rateBase;
-    };
+    const convertToBaseLatest = (amount: number, currency: string) => (
+      convertCurrency(project.fxData, amount, currency, baseCurrency)
+    );
 
     // --- FORECAST LOGIC (History & Upcoming Based) ---
     const forecastEvents: { date: Date, amount: number, name: string, ticker: string, debug?: string }[] = [];

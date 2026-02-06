@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, Search, X } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
+import { filterTransactionsByPortfolio } from '@/lib/portfolioSelectors';
+import { getCurrencyOptions } from '@/lib/fxUtils';
 import { type DeletedTxEntry, type TransactionLike } from '@/types/portfolioView';
 
 const TransactionEditModal = ({
@@ -278,9 +280,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const filteredTransactions = useMemo(() => {
-    if (!project) return [];
-    if (selectedPortfolioIds.length === 0) return project.transactions;
-    return project.transactions.filter(t => t.portfolioId && selectedPortfolioIds.includes(t.portfolioId));
+    return filterTransactionsByPortfolio(project, selectedPortfolioIds);
   }, [project, selectedPortfolioIds]);
 
   const transactionTypes = useMemo(() => {
@@ -292,10 +292,8 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
   }, [filteredTransactions]);
 
   const currencies = useMemo(() => {
-    const manual = ['EUR', 'USD', 'CHF', 'GBP'];
-    const fromFx = project?.fxData.rates ? Object.keys(project.fxData.rates) : [];
-    return Array.from(new Set([...manual, ...fromFx])).sort();
-  }, [project]);
+    return getCurrencyOptions(project?.fxData);
+  }, [project?.fxData]);
 
   const portfolioNameById = useMemo(() => {
     const map: Record<string, string> = {};
