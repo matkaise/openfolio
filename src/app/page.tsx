@@ -1789,6 +1789,90 @@ const TransactionEditModal = ({
   );
 };
 
+const DeletedTransactionsModal = ({
+  isOpen,
+  onClose,
+  items,
+  onRestore,
+  onPurge
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  items: { tx: any; deletedAt: string }[];
+  onRestore: (entry: { tx: any; deletedAt: string }) => void;
+  onPurge: (entry: { tx: any; deletedAt: string }) => void;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <style>{`
+        .deleted-modal-scroll::-webkit-scrollbar { width: 8px; }
+        .deleted-modal-scroll::-webkit-scrollbar-track {
+          background: rgba(15, 23, 42, 0.35);
+          border-radius: 999px;
+        }
+        .deleted-modal-scroll::-webkit-scrollbar-thumb {
+          background: rgba(148, 163, 184, 0.55);
+          border-radius: 999px;
+          border: 2px solid rgba(15, 23, 42, 0.35);
+        }
+        .deleted-modal-scroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(203, 213, 225, 0.75);
+        }
+      `}</style>
+      <div
+        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-white">Papierkorb</h3>
+            <p className="text-xs text-slate-400 mt-1">{items.length} Eintraege</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
+            <X className="text-slate-400 hover:text-white" />
+          </button>
+        </div>
+
+        <div
+          className="deleted-modal-scroll max-h-[60vh] overflow-y-auto divide-y divide-slate-800 pr-2 -mr-2 [scrollbar-width:thin] [scrollbar-color:rgba(148,163,184,0.5)_rgba(15,23,42,0.3)]"
+          style={{ scrollbarGutter: 'stable both-edges' }}
+        >
+          {items.length === 0 ? (
+            <div className="text-slate-400 text-sm p-6 text-center">Keine geloeschten Transaktionen.</div>
+          ) : (
+            items.map(entry => (
+              <div key={entry.tx.id} className="py-3 flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-slate-200 truncate">{entry.tx.name || entry.tx.isin}</div>
+                  <div className="text-xs text-slate-500">
+                    {new Date(entry.tx.date).toLocaleDateString('de-DE')} - {entry.tx.type}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => onRestore(entry)}
+                    className="px-3 py-1.5 text-xs bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 rounded-lg hover:bg-emerald-500/30 transition"
+                  >
+                    Wiederherstellen
+                  </button>
+                  <button
+                    onClick={() => onPurge(entry)}
+                    className="px-3 py-1.5 text-xs bg-rose-500/10 text-rose-200 border border-rose-500/30 rounded-lg hover:bg-rose-500/20 transition"
+                  >
+                    Endgueltig loeschen
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const toDateKey = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -4146,6 +4230,10 @@ const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: s
   const [txDateFrom, setTxDateFrom] = useState('');
   const [txDateTo, setTxDateTo] = useState('');
   const [editingTx, setEditingTx] = useState<any | null>(null);
+  const [deletedTxs, setDeletedTxs] = useState<{ tx: any; deletedAt: string }[]>([]);
+  const [showDeletedModal, setShowDeletedModal] = useState(false);
+  const [toastEntry, setToastEntry] = useState<{ tx: any; deletedAt: string } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const filteredTransactions = useMemo(() => {
     if (!project) return [];
@@ -4196,6 +4284,40 @@ const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: s
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [filteredTransactions, txType, txSearch, txDateFrom, txDateTo]);
 
+  useEffect(() => {
+    if (!toastEntry) return;
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastEntry(null), 6000);
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, [toastEntry]);
+
+  const handleDeleteTransaction = (target: any) => {
+    if (!updateProject) return;
+    updateProject(prev => ({
+      ...prev,
+      transactions: prev.transactions.filter(t => t.id !== target.id),
+      modified: new Date().toISOString()
+    }));
+    const entry = { tx: target, deletedAt: new Date().toISOString() };
+    setDeletedTxs(prev => [entry, ...prev.filter(e => e.tx.id !== target.id)]);
+    setToastEntry(entry);
+  };
+
+  const handleRestoreTransaction = (entry: { tx: any; deletedAt: string }) => {
+    if (!updateProject) return;
+    updateProject(prev => ({
+      ...prev,
+      transactions: prev.transactions.some(t => t.id === entry.tx.id)
+        ? prev.transactions
+        : [...prev.transactions, entry.tx],
+      modified: new Date().toISOString()
+    }));
+    setDeletedTxs(prev => prev.filter(e => e.tx.id !== entry.tx.id));
+    setToastEntry(null);
+  };
+
   return (
     <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 w-full">
       <div className="flex items-center justify-between mb-6">
@@ -4203,8 +4325,16 @@ const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: s
           <FileText size={20} className="text-emerald-500" />
           Transaktionen
         </h2>
-        <div className="text-sm text-slate-400">
-          {visibleTransactions.length}{visibleTransactions.length !== filteredTransactions.length ? ' / ' + filteredTransactions.length : ''} Eintraege
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowDeletedModal(true)}
+            className="text-xs bg-slate-800 border border-slate-700/60 text-slate-200 hover:text-white hover:bg-slate-700/70 transition-colors rounded-lg py-1.5 px-3"
+          >
+            Papierkorb ({deletedTxs.length})
+          </button>
+          <div className="text-sm text-slate-400">
+            {visibleTransactions.length}{visibleTransactions.length !== filteredTransactions.length ? ' / ' + filteredTransactions.length : ''} Eintraege
+          </div>
         </div>
       </div>
 
@@ -4326,15 +4456,40 @@ const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: s
           setEditingTx(null);
         }}
         onDelete={(target) => {
-          if (!updateProject) return;
-          updateProject(prev => ({
-            ...prev,
-            transactions: prev.transactions.filter(t => t.id !== target.id),
-            modified: new Date().toISOString()
-          }));
+          handleDeleteTransaction(target);
           setEditingTx(null);
         }}
       />
+
+      <DeletedTransactionsModal
+        isOpen={showDeletedModal}
+        onClose={() => setShowDeletedModal(false)}
+        items={deletedTxs}
+        onRestore={handleRestoreTransaction}
+        onPurge={(entry) => {
+          setDeletedTxs(prev => prev.filter(e => e.tx.id !== entry.tx.id));
+        }}
+      />
+
+      {toastEntry ? (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 border border-slate-800 shadow-2xl rounded-xl px-4 py-3 flex items-center gap-3">
+          <div className="text-sm text-slate-200">
+            Transaktion geloescht
+          </div>
+          <button
+            onClick={() => handleRestoreTransaction(toastEntry)}
+            className="text-xs px-3 py-1.5 bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 rounded-lg hover:bg-emerald-500/30 transition"
+          >
+            Rueckgaengig
+          </button>
+          <button
+            onClick={() => setShowDeletedModal(true)}
+            className="text-xs px-3 py-1.5 bg-slate-800 text-slate-200 border border-slate-700/60 rounded-lg hover:bg-slate-700/70 transition"
+          >
+            Papierkorb
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 };
