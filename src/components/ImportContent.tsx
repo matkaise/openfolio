@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Wallet, Plus, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 
@@ -8,22 +8,13 @@ interface ImportContentProps {
 
 export const ImportContent = ({ onContinue }: ImportContentProps) => {
     const { project } = useProject();
-    const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>('');
-    const [isNewPortfolio, setIsNewPortfolio] = useState(false);
+    const initialPortfolioId = project?.portfolios?.[0]?.id || '';
+    const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>(initialPortfolioId);
+    const [isNewPortfolio, setIsNewPortfolio] = useState(!(project?.portfolios && project.portfolios.length > 0));
     const [newPortfolioName, setNewPortfolioName] = useState('');
     const [error, setError] = useState<string | null>(null);
 
-    // Set default selection
-    useMemo(() => {
-        if (project && project.portfolios && project.portfolios.length > 0) {
-            if (!selectedPortfolioId) {
-                setSelectedPortfolioId(project.portfolios[0].id);
-                setIsNewPortfolio(false);
-            }
-        } else {
-            setIsNewPortfolio(true);
-        }
-    }, [project]);
+    // Default selection is derived from the initial project state (component remounts on project change).
 
     // Validation
     const validateName = (name: string) => {

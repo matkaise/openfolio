@@ -1,17 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { X, Globe, BarChart3, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
+import { Globe, BarChart3, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { SimpleAreaChart } from './SimpleAreaChart';
 import { Security, Transaction } from '@/types/domain';
 
 interface SecurityDetailModalProps {
     isOpen: boolean;
-    onClose: () => void;
-    security: Security;
-    transactions: Transaction[];
-    currency: string;
+  onClose: () => void;
+  security: Security;
+  transactions: Transaction[];
 }
 
-export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, currency }: SecurityDetailModalProps) => {
+export const SecurityDetailModal = ({ isOpen, onClose, security, transactions }: SecurityDetailModalProps) => {
     const [timeRange, setTimeRange] = useState('1J');
 
     // Close on escape

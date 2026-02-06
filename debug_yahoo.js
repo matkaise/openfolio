@@ -1,16 +1,18 @@
-const pkg = require('yahoo-finance2');
-const YahooFinance = pkg.default || pkg;
+async function getYahooClient() {
+    const pkg = await import('yahoo-finance2');
+    const YahooFinance = pkg.default || pkg;
 
-// If it's a function (class), instantiate it.
-let yahooFinance;
-try {
-    yahooFinance = new YahooFinance();
-} catch (e) {
-    yahooFinance = YahooFinance; // Fallback if it's already an instance
+    // If it's a function (class), instantiate it.
+    try {
+        return new YahooFinance();
+    } catch {
+        return YahooFinance; // Fallback if it's already an instance
+    }
 }
 
 async function run() {
     try {
+        const yahooFinance = await getYahooClient();
         const symbol = 'AAPL';
         // yahooFinance.suppressNotices(['yahooSurvey']); 
 
@@ -19,8 +21,8 @@ async function run() {
 
         console.log('Quote dividendYield:', quote.dividendYield);
         console.log('SummaryDetail dividendYield:', summary.summaryDetail.dividendYield);
-    } catch (e) {
-        console.error(e);
+    } catch (err) {
+        console.error(err);
     }
 }
 

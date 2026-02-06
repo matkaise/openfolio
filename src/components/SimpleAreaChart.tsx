@@ -11,6 +11,8 @@ import {
     Tooltip
 } from 'recharts';
 
+type ChartPoint = { date: string; value: number };
+
 export const SimpleAreaChart = ({
     data,
     color = "#10b981",
@@ -22,7 +24,7 @@ export const SimpleAreaChart = ({
     tooltipLabel,
     markers = []
 }: {
-    data: any[],
+    data: ChartPoint[],
     color?: string,
     height?: number,
     showAxes?: boolean,
@@ -119,11 +121,11 @@ export const SimpleAreaChart = ({
                         contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', fontSize: '12px' }}
                         itemStyle={{ color: isPercentage ? (Number(data[0]?.value) > 0 ? '#10b981' : '#f43f5e') : color }} // Simplification for tooltip dot
                         labelStyle={{ color: '#94a3b8' }}
-                        formatter={(value: any) => [
+                        formatter={(value: number | string) => [
                             isPercentage ? `${Number(value) > 0 ? '+' : ''}${Number(value).toFixed(2)}%` : `${Number(value).toFixed(2)}`,
                             isPercentage ? (tooltipLabel || 'Performance') : (tooltipLabel || 'Kurs')
                         ]}
-                        labelFormatter={(label) => {
+                        labelFormatter={(label: string) => {
                             const d = new Date(label);
                             return d.toLocaleDateString();
                         }}

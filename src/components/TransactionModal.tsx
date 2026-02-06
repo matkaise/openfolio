@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { X, Upload, Plus, Calendar, Hash, DollarSign, Tag, Search, ArrowLeft, Briefcase, Wallet } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
-import { Transaction } from '@/types/domain';
+import { Transaction, type Portfolio } from '@/types/domain';
 import { parseFlatexCsv } from '@/lib/csvParser';
 
 interface TransactionModalProps {
@@ -34,17 +34,6 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     const [isDragging, setIsDragging] = useState(false);
     const [parsedTx, setParsedTx] = useState<Transaction[]>([]);
     const [importStatus, setImportStatus] = useState<'idle' | 'processing' | 'ready' | 'success'>('idle');
-
-    // Reset state on open
-    useEffect(() => {
-        if (isOpen) {
-            setImportStatus('idle');
-            setParsedTx([]);
-            setIdentifier('');
-            setShares('');
-            setPrice('');
-        }
-    }, [isOpen]);
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
@@ -92,7 +81,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     };
 
     // Helper to get or create target portfolio ID
-    const getTargetPortfolioId = (currentPortfolios: any[]) => {
+    const getTargetPortfolioId = (currentPortfolios: Portfolio[]) => {
         if (!targetPortfolio) {
             // Fallback if something went wrong
             return { id: currentPortfolios[0]?.id || crypto.randomUUID(), name: 'Fallback', isNew: !currentPortfolios.length };

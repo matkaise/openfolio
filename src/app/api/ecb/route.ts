@@ -5,6 +5,8 @@ const ECB_URLS = {
     hist: 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml'
 };
 
+type EcbDay = { date: string; rates: Record<string, number> };
+
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const mode = searchParams.get('mode') === 'hist' ? 'hist' : 'daily';
@@ -24,9 +26,9 @@ export async function GET(request: NextRequest) {
         // Simple XML Parsing using Regex to avoid heavy XML DOM dependencies
         // Structure: <Cube time="2023-10-27"> <Cube currency="USD" rate="1.05" /> ... </Cube>
 
-        const result: any[] = [];
+        const result: EcbDay[] = [];
         const dateRegex = /<Cube time="(\d{4}-\d{2}-\d{2})">/g;
-        let dateMatch;
+        let dateMatch: RegExpExecArray | null;
 
         // Iterate over dates
         while ((dateMatch = dateRegex.exec(xmlText)) !== null) {
@@ -36,7 +38,9 @@ export async function GET(request: NextRequest) {
             // Find end of this date block or file
             const startIndex = dateMatch.index;
             const nextDateMatch = xmlText.slice(startIndex + 1).match(/<Cube time="/);
-            const endIndex = nextDateMatch ? (startIndex + 1 + nextDateMatch.index!) : xmlText.length;
+            const endIndex = nextDateMatch && nextDateMatch.index !== undefined
+                ? (startIndex + 1 + nextDateMatch.index)
+                : xmlText.length;
             const block = xmlText.slice(startIndex, endIndex);
 
             // Extract rates within block
@@ -55,8 +59,9 @@ export async function GET(request: NextRequest) {
             data: result
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'ECB Proxy Error';
         console.error("ECB Proxy Error:", error);
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+        return NextResponse.json({ success: false, error: message }, { status: 500 });
     }
 }

@@ -278,6 +278,10 @@ export function calculatePortfolioHistory(
             }));
         }
     });
+    const securityByIsin: Record<string, Security> = {};
+    securities.forEach(sec => {
+        securityByIsin[sec.isin] = sec;
+    });
 
     switch (timeRange) {
         case '1M':
@@ -351,13 +355,16 @@ export function calculatePortfolioHistory(
     // Sort and deduplicate (just in case)
     datePoints.sort((a, b) => a.getTime() - b.getTime());
 
+    const priceDateCache: Record<string, string[]> = {};
+    const fxDateCache: Record<string, string[]> = {};
+
     // Helper function to get price at a specific date
     const getPriceAtDate = (isin: string, targetDate: Date): number => {
-        const sec = securities.find(s => s.isin === isin);
+        const sec = securityByIsin[isin];
         if (!sec || !sec.priceHistory) return 0;
 
         const targetTime = targetDate.getTime();
-        const dates = Object.keys(sec.priceHistory).sort();
+        const dates = priceDateCache[isin] || (priceDateCache[isin] = Object.keys(sec.priceHistory).sort());
 
         // Find closest earlier or equal date
         let closestDate = dates[0];
@@ -404,7 +411,7 @@ export function calculatePortfolioHistory(
 
         if (date) {
             const targetDate = new Date(date).getTime();
-            const availableDates = Object.keys(history).sort();
+            const availableDates = fxDateCache[currency] || (fxDateCache[currency] = Object.keys(history).sort());
             let closestDate = availableDates[0];
             for (const d of availableDates) {
                 const dTime = new Date(d).getTime();
@@ -417,7 +424,7 @@ export function calculatePortfolioHistory(
             return history[closestDate] || 1;
         }
 
-        const dates = Object.keys(history).sort();
+        const dates = fxDateCache[currency] || (fxDateCache[currency] = Object.keys(history).sort());
         const latest = dates[dates.length - 1];
         return history[latest] || 1;
     };
@@ -431,8 +438,64 @@ export function calculatePortfolioHistory(
         return amountEur * rateTo;
     };
 
-    // Calculate portfolio value at each date point
-    // Calculate portfolio value at each date point
+    // Prepare events per ISIN (transactions + splits) once for incremental replay
+    const txByIsin: Record<string, Transaction[]> = {};
+    transactions.forEach(tx => {
+        if (!tx.isin) return;
+        if (!txByIsin[tx.isin]) txByIsin[tx.isin] = [];
+        txByIsin[tx.isin].push(tx);
+    });
+    Object.values(txByIsin).forEach(list => {
+        list.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    });
+
+    const eventsByIsin: Record<string, { time: number; date: string; type: 'Tx' | 'Split'; data?: Transaction; ratio?: number }[]> = {};
+    const allIsins = new Set<string>([
+        ...Object.keys(txByIsin),
+        ...Object.keys(splitsMap)
+    ]);
+
+    allIsins.forEach(isin => {
+        const events: { time: number; date: string; type: 'Tx' | 'Split'; data?: Transaction; ratio?: number }[] = [];
+
+        const txs = txByIsin[isin] || [];
+        txs.forEach(tx => {
+            events.push({ time: new Date(tx.date).getTime(), date: tx.date, type: 'Tx', data: tx });
+        });
+
+        const splits = splitsMap[isin];
+        if (splits) {
+            splits.forEach(split => {
+                events.push({ time: split.date.getTime(), date: split.date.toISOString().split('T')[0], type: 'Split', ratio: split.ratio });
+            });
+        }
+
+        events.sort((a, b) => {
+            if (a.time !== b.time) return a.time - b.time;
+            if (a.type === 'Split' && b.type !== 'Split') return -1;
+            if (a.type !== 'Split' && b.type === 'Split') return 1;
+            return 0;
+        });
+
+        eventsByIsin[isin] = events;
+    });
+
+    const stateByIsin: Record<string, { quantity: number; invested: number; currency: string; dividend: number }> = {};
+    const eventIndexByIsin: Record<string, number> = {};
+
+    allIsins.forEach(isin => {
+        const firstTx = txByIsin[isin]?.[0];
+        const sec = securityByIsin[isin];
+        stateByIsin[isin] = {
+            quantity: 0,
+            invested: 0,
+            dividend: 0,
+            currency: firstTx?.currency || sec?.currency || 'EUR'
+        };
+        eventIndexByIsin[isin] = 0;
+    });
+
+    // Calculate portfolio value at each date point (incremental replay)
     const result: { date: string; value: number; invested: number; dividend: number }[] = [];
 
     for (const datePoint of datePoints) {
@@ -441,59 +504,17 @@ export function calculatePortfolioHistory(
         const month = String(datePoint.getMonth() + 1).padStart(2, '0');
         const day = String(datePoint.getDate()).padStart(2, '0');
         const dateStr = `${year}-${month}-${day}`;
+        const dateTime = datePoint.getTime();
 
-        // Build holdings snapshot at this date
-        const holdingsMap: Record<string, {
-            quantity: number;
-            invested: number;
-            currency: string;
-            dividend?: number;
-        }> = {};
+        // Apply events up to this date
+        allIsins.forEach(isin => {
+            const events = eventsByIsin[isin];
+            if (!events || events.length === 0) return;
+            const h = stateByIsin[isin];
+            let idx = eventIndexByIsin[isin] || 0;
 
-        // Process all transactions up to this date
-        // Build timeline for this date snapshot
-        // We need to replay history up to 'datePoint'.
-        const activeIsins = new Set([...Object.keys(holdingsMap), ...transactions.filter(t => new Date(t.date) <= datePoint && t.isin).map(t => t.isin!)]);
-
-        activeIsins.forEach(isin => {
-            if (!holdingsMap[isin]) {
-                const firstTx = transactions.find(t => t.isin === isin);
-                const sec = securities.find(s => s.isin === isin);
-                holdingsMap[isin] = { quantity: 0, invested: 0, currency: firstTx?.currency || sec?.currency || 'EUR' };
-            }
-            const h = holdingsMap[isin];
-            const sec = securities.find(s => s.isin === isin);
-
-            // Events up to datePoint for this ISIN
-            // Optimize: This is N^3 effectively. Can be slow.
-            // But correct.
-            const events: { date: string, type: 'Tx' | 'Split', data?: Transaction, ratio?: number }[] = [];
-
-            // Add Txs
-            transactions.filter(t => t.isin === isin && new Date(t.date) <= datePoint).forEach(tx => events.push({ date: tx.date, type: 'Tx', data: tx }));
-
-            // Add Splits
-            if (sec && sec.splits) {
-                Object.entries(sec.splits).forEach(([d, r]) => {
-                    if (new Date(d) <= datePoint) events.push({ date: d, type: 'Split', ratio: r });
-                });
-            }
-
-            events.sort((a, b) => {
-                const timeA = new Date(a.date).getTime();
-                const timeB = new Date(b.date).getTime();
-                if (timeA !== timeB) return timeA - timeB;
-                if (a.type === 'Split' && b.type !== 'Split') return -1;
-                if (a.type !== 'Split' && b.type === 'Split') return 1;
-                return 0;
-            });
-
-            // Replay
-            // Note: This replay is inefficient inside the datePoint loop (re-calculating from 0 for every point).
-            // But refactoring to incremental calculation is too risky for now.
-            h.quantity = 0; h.invested = 0; h.dividend = 0; // Reset state for replay
-
-            for (const event of events) {
+            while (idx < events.length && events[idx].time <= dateTime) {
+                const event = events[idx];
                 if (event.type === 'Split') {
                     const ratio = event.ratio || 1;
                     if (ratio > 0 && h.quantity > 0) h.quantity *= ratio;
@@ -512,61 +533,36 @@ export function calculatePortfolioHistory(
                         if (h.quantity < 0.000001) { h.quantity = 0; h.invested = 0; }
                     } else if (tx.type === 'Dividend') {
                         const amountBase = convert(Math.abs(tx.amount), tx.currency, baseCurrency, tx.date);
-                        h.dividend = (h.dividend || 0) + amountBase;
+                        h.dividend += amountBase;
                     }
                 }
+                idx++;
             }
+
+            eventIndexByIsin[isin] = idx;
         });
 
-        // Calculate total value at this date
+        // Calculate totals at this date
         let totalValue = 0;
         let totalInvested = 0;
         let totalDividend = 0;
 
-        for (const isin in holdingsMap) {
-            const h = holdingsMap[isin];
-
-            // Capture dividends for this specific day (reset daily in a real accumulation, 
-            // but here we are snapshotting. Wait, calculatePortfolioHistory is cumulative?
-            // No, the logic re-runs transaction filter from scratch for EACH datePoint.
-            // So `holdingsMap` is rebuilt from zero for each day.
-            // This is O(N^2) but fine for now.
-            // BUT: 'Dividend' is a one-off event. summing all past dividends into `h.dividend` 
-            // implies accumulation. 
-            // We need returns for THAT DAY.
-
-            // Correction: For TWR, we need the dividend occurring ON THAT SPECIFIC DAY/PERIOD.
-            // My current logic rebuilds state from 0 to DatePoint.
-            // If I sum `h.dividend`, I get TOTAL CUMULATIVE dividends up to DatePoint.
-            // This is NOT what I want for Daily TWR. I want "Dividend paid TODAY".
-
-            // Actually, `calculatePortfolioHistory` returns a content series.
-            // If I return `cumulativeDividend`, I can diff it in `analysisService`?
-            // Yes. `dailyDividend = curr.cumulative - prev.cumulative`.
-        }
-
-        // Let's stick to the re-calc loop.
-        // We will sum all dividends up to this date.
-        // Then in analysisService, we take the delta.
-
-        for (const isin in holdingsMap) {
-            const h = holdingsMap[isin];
+        allIsins.forEach(isin => {
+            const h = stateByIsin[isin];
             if (h.dividend) totalDividend += h.dividend;
+            if (h.quantity <= 0.000001) return;
 
-            if (h.quantity <= 0.000001) continue;
-
-            const sec = securities.find(s => s.isin === isin);
+            const sec = securityByIsin[isin];
             const securityCurrency = sec?.currency || h.currency;
 
             // Use ADJUSTED price (un-adjusted for future splits) to match point-in-time holdings
             const price = getAdjustedPriceAtDate(isin, datePoint);
-
             const valueInSecurityCurrency = h.quantity * price;
             const valueInBaseCurrency = convert(valueInSecurityCurrency, securityCurrency, baseCurrency, dateStr);
 
             totalValue += valueInBaseCurrency;
             totalInvested += h.invested;
-        }
+        });
 
         result.push({
             date: dateStr,
@@ -689,12 +685,9 @@ export function calculateAnalysisMetrics(
     let maxDrawdown = 0;
     let maxDrawdownDate = '';
     let peak = historyData[0].value;
-    let peakDate = historyData[0].date;
-
     for (const point of historyData) {
         if (point.value > peak) {
             peak = point.value;
-            peakDate = point.date;
         }
 
         if (peak > 0) {
@@ -738,11 +731,14 @@ export function calculateAnalysisMetrics(
  * Used for charts to show pure performance over time, filtering out cashflows.
  */
 export function calculateTWRSeries(
-    historyData: { date: string; value: number; invested: number }[]
+    historyData: { date: string; value: number; invested: number; dividend?: number }[],
+    includeDividends: boolean = false
 ): { date: string; value: number }[] {
     if (!historyData || historyData.length === 0) return [];
 
     const result: { date: string; value: number }[] = [];
+    const getValue = (point: { value: number; dividend?: number }) =>
+        point.value + (includeDividends ? (point.dividend || 0) : 0);
 
     // Start baseline
     result.push({ date: historyData[0].date, value: 0 });
@@ -760,11 +756,13 @@ export function calculateTWRSeries(
 
         // TWR Formula: (End - (Start + CF)) / (Start + CF)
         // Check for edge case: Start + CF = 0
-        const denominator = prev.value + cashFlow;
+        const prevValue = getValue(prev);
+        const currValue = getValue(curr);
+        const denominator = prevValue + cashFlow;
 
         let periodicReturn = 0;
         if (denominator !== 0) {
-            periodicReturn = (curr.value - denominator) / denominator; // Raw scalar (e.g. 0.01 for 1%)
+            periodicReturn = (currValue - denominator) / denominator; // Raw scalar (e.g. 0.01 for 1%)
         }
 
         // Chain the return

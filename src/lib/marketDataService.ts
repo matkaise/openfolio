@@ -1,4 +1,4 @@
-import { ProjectData, Security, ISIN } from '@/types/domain';
+import { ProjectData, ISIN } from '@/types/domain';
 
 export const syncProjectQuotes = async (project: ProjectData, force: boolean = false): Promise<ProjectData> => {
     const now = new Date();

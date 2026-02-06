@@ -13,7 +13,7 @@ export interface Transaction {
     exchangeRate?: number; // Transaction specific rate
     broker: string;
     portfolioId?: string; // Link to specific portfolio
-    originalData?: any; // To store raw CSV row for debugging
+    originalData?: unknown; // To store raw CSV row for debugging
 }
 
 export interface Security {

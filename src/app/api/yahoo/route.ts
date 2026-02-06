@@ -1,37 +1,82 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+type Interval = '1d';
+
+type YahooChartQuote = { date?: number | Date; close?: number };
+type YahooChartSplit = { date: number | Date; numerator?: number; denominator?: number };
+type YahooChartDividend = { date: number | Date; amount?: number };
+
+type YahooChartResult = {
+    quotes?: YahooChartQuote[];
+    meta?: { currency?: string; symbol?: string; regularMarketPrice?: number };
+    events?: {
+        splits?: Record<string, YahooChartSplit>;
+        dividends?: Record<string, YahooChartDividend>;
+    };
+};
+
+type YahooQuoteResult = {
+    longName?: string;
+    shortName?: string;
+    currency?: string;
+    quoteType?: string;
+    marketCap?: number;
+    trailingPE?: number;
+    dividendYield?: number;
+    fiftyTwoWeekHigh?: number;
+    fiftyTwoWeekLow?: number;
+    epsTrailingTwelveMonths?: number;
+    epsForward?: number;
+};
+
+type YahooQuoteSummary = {
+    financialData?: { totalRevenue?: number };
+    defaultKeyStatistics?: { forwardPE?: number; trailingEps?: number; forwardEps?: number };
+    earnings?: { earningsChart?: { quarterly?: { date: string; actual?: number }[] } };
+    assetProfile?: { country?: string; sector?: string; industry?: string };
+    calendarEvents?: { exDividendDate?: number | Date; dividendDate?: number | Date; earnings?: unknown };
+    summaryDetail?: { currency?: string; dividendYield?: number; dividendRate?: number };
+};
+
+type YahooFinanceLike = {
+    chart: (symbol: string, options: { period1: string; interval: Interval }) => Promise<YahooChartResult>;
+    quote: (symbol: string) => Promise<YahooQuoteResult>;
+    quoteSummary: (symbol: string, options: { modules: string[] }) => Promise<YahooQuoteSummary>;
+};
+
 export async function POST(req: NextRequest) {
     try {
         console.error('[YahooAPI] Starting request...');
-        let yahooFinance;
+        let yahooFinance: YahooFinanceLike;
         try {
-            const pkg = require('yahoo-finance2');
-            const Exported = pkg.default || pkg;
+            const pkg = await import('yahoo-finance2');
+            const exported = (pkg as { default?: unknown }).default ?? pkg;
 
             // Check if it's a class/function and instantiate
-            if (typeof Exported === 'function') {
-                yahooFinance = new Exported();
+            if (typeof exported === 'function') {
+                yahooFinance = new (exported as new () => YahooFinanceLike)();
                 console.error('[YahooAPI] Instantiated new YahooFinance class');
             } else {
-                yahooFinance = Exported;
+                yahooFinance = exported as YahooFinanceLike;
                 console.error('[YahooAPI] Using existing instance');
             }
-        } catch (err) {
-            console.error('[YahooAPI] Require failed:', err);
+        } catch (err: unknown) {
+            console.error('[YahooAPI] Import failed:', err);
             throw err;
         }
         // console.log('[YahooAPI] Keys:', Object.keys(yahooFinance || {}));
 
-        const body = await req.json();
-        const { symbol, range, interval } = body;
+        const body: { symbol?: string; interval?: Interval; from?: string } = await req.json();
+        const { symbol } = body;
 
         if (!symbol) {
             return NextResponse.json({ error: 'Symbol required' }, { status: 400 });
         }
 
+        const intervalValue: Interval = body.interval === '1d' ? '1d' : '1d';
         const queryOptions = {
             period1: body.from || '1970-01-01',
-            interval: interval || '1d' as '1d' // Cast to expected type
+            interval: intervalValue
         };
 
         console.log(`[YahooAPI] Fetching historical for ${symbol}`, JSON.stringify(queryOptions));
@@ -58,7 +103,7 @@ export async function POST(req: NextRequest) {
 
             const history: Record<string, number> = {};
 
-            quotes.forEach((q: any) => {
+            quotes.forEach((q) => {
                 if (q.date && q.close) {
                     const dateStr = new Date(q.date).toISOString().split('T')[0];
                     history[dateStr] = q.close;
@@ -72,8 +117,8 @@ export async function POST(req: NextRequest) {
             if (result.events) {
                 if (result.events.splits) {
                     const rawSplits = result.events.splits;
-                    Object.values(rawSplits).forEach((s: any) => {
-                        let dateStr = new Date(s.date instanceof Date ? s.date : (s.date < 100000000000 ? s.date * 1000 : s.date)).toISOString().split('T')[0];
+                    Object.values(rawSplits).forEach((s) => {
+                        const dateStr = new Date(s.date instanceof Date ? s.date : (s.date < 100000000000 ? s.date * 1000 : s.date)).toISOString().split('T')[0];
                         if (s.numerator && s.denominator) {
                             splits[dateStr] = s.numerator / s.denominator;
                         }
@@ -81,8 +126,8 @@ export async function POST(req: NextRequest) {
                 }
                 if (result.events.dividends) {
                     const rawDivs = result.events.dividends;
-                    Object.values(rawDivs).forEach((d: any) => {
-                        let dateStr = new Date(d.date instanceof Date ? d.date : (d.date < 100000000000 ? d.date * 1000 : d.date)).toISOString().split('T')[0];
+                    Object.values(rawDivs).forEach((d) => {
+                        const dateStr = new Date(d.date instanceof Date ? d.date : (d.date < 100000000000 ? d.date * 1000 : d.date)).toISOString().split('T')[0];
                         if (d.amount) {
                             dividendHistory.push({ date: dateStr, amount: d.amount });
                         }
@@ -99,7 +144,7 @@ export async function POST(req: NextRequest) {
             const summaryDetail = summaryResult?.summaryDetail || {};
 
             // Map Earnings History
-            const earningsHistory = earnings.earningsChart?.quarterly?.map((q: any) => ({
+            const earningsHistory = earnings.earningsChart?.quarterly?.map((q) => ({
                 date: q.date, // e.g. "4Q2023"
                 eps: q.actual
             })) || [];
@@ -150,14 +195,16 @@ export async function POST(req: NextRequest) {
                 dividendHistory,
                 upcomingDividends
             });
-        } catch (innerErr: any) {
-            console.log('[YahooAPI] Library Error (Log):', innerErr.message);
+        } catch (innerErr: unknown) {
+            const message = innerErr instanceof Error ? innerErr.message : String(innerErr);
+            console.log('[YahooAPI] Library Error (Log):', message);
             // console.log(JSON.stringify(innerErr));
             throw innerErr;
         }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Failed to fetch data';
         console.error('Yahoo API Error:', error);
-        return NextResponse.json({ error: error.message || 'Failed to fetch data' }, { status: 500 });
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

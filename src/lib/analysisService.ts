@@ -6,8 +6,9 @@ import { AnalysisMetrics, calculateTWRSeries } from './portfolioUtils';
  * Refactored into separate file for better maintainability and to ensure fix application
  */
 export function calculateAnalysisMetrics(
-    historyData: { date: string; value: number; invested: number }[],
-    riskFreeRate: number = 0.02 // 2% annual risk-free rate
+    historyData: { date: string; value: number; invested: number; dividend?: number }[],
+    riskFreeRate: number = 0.02, // 2% annual risk-free rate
+    options?: { includeDividends?: boolean }
 ): AnalysisMetrics {
     if (historyData.length === 0) {
         return {
@@ -23,7 +24,8 @@ export function calculateAnalysisMetrics(
     // 1. Calculate monthly returns
     // 1. Calculate monthly returns using TWR Series (Source of Truth)
     // This ensures consistency with the detailed charts.
-    const twrSeries = calculateTWRSeries(historyData);
+    const includeDividends = options?.includeDividends ?? false;
+    const twrSeries = calculateTWRSeries(historyData, includeDividends);
 
     // Helper to find TWR value at a specific date
     const getTwrValue = (d: string) => {

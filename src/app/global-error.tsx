@@ -1,12 +1,13 @@
 'use client';
 
 export default function GlobalError({
-    error,
+    error: _error,
     reset,
 }: {
     error: Error & { digest?: string };
     reset: () => void;
 }) {
+    void _error;
     return (
         <html>
             <body className="bg-slate-900 text-slate-200">

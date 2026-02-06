@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   LayoutDashboard,
   PieChart,
@@ -9,7 +9,6 @@ import {
   ArrowDownRight,
   TrendingUp,
   Calendar,
-  Settings,
   Bell,
   Plus,
   Search,
@@ -27,15 +26,12 @@ import {
   Check,
   Coins,
   Banknote,
-  Upload,
   FileText,
-  CloudUpload,
   Loader2,
-  FileCheck,
   Database,
   Save,
   LogOut,
-  FolderOpen
+  type LucideIcon
 } from 'lucide-react';
 import {
   AreaChart,
@@ -47,8 +43,7 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
-import { useMemo } from 'react';
-import { calculateHoldings, calculatePortfolioHistory, type Holding } from '@/lib/portfolioUtils';
+import { calculateHoldings, calculatePortfolioHistory, type Holding, type AnalysisMetrics } from '@/lib/portfolioUtils';
 import { calculateAnalysisMetrics } from '@/lib/analysisService';
 import { CurrencyService } from '@/lib/currencyService';
 import { useProject } from '@/contexts/ProjectContext';
@@ -60,109 +55,40 @@ import { ImportContent } from '@/components/ImportContent';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { TransactionModal } from '@/components/TransactionModal';
 import { ReturnChartModal } from '@/components/ReturnChartModal';
+import { type Transaction, type Security } from '@/types/domain';
 
 
-// --- Mock Data ---
 
-const portfolioData = {
-  totalValue: 142580.45,
-  investedCapital: 112000.00,
-  totalReturn: 30580.45,
-  totalReturnPercent: 27.3,
-  dayChange: 1240.50,
-  dayChangePercent: 0.87,
+
+type HistoryPoint = { date: string; value: number; invested: number; dividend?: number };
+type AnalysisCache = { key: string; historyData: HistoryPoint[]; analysisMetrics: AnalysisMetrics };
+type PerformanceRow = { date: string; [key: string]: string | number | undefined };
+type TransactionLike = Omit<Transaction, 'type'> & {
+  type: Transaction['type'] | 'Sparplan_Buy';
+  quantity?: number;
+  pricePerShare?: number;
+  price?: number;
 };
-
-const historyData = [
-  { date: 'Jan', value: 112000 },
-  { date: 'Feb', value: 115000 },
-  { date: 'Mär', value: 113500 },
-  { date: 'Apr', value: 118000 },
-  { date: 'Mai', value: 122000 },
-  { date: 'Jun', value: 121000 },
-  { date: 'Jul', value: 128000 },
-  { date: 'Aug', value: 132000 },
-  { date: 'Sep', value: 129000 },
-  { date: 'Okt', value: 135000 },
-  { date: 'Nov', value: 139000 },
-  { date: 'Dez', value: 142580 },
-];
+type DeletedTxEntry = { tx: TransactionLike; deletedAt: string };
+type DividendHistoryEntry = NonNullable<Security['dividendHistory']>[number];
+type UpcomingDividendEntry = NonNullable<Security['upcomingDividends']>[number];
+type EventEntry = { time: number; type: 'Tx' | 'Split'; data?: TransactionLike; ratio?: number };
 
 
 
-const holdings = [
-  { id: 1, name: 'Vanguard FTSE All-World', ticker: 'VWCE', type: 'ETF', value: 65400.20, shares: 620, change: 1.2, color: 'bg-orange-500' },
-  { id: 2, name: 'Apple Inc.', ticker: 'AAPL', type: 'Aktie', value: 15200.50, shares: 85, change: -0.4, color: 'bg-gray-100' },
-  { id: 3, name: 'Microsoft Corp.', ticker: 'MSFT', type: 'Aktie', value: 12800.10, shares: 42, change: 2.1, color: 'bg-blue-600' },
-  { id: 4, name: 'Bitcoin', ticker: 'BTC', type: 'Krypto', value: 8500.00, shares: 0.15, change: 4.5, color: 'bg-yellow-500' },
-  { id: 5, name: 'iShares Core S&P 500', ticker: 'SXR8', type: 'ETF', value: 19600.00, shares: 45, change: 0.8, color: 'bg-black' },
-  { id: 6, name: 'Ethereum', ticker: 'ETH', type: 'Krypto', value: 5500.00, shares: 2.5, change: -1.2, color: 'bg-indigo-500' },
-];
-
-// Analysis Data
-const monthlyReturns = [
-  { month: 'Jan', return: 2.4 },
-  { month: 'Feb', return: -1.2 },
-  { month: 'Mär', return: 0.8 },
-  { month: 'Apr', return: 3.5 },
-  { month: 'Mai', return: -0.5 },
-  { month: 'Jun', return: 1.2 },
-  { month: 'Jul', return: 4.1 },
-  { month: 'Aug', return: 0.2 },
-  { month: 'Sep', return: -2.1 },
-  { month: 'Okt', return: 1.8 },
-  { month: 'Nov', return: 2.9 },
-  { month: 'Dez', return: 1.5 },
-];
 
 
 
-// Dividend Data
-const dividendMonthly = [
-  { month: 'Jan', current: 120, prev: 85 },
-  { month: 'Feb', current: 45, prev: 30 },
-  { month: 'Mär', current: 210, prev: 180 },
-  { month: 'Apr', current: 15, prev: 10 },
-  { month: 'Mai', current: 320, prev: 250 },
-  { month: 'Jun', current: 180, prev: 160 },
-  { month: 'Jul', current: 55, prev: 40 },
-  { month: 'Aug', current: 25, prev: 20 },
-  { month: 'Sep', current: 190, prev: 150 },
-  { month: 'Okt', current: 0, prev: 10, forecast: 45 }, // Forecast example
-  { month: 'Nov', current: 0, prev: 25, forecast: 30 },
-  { month: 'Dez', current: 0, prev: 140, forecast: 160 },
-];
 
-const upcomingDividends = [
-  { id: 1, name: 'Coca-Cola Co.', ticker: 'KO', payDate: '15. Okt', amount: 12.50, status: 'Bestätigt', color: 'bg-red-500' },
-  { id: 2, name: 'Realty Income', ticker: 'O', payDate: '15. Okt', amount: 8.40, status: 'Prognose', color: 'bg-blue-700' },
-  { id: 3, name: 'Apple Inc.', ticker: 'AAPL', payDate: '14. Nov', amount: 5.20, status: 'Prognose', color: 'bg-gray-100' },
-  { id: 4, name: 'Microsoft', ticker: 'MSFT', payDate: '10. Dez', amount: 14.10, status: 'Prognose', color: 'bg-blue-500' },
-];
 
-const recentDividends = [
-  { id: 1, name: 'Vanguard FTSE All-World', date: '28. Sep', amount: 154.20, type: 'Ausschüttung' },
-  { id: 2, name: 'Johnson & Johnson', date: '08. Sep', amount: 24.50, type: 'Dividende' },
-  { id: 3, name: 'Unilever PLC', date: '02. Sep', amount: 18.90, type: 'Dividende' },
-  { id: 4, name: 'Realty Income', date: '15. Aug', amount: 8.35, type: 'Dividende' },
-  { id: 5, name: 'Apple Inc.', date: '12. Aug', amount: 4.80, type: 'Dividende' },
-];
 
-const brokers = [
-  "Trade Republic",
-  "Scalable Capital",
-  "ING DiBa",
-  "Comdirect",
-  "Consorsbank",
-  "Interactive Brokers",
-  "Flatex",
-  "Coinbase"
-];
+
+
 
 
 // --- Components ---
 
-const SidebarItem = ({ icon: Icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) => (
+const SidebarItem = ({ icon: Icon, label, active, onClick }: { icon: LucideIcon, label: string, active: boolean, onClick: () => void }) => (
   <button
     onClick={onClick}
     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${active
@@ -183,186 +109,6 @@ export const Card = ({ children, className = "" }: { children: React.ReactNode, 
 
 
 
-// --- Updated Modal Component (File Import) ---
-const LegacyTransactionModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
-  const [selectedBroker, setSelectedBroker] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [uploadStatus, setUploadStatus] = useState('idle'); // idle, uploading, success
-
-  // Reset state on open
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedBroker('');
-      setFile(null);
-      setUploadStatus('idle');
-    }
-  }, [isOpen]);
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFile(e.target.files[0]);
-    }
-  };
-
-  const handleFile = (uploadedFile: File) => {
-    setFile(uploadedFile);
-    // Simulate upload/parsing process
-    setUploadStatus('uploading');
-    setTimeout(() => {
-      setUploadStatus('success');
-    }, 2000);
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-700">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <CloudUpload className="text-emerald-500" size={24} />
-            Portfolio Import
-          </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition">
-            <X size={24} />
-          </button>
-        </div>
-
-        {/* Modal Body */}
-        <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
-
-          {/* Step 1: Broker Selection */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">1. Broker auswählen</label>
-            <div className="relative">
-              <select
-                value={selectedBroker}
-                onChange={(e) => setSelectedBroker(e.target.value)}
-                className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 px-4 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition cursor-pointer"
-              >
-                <option value="" disabled>Bitte wählen...</option>
-                {brokers.map(broker => (
-                  <option key={broker} value={broker}>{broker}</option>
-                ))}
-              </select>
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                <ChevronRight className="rotate-90" size={16} />
-              </div>
-            </div>
-            <p className="text-xs text-slate-500">
-              Der passende Parser wird automatisch für den gewählten Broker aktiviert.
-            </p>
-          </div>
-
-          {/* Step 2: Dropzone */}
-          <div className={`space-y-2 transition-opacity duration-300 ${!selectedBroker ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-            <label className="text-sm font-medium text-slate-300">2. Datei hochladen (PDF oder CSV)</label>
-
-            {uploadStatus === 'idle' && (
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all cursor-pointer bg-slate-900/20 group
-                        ${isDragging ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-700 hover:border-slate-500 hover:bg-slate-900/50'}
-                    `}
-              >
-                <input
-                  type="file"
-                  accept=".pdf,.csv"
-                  className="hidden"
-                  id="file-upload"
-                  onChange={handleFileInput}
-                />
-                <label htmlFor="file-upload" className="flex flex-col items-center cursor-pointer w-full h-full">
-                  <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <Upload className="text-emerald-500" size={24} />
-                  </div>
-                  <p className="text-slate-300 font-medium mb-1">Datei hier ablegen</p>
-                  <p className="text-xs text-slate-500">oder klicken zum Auswählen</p>
-                </label>
-              </div>
-            )}
-
-            {uploadStatus === 'uploading' && (
-              <div className="border border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center text-center bg-slate-900/50">
-                <Loader2 className="text-emerald-500 animate-spin mb-3" size={32} />
-                <p className="text-slate-300 font-medium">Analysiere Datei...</p>
-                <p className="text-xs text-slate-500 mt-1">{file?.name}</p>
-              </div>
-            )}
-
-            {uploadStatus === 'success' && (
-              <div className="border border-emerald-500/30 bg-emerald-500/10 rounded-xl p-6 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-slate-900 shrink-0">
-                  <FileCheck size={20} strokeWidth={3} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-emerald-400 font-medium">Analyse erfolgreich!</p>
-                  <p className="text-xs text-emerald-500/70 truncate">{file?.name}</p>
-                </div>
-                <button onClick={() => setUploadStatus('idle')} className="text-xs text-slate-400 hover:text-white underline">
-                  Ändern
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Info Box */}
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex gap-3">
-            <Activity className="text-blue-400 shrink-0 mt-0.5" size={16} />
-            <div className="text-xs text-slate-300">
-              Unser Algorithmus extrahiert Transaktionsdaten (Kauf, Verkauf, Dividenden, Steuern) automatisch lokal in deinem Browser. Deine Daten verlassen nie dein Gerät.
-            </div>
-          </div>
-
-        </div>
-
-        {/* Modal Footer */}
-        <div className="p-6 border-t border-slate-700 flex justify-end space-x-3 bg-slate-800 rounded-b-2xl">
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 rounded-xl text-slate-300 hover:bg-slate-700 hover:text-white transition font-medium"
-          >
-            Abbrechen
-          </button>
-          <button
-            disabled={uploadStatus !== 'success'}
-            className={`px-5 py-2.5 rounded-xl text-white shadow-lg transition font-medium flex items-center
-                ${uploadStatus === 'success'
-                ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20 cursor-pointer'
-                : 'bg-slate-700 text-slate-500 cursor-not-allowed'}
-            `}
-          >
-            {uploadStatus === 'success' ? '3 Transaktionen importieren' : 'Import starten'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-
 import { SecurityDetailModal } from '@/components/SecurityDetailModal';
 import { syncProjectQuotes, repairProjectSecurities } from '@/lib/marketDataService';
 
@@ -376,50 +122,64 @@ export default function PortfolioApp() {
   const [timeRange, setTimeRange] = useState('1M');
   const [selectedPortfolioIds, setSelectedPortfolioIds] = useState<string[]>([]); // Empty array = All
   const [selectedSecurityIsin, setSelectedSecurityIsin] = useState<string | null>(null);
-  const [analysisCache, setAnalysisCache] = useState<any>(null);
+  const [analysisCache, setAnalysisCache] = useState<AnalysisCache | null>(null);
+  const [includeDividendsInPerformance, setIncludeDividendsInPerformance] = useState(false);
 
   // State for Import Flow
   const [importTargetPortfolio, setImportTargetPortfolio] = useState<{ id: string; name: string; isNew: boolean } | null>(null);
 
-  // Invalidate cache when project data changes
-  useEffect(() => {
-    setAnalysisCache(null);
-  }, [project]);
+
 
   // Sync Market Data on Load (and auto-repair)
   useEffect(() => {
-    if (isLoaded && project) {
-      // 1. Repair missing securities if any
-      const repaired = repairProjectSecurities(project);
+    if (!isLoaded || !project) return;
 
-      // 2. Sync Quotes
-      syncProjectQuotes(repaired).then(updated => {
-        // If either repair or sync changed the project, update context
-        if (updated !== project) {
-          updateProject(() => updated);
-        }
-      });
+    // 1. Repair missing securities if any
+    const repaired = repairProjectSecurities(project);
+    const needsRepairUpdate = repaired !== project;
+
+    // 2. Check if any security needs syncing (new or stale)
+    const now = new Date();
+    const needsSync = Object.values(repaired.securities || {}).some(sec => {
+      const symbol = sec.symbol || sec.isin;
+      if (!symbol) return false;
+      if (!sec.lastSync) return true;
+      const diffHours = (now.getTime() - new Date(sec.lastSync).getTime()) / (1000 * 60 * 60);
+      return diffHours > 24;
+    });
+
+    if (!needsSync) {
+      if (needsRepairUpdate) {
+        updateProject(() => repaired);
+      }
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, project?.id]); // Run once per project load
+
+    // 3. Sync Quotes
+    syncProjectQuotes(repaired).then(updated => {
+      if (updated !== repaired || needsRepairUpdate) {
+        updateProject(() => updated);
+      }
+    });
+  }, [isLoaded, project, updateProject]);
+
+  const handleCacheUpdate = useCallback((data: AnalysisCache) => {
+    setAnalysisCache(data);
+  }, []);
 
   // Show Launcher if no project is loaded
   if (!isLoaded) {
     return <ProjectLauncher />;
   }
 
-  const handleCacheUpdate = (data: any) => {
-    setAnalysisCache(data);
-  };
-
   const renderContent = () => {
-    switch (activeTab) {
-      case 'Dashboard':
-        return <DashboardContent timeRange={timeRange} setTimeRange={setTimeRange} selectedPortfolioIds={selectedPortfolioIds} onSelectSecurity={setSelectedSecurityIsin} onShowPortfolio={() => setActiveTab('Portfolio')} />;
-      case 'Portfolio':
-        return <PortfolioList selectedPortfolioIds={selectedPortfolioIds} onSelectSecurity={setSelectedSecurityIsin} />;
-      case 'Analyse':
-        return <AnalysisContent selectedPortfolioIds={selectedPortfolioIds} cachedData={analysisCache} onCacheUpdate={handleCacheUpdate} />;
+      switch (activeTab) {
+        case 'Dashboard':
+        return <DashboardContent timeRange={timeRange} setTimeRange={setTimeRange} selectedPortfolioIds={selectedPortfolioIds} onSelectSecurity={setSelectedSecurityIsin} onShowPortfolio={() => setActiveTab('Portfolio')} includeDividends={includeDividendsInPerformance} onToggleDividends={() => setIncludeDividendsInPerformance(v => !v)} />;
+        case 'Portfolio':
+          return <PortfolioList selectedPortfolioIds={selectedPortfolioIds} onSelectSecurity={setSelectedSecurityIsin} />;
+        case 'Analyse':
+        return <AnalysisContent selectedPortfolioIds={selectedPortfolioIds} cachedData={analysisCache} onCacheUpdate={handleCacheUpdate} includeDividends={includeDividendsInPerformance} onToggleDividends={() => setIncludeDividendsInPerformance(v => !v)} />;
       case 'Dividenden':
         return <DividendenContent selectedPortfolioIds={selectedPortfolioIds} />;
       case 'Transaktionen':
@@ -429,6 +189,7 @@ export default function PortfolioApp() {
       case 'Import':
         return (
           <ImportContent
+            key={project?.id || 'import'}
             onContinue={(portfolioId, isNew, newName) => {
               // 1. Set the target for the modal
               setImportTargetPortfolio({
@@ -580,7 +341,6 @@ export default function PortfolioApp() {
             onClose={() => setSelectedSecurityIsin(null)}
             security={project.securities[selectedSecurityIsin]}
             transactions={project.transactions}
-            currency={project.settings.baseCurrency}
           />
         )}
       </main>
@@ -604,11 +364,13 @@ export default function PortfolioApp() {
       )}
 
       {/* Transaction Modal */}
-      <TransactionModal
-        isOpen={isTransactionModalOpen}
-        onClose={() => setIsTransactionModalOpen(false)}
-        targetPortfolio={importTargetPortfolio}
-      />
+      {isTransactionModalOpen && (
+        <TransactionModal
+          isOpen={isTransactionModalOpen}
+          onClose={() => setIsTransactionModalOpen(false)}
+          targetPortfolio={importTargetPortfolio}
+        />
+      )}
 
     </div>
   );
@@ -616,7 +378,7 @@ export default function PortfolioApp() {
 
 // --- Sub-Components ---
 
-const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectSecurity, onShowPortfolio }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioIds: string[], onSelectSecurity: (isin: string) => void, onShowPortfolio: () => void }) => {
+const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectSecurity, onShowPortfolio, includeDividends, onToggleDividends }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioIds: string[], onSelectSecurity: (isin: string) => void, onShowPortfolio: () => void, includeDividends: boolean, onToggleDividends: () => void }) => {
   const { project } = useProject();
   const [chartMode, setChartMode] = useState<'value' | 'performance'>('value');
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
@@ -675,13 +437,15 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
     // This matches Value % change if no cashflows, and handles cashflows correctly without jumps.
 
     if (historyData.length === 0) return [];
+    const getValue = (point: { value: number; dividend?: number }) =>
+      point.value + (includeDividends ? (point.dividend || 0) : 0);
 
     // Period Money-Weighted Return (MWR) Logic
     // Formula: ((Val_Curr - Val_Start) - (Inv_Curr - Inv_Start)) / (Val_Start + (Inv_Curr - Inv_Start))
 
     // Get baseline values at start of period
     const startPoint = historyData[0];
-    let startValue = startPoint.value;
+    let startValue = getValue(startPoint);
     const startInvested = startPoint.invested || 0;
 
     // Detect if this is the start of the entire history (First Transaction)
@@ -710,13 +474,14 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
       if (index === 0) {
         if (isStartOfHistory) {
           const inv = point.invested || 0;
-          if (inv > 0) return { ...point, value: ((point.value - inv) / inv) * 100 };
+          const valueWithDividends = getValue(point);
+          if (inv > 0) return { ...point, value: ((valueWithDividends - inv) / inv) * 100 };
           return { ...point, value: 0 };
         }
         return { ...point, value: 0 };
       }
 
-      const currValue = point.value;
+      const currValue = getValue(point);
       const currInvested = point.invested || 0;
 
       const deltaInvested = currInvested - startInvested;
@@ -783,7 +548,7 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
     }
 
     */
-  }, [historyData, chartMode, timeRange]);
+  }, [historyData, chartMode, timeRange, includeDividends, filteredTransactions]);
 
   const investedCapital = holdings.reduce((sum, h) => sum + (h.quantity * (h.averageBuyPrice || 0)), 0);
   const currentMaketValue = holdings.reduce((sum, h) => sum + h.value, 0);
@@ -791,7 +556,6 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
   // Or just MarketValue - Invested for Unrealized.
   // Let's stick to Unrealized for Dashboard Card for now + Realized.
   const totalReturn = (currentMaketValue + realizedPnL) - investedCapital;
-  const totalReturnPercent = investedCapital > 0 ? (totalReturn / investedCapital) * 100 : 0;
 
   // Day change is missing real data source (need quotes). Mocking 0 for now or calculating if we had Yest Close.
   const dayChangePercent = 0;
@@ -888,7 +652,7 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
         }
       });
     } else {
-      const txByIsin: Record<string, any[]> = {};
+      const txByIsin: Record<string, TransactionLike[]> = {};
       filteredTransactions.forEach(t => {
         if (!t.isin) return;
         if (!txByIsin[t.isin]) txByIsin[t.isin] = [];
@@ -898,18 +662,40 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
       Object.keys(txByIsin).forEach(isin => {
         const sec = project.securities?.[isin];
         if (!sec || !sec.dividendHistory) return;
-        const secTx = (txByIsin[isin] || []).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const secTx = (txByIsin[isin] || []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const events: EventEntry[] = [];
+        secTx.forEach(t => {
+          events.push({ time: new Date(t.date).getTime(), type: 'Tx', data: t });
+        });
+        if (sec.splits) {
+          Object.entries(sec.splits).forEach(([d, r]) => {
+            events.push({ time: new Date(d).getTime(), type: 'Split', ratio: r as number });
+          });
+        }
+        events.sort((a, b) => {
+          if (a.time !== b.time) return a.time - b.time;
+          if (a.type === 'Split' && b.type !== 'Split') return -1;
+          if (a.type !== 'Split' && b.type === 'Split') return 1;
+          return 0;
+        });
 
-        sec.dividendHistory.forEach((dh: any) => {
+        sec.dividendHistory.forEach((dh: DividendHistoryEntry) => {
           const dDate = new Date(dh.date);
           if (dDate > today) return;
 
           let sharesAtDate = 0;
-          for (const t of secTx) {
-            if (new Date(t.date) > dDate) break;
-            const qty = Math.abs(t.shares || t.quantity || 0);
-            if (t.type === 'Buy' || t.type === 'Sparplan_Buy') sharesAtDate += qty;
-            else if (t.type === 'Sell') sharesAtDate -= qty;
+          const targetTime = dDate.getTime();
+          for (const event of events) {
+            if (event.time > targetTime) break;
+            if (event.type === 'Split') {
+              const ratio = event.ratio || 1;
+              if (ratio > 0 && sharesAtDate > 0) sharesAtDate *= ratio;
+            } else if (event.type === 'Tx' && event.data) {
+              const t = event.data;
+              const qty = Math.abs(t.shares || t.quantity || 0);
+              if (t.type === 'Buy' || t.type === 'Sparplan_Buy') sharesAtDate += qty;
+              else if (t.type === 'Sell') sharesAtDate -= qty;
+            }
           }
           if (sharesAtDate <= 0.0001) return;
 
@@ -929,7 +715,7 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
     const monthlyBarsYTD = monthKeysYTD.map(key => monthlyMap[key] || 0);
 
     const forecastEvents: { date: Date; amount: number; name: string }[] = [];
-    holdings.forEach((h: any) => {
+    holdings.forEach(h => {
       const sec = project.securities?.[h.security.isin];
       if (!sec) return;
       const shares = h.quantity || 0;
@@ -937,12 +723,12 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
       const secCurrency = sec.currency || 'EUR';
 
       if (sec.upcomingDividends && Array.isArray(sec.upcomingDividends)) {
-        sec.upcomingDividends.forEach((ud: any) => {
+        sec.upcomingDividends.forEach((ud: UpcomingDividendEntry) => {
           const exDate = new Date(ud.exDate);
           if (exDate.getFullYear() === currentYear && exDate > today) {
             let amount = ud.amount;
             if (!amount && sec.dividendHistory?.length) {
-              const sortedHist = [...sec.dividendHistory].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              const sortedHist = [...sec.dividendHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
               amount = sortedHist[0].amount;
             }
             if (amount) {
@@ -958,7 +744,7 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
       }
 
       if (sec.dividendHistory && Array.isArray(sec.dividendHistory)) {
-        sec.dividendHistory.forEach((dh: any) => {
+        sec.dividendHistory.forEach((dh: DividendHistoryEntry) => {
           const dDate = new Date(dh.date);
           if (dDate.getFullYear() !== currentYear - 1) return;
           const thisYearDate = new Date(currentYear, dDate.getMonth(), dDate.getDate());
@@ -994,7 +780,7 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
 
     holdings.forEach(h => {
       // Normalize type
-      let type = h.security.quoteType || 'Sonstige';
+      const type = h.security.quoteType || 'Sonstige';
       // Yahoo types normalization
       const yahooTypeMap: Record<string, string> = {
         'EQUITY': 'Einzelaktien',
@@ -1035,78 +821,6 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
         color: colorMap[name] || '#64748b'
       }))
       .sort((a, b) => b.value - a.value);
-  }, [holdings]);
-
-  // Calculate Sector Data
-  const sectorData = useMemo(() => {
-    const groups: Record<string, { value: number; holdings: Holding[] }> = {};
-    let totalValue = 0;
-
-    holdings.forEach(h => {
-      const sector = h.security.sector || 'Unbekannt';
-      if (!groups[sector]) groups[sector] = { value: 0, holdings: [] };
-      groups[sector].value += h.value;
-      groups[sector].holdings.push(h);
-      totalValue += h.value;
-    });
-
-    return Object.entries(groups)
-      .map(([name, group]) => ({
-        name,
-        value: totalValue > 0 ? Math.round((group.value / totalValue) * 100) : 0,
-        totalValue: group.value,
-        holdings: group.holdings.sort((a, b) => b.value - a.value)
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
-  }, [holdings]);
-
-  // Calculate Region Data
-  const regionData = useMemo(() => {
-    const groups: Record<string, { value: number; holdings: Holding[] }> = {};
-    let totalValue = 0;
-
-    holdings.forEach(h => {
-      const region = h.security.region || h.security.country || 'Unbekannt';
-      if (!groups[region]) groups[region] = { value: 0, holdings: [] };
-      groups[region].value += h.value;
-      groups[region].holdings.push(h);
-      totalValue += h.value;
-    });
-
-    return Object.entries(groups)
-      .map(([name, group]) => ({
-        name,
-        value: totalValue > 0 ? Math.round((group.value / totalValue) * 100) : 0,
-        totalValue: group.value,
-        holdings: group.holdings.sort((a, b) => b.value - a.value)
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-  }, [holdings]);
-
-  // Calculate Industry Data (Branche)
-  const industryData = useMemo(() => {
-    const groups: Record<string, { value: number; holdings: Holding[] }> = {};
-    let totalValue = 0;
-
-    holdings.forEach(h => {
-      const industry = h.security.industry || 'Unbekannt';
-      if (!groups[industry]) groups[industry] = { value: 0, holdings: [] };
-      groups[industry].value += h.value;
-      groups[industry].holdings.push(h);
-      totalValue += h.value;
-    });
-
-    return Object.entries(groups)
-      .map(([name, group]) => ({
-        name,
-        value: totalValue > 0 ? Math.round((group.value / totalValue) * 100) : 0,
-        totalValue: group.value,
-        holdings: group.holdings.sort((a, b) => b.value - a.value)
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
   }, [holdings]);
 
   return (
@@ -1219,6 +933,18 @@ const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSel
                   %
                 </button>
               </div>
+              {chartMode === 'performance' && (
+                <button
+                  onClick={onToggleDividends}
+                  className={`px-3 py-1 text-xs rounded-md font-medium transition-all flex items-center gap-1 ${includeDividends
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'bg-slate-900/50 text-slate-500 hover:text-slate-300'
+                    }`}
+                >
+                  {includeDividends && <Check size={12} />}
+                  Dividenden
+                </button>
+              )}
             </div>
 
             {/* Center: Time Range */}
@@ -1617,28 +1343,23 @@ const TransactionEditModal = ({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  transaction: any | null;
+  transaction: TransactionLike | null;
   typeOptions: string[];
   currencies: string[];
-  onSave: (updated: any) => void;
-  onDelete: (target: any) => void;
+  onSave: (updated: TransactionLike) => void;
+  onDelete: (target: TransactionLike) => void;
 }) => {
-  const [type, setType] = useState('Buy');
-  const [date, setDate] = useState('');
-  const [shares, setShares] = useState('');
-  const [pricePerShare, setPricePerShare] = useState('');
-  const [currency, setCurrency] = useState('EUR');
-
-  useEffect(() => {
-    if (!transaction) return;
-    setType(transaction.type || 'Buy');
-    setDate(transaction.date || new Date().toISOString().split('T')[0]);
-    const rawShares = transaction.shares ?? transaction.quantity;
-    setShares(rawShares !== undefined && rawShares !== null ? Math.abs(rawShares).toString() : '');
-    const rawPrice = transaction.pricePerShare ?? transaction.price;
-    setPricePerShare(rawPrice !== undefined && rawPrice !== null ? Number(rawPrice).toString() : '');
-    setCurrency(transaction.currency || 'EUR');
-  }, [transaction]);
+  const [type, setType] = useState(() => transaction?.type || 'Buy');
+  const [date, setDate] = useState(() => transaction?.date || new Date().toISOString().split('T')[0]);
+  const [shares, setShares] = useState(() => {
+    const rawShares = transaction?.shares ?? transaction?.quantity;
+    return rawShares !== undefined && rawShares !== null ? Math.abs(rawShares).toString() : '';
+  });
+  const [pricePerShare, setPricePerShare] = useState(() => {
+    const rawPrice = transaction?.pricePerShare ?? transaction?.price;
+    return rawPrice !== undefined && rawPrice !== null ? Number(rawPrice).toString() : '';
+  });
+  const [currency, setCurrency] = useState(() => transaction?.currency || 'EUR');
 
   if (!isOpen || !transaction) return null;
 
@@ -1798,9 +1519,9 @@ const DeletedTransactionsModal = ({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  items: { tx: any; deletedAt: string }[];
-  onRestore: (entry: { tx: any; deletedAt: string }) => void;
-  onPurge: (entry: { tx: any; deletedAt: string }) => void;
+  items: DeletedTxEntry[];
+  onRestore: (entry: DeletedTxEntry) => void;
+  onPurge: (entry: DeletedTxEntry) => void;
 }) => {
   if (!isOpen) return null;
 
@@ -1883,11 +1604,15 @@ const toDateKey = (date: Date) => {
 const AnalysisContent = ({
   selectedPortfolioIds,
   cachedData,
-  onCacheUpdate
+  onCacheUpdate,
+  includeDividends,
+  onToggleDividends
 }: {
   selectedPortfolioIds: string[],
-  cachedData?: any,
-  onCacheUpdate?: (data: any) => void
+  cachedData?: AnalysisCache | null,
+  onCacheUpdate?: (data: AnalysisCache) => void,
+  includeDividends: boolean,
+  onToggleDividends: () => void
 }) => {
   const { project } = useProject();
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
@@ -2035,8 +1760,8 @@ const AnalysisContent = ({
 
   // Calculate portfolio history for MAX (for analysis metrics across years)
   // Moved to effect to unblock UI
-  const [historyData, setHistoryData] = useState<any[]>([]);
-  const [analysisMetrics, setAnalysisMetrics] = useState<any>(
+  const [historyData, setHistoryData] = useState<HistoryPoint[]>([]);
+  const [analysisMetrics, setAnalysisMetrics] = useState<AnalysisMetrics>(
     { volatility: 0, sharpeRatio: 0, maxDrawdown: 0, maxDrawdownDate: '', availableYears: [], monthlyReturns: [], twrSeries: [] }
   );
 
@@ -2113,7 +1838,7 @@ const AnalysisContent = ({
 
     // Check Cache
     // Added version suffix to force invalidation after TWR refactor
-    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|v3`;
+    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|v4`;
     if (cachedData && cachedData.key === cacheKey) {
       setHistoryData(cachedData.historyData);
       setAnalysisMetrics(cachedData.analysisMetrics);
@@ -2135,7 +1860,7 @@ const AnalysisContent = ({
         'daily' // High precision for TWR/Drawdown
       );
 
-      const metrics = calculateAnalysisMetrics(data);
+      const metrics = calculateAnalysisMetrics(data, riskFreeRate, { includeDividends });
 
       setHistoryData(data);
       setAnalysisMetrics(metrics);
@@ -2149,7 +1874,7 @@ const AnalysisContent = ({
     }, 100); // 100ms delay to ensure loading state is visible and UI feels responsive
 
     return () => clearTimeout(timer);
-  }, [project, filteredTransactions, cachedData]);
+  }, [project, filteredTransactions, selectedPortfolioIds, cachedData, includeDividends, riskFreeRate, onCacheUpdate]);
 
   // Removed old synchronous useMemos and redundant loading effects
 
@@ -2285,8 +2010,8 @@ const AnalysisContent = ({
   };
 
   // Build performance series using MWR-style logic (matches Dashboard)
-  const buildMwrSeries = (
-    sourceHistory: { date: string; value: number; invested: number }[],
+  const buildMwrSeries = useCallback((
+    sourceHistory: { date: string; value: number; invested: number; dividend?: number }[],
     rangeStart: string,
     rangeEnd: string
   ) => {
@@ -2296,7 +2021,9 @@ const AnalysisContent = ({
     if (periodData.length === 0) return [];
 
     const startPoint = periodData[0];
-    let startValue = startPoint.value;
+    const getValue = (point: { value: number; dividend?: number }) =>
+      point.value + (includeDividends ? (point.dividend || 0) : 0);
+    let startValue = getValue(startPoint);
     const startInvested = startPoint.invested || 0;
 
     // Align with Dashboard performance logic (MWR-style)
@@ -2319,13 +2046,14 @@ const AnalysisContent = ({
       if (index === 0) {
         if (isStartOfHistory) {
           const inv = point.invested || 0;
-          if (inv > 0) return { date: point.date, value: ((point.value - inv) / inv) * 100 };
+          const valueWithDividends = getValue(point);
+          if (inv > 0) return { date: point.date, value: ((valueWithDividends - inv) / inv) * 100 };
           return { date: point.date, value: 0 };
         }
         return { date: point.date, value: 0 };
       }
 
-      const currValue = point.value;
+      const currValue = getValue(point);
       const currInvested = point.invested || 0;
       const deltaInvested = currInvested - startInvested;
       const capitalAtWork = startValue + deltaInvested;
@@ -2338,7 +2066,7 @@ const AnalysisContent = ({
 
       return { date: point.date, value: percent };
     });
-  };
+  }, [includeDividends, performanceRange, filteredTransactions]);
 
   const performanceRangeDates = useMemo(() => {
     const series = analysisMetrics?.twrSeries || [];
@@ -2367,7 +2095,7 @@ const AnalysisContent = ({
   const portfolioPerformanceSeries = useMemo(() => {
     if (!performanceRangeDates.start || !performanceRangeDates.end) return [];
     return buildMwrSeries(historyData, performanceRangeDates.start, performanceRangeDates.end);
-  }, [historyData, filteredTransactions, performanceRangeDates.start, performanceRangeDates.end, performanceRange]);
+  }, [historyData, performanceRangeDates.start, performanceRangeDates.end, buildMwrSeries]);
 
   useEffect(() => {
     const missingCurrency = benchmarkList.filter(b => !b.currency && !benchmarkCurrencyAttempts.current.has(b.symbol));
@@ -2407,7 +2135,7 @@ const AnalysisContent = ({
     };
   }, [benchmarkList, isBenchmarkCurrencyLoading]);
 
-  const getFxRate = (currency: string, date?: string) => {
+  const getFxRate = useCallback((currency: string, date?: string) => {
     if (!project || !project.fxData?.rates) return 1;
     if (currency === 'EUR') return 1;
     const history = project.fxData.rates[currency];
@@ -2431,18 +2159,18 @@ const AnalysisContent = ({
     const dates = Object.keys(history).sort();
     const latest = dates[dates.length - 1];
     return history[latest] || 1;
-  };
+  }, [project]);
 
-  const convertCurrency = (amount: number, from: string, to: string, date?: string) => {
+  const convertCurrency = useCallback((amount: number, from: string, to: string, date?: string) => {
     if (from === to) return amount;
     const rateFrom = getFxRate(from, date);
     const amountEur = amount / rateFrom;
     if (to === 'EUR') return amountEur;
     const rateTo = getFxRate(to, date);
     return amountEur * rateTo;
-  };
+  }, [getFxRate]);
 
-  const buildBenchmarkMwrHistory = (
+  const buildBenchmarkMwrHistory = useCallback((
     history: Record<string, number>,
     currency: string,
     baseCurrency: string,
@@ -2491,9 +2219,9 @@ const AnalysisContent = ({
     }
 
     return synthetic;
-  };
+  }, [historyData, convertCurrency]);
 
-  const buildBenchmarkSeries = (
+  const buildBenchmarkSeries = useCallback((
     history: Record<string, number>,
     start: string,
     end: string,
@@ -2502,7 +2230,7 @@ const AnalysisContent = ({
   ) => {
     const syntheticHistory = buildBenchmarkMwrHistory(history, currency, baseCurrency, start, end);
     return buildMwrSeries(syntheticHistory, start, end);
-  };
+  }, [buildBenchmarkMwrHistory, buildMwrSeries]);
 
   const benchmarkSeries = useMemo(() => {
     if (!performanceRangeDates.start || !performanceRangeDates.end) return [];
@@ -2516,21 +2244,22 @@ const AnalysisContent = ({
     }));
   }, [
     benchmarkList,
-    historyData,
-    filteredTransactions,
-    performanceRange,
     performanceRangeDates.start,
     performanceRangeDates.end,
     project?.settings.baseCurrency,
-    project?.fxData?.rates
+    buildBenchmarkSeries
   ]);
 
   const performanceComparisonData = useMemo(() => {
-    const dataMap = new Map<string, any>();
+    const dataMap = new Map<string, PerformanceRow>();
 
     const addPoint = (date: string, key: string, value: number) => {
-      if (!dataMap.has(date)) dataMap.set(date, { date });
-      dataMap.get(date)[key] = value;
+      const existing = dataMap.get(date);
+      if (existing) {
+        existing[key] = value;
+        return;
+      }
+      dataMap.set(date, { date, [key]: value });
     };
 
     portfolioPerformanceSeries.forEach(p => addPoint(p.date, 'portfolio', p.value));
@@ -2581,8 +2310,9 @@ const AnalysisContent = ({
         { symbol, name: data.longName || symbol, history: data.history, currency: data.currency }
       ]);
       setBenchmarkInput('');
-    } catch (err: any) {
-      setBenchmarkError(err?.message || 'Benchmark konnte nicht geladen werden.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Benchmark konnte nicht geladen werden.';
+      setBenchmarkError(message);
     } finally {
       setIsBenchmarkLoading(false);
     }
@@ -2748,16 +2478,28 @@ const AnalysisContent = ({
                 <Activity size={18} className="text-emerald-400" />
                 <h3 className="font-semibold text-white">Performancevergleich</h3>
               </div>
-              <div className="flex bg-slate-900/50 p-1 rounded-lg">
-                {(['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map(range => (
-                  <button
-                    key={range}
-                    onClick={() => setPerformanceRange(range)}
-                    className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${performanceRange === range ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
-                  >
-                    {range}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex bg-slate-900/50 p-1 rounded-lg">
+                  {(['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map(range => (
+                    <button
+                      key={range}
+                      onClick={() => setPerformanceRange(range)}
+                      className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${performanceRange === range ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                      {range}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={onToggleDividends}
+                  className={`px-3 py-1 text-xs rounded-md font-medium transition-all flex items-center gap-1 ${includeDividends
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'bg-slate-900/50 text-slate-500 hover:text-slate-300'
+                    }`}
+                >
+                  {includeDividends && <Check size={12} />}
+                  Dividenden
+                </button>
               </div>
             </div>
 
@@ -2839,8 +2581,8 @@ const AnalysisContent = ({
                     <Tooltip
                       contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', fontSize: '12px' }}
                       labelStyle={{ color: '#94a3b8' }}
-                      formatter={(value: any, name: any) => [`${Number(value).toFixed(2)}%`, name]}
-                      labelFormatter={(label) => new Date(label).toLocaleDateString('de-DE')}
+                      formatter={(value: number | string, name: string) => [`${Number(value).toFixed(2)}%`, name]}
+                      labelFormatter={(label: string) => new Date(label).toLocaleDateString('de-DE')}
                     />
                     <Legend
                       verticalAlign="bottom"
@@ -3231,8 +2973,6 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
     const dividends = filteredTransactions.filter(t => t.type === 'Dividend');
     const currentYear = new Date().getFullYear();
     const lastYear = currentYear - 1;
-    const currentMonth = new Date().getMonth(); // 0 = Jan
-
     let sumCurrent = 0;
     let sumLast = 0;
 
@@ -3301,11 +3041,10 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
     };
 
     // --- FORECAST LOGIC (History & Upcoming Based) ---
-    let projectedAnnual = 0;
     const forecastEvents: { date: Date, amount: number, name: string, ticker: string, debug?: string }[] = [];
     const monthlyForecastMap: Record<number, number> = {}; // Month -> Amount
 
-    holdings.forEach((h: any) => {
+    holdings.forEach(h => {
       const sec = project.securities?.[h.security.isin];
       if (!sec) return;
 
@@ -3332,13 +3071,13 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
 
       // 1. Check Upcoming Dividends (Confirmed)
       if (sec.upcomingDividends && Array.isArray(sec.upcomingDividends)) {
-        sec.upcomingDividends.forEach((ud: any) => {
+        sec.upcomingDividends.forEach((ud: UpcomingDividendEntry) => {
           const exDate = new Date(ud.exDate);
           if (exDate.getFullYear() === currentYear && exDate > new Date()) {
             let amount = ud.amount;
             // If amount is missing, infer from latest history
             if (!amount && sec.dividendHistory?.length) {
-              const sortedHist = [...sec.dividendHistory].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              const sortedHist = [...sec.dividendHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
               amount = sortedHist[0].amount;
             }
 
@@ -3354,7 +3093,6 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
                 debug: `${shares}x ~${amount.toFixed(2)} ${secCurrency}`
               });
               monthlyForecastMap[exDate.getMonth()] = (monthlyForecastMap[exDate.getMonth()] || 0) + finalVal;
-              projectedAnnual += finalVal;
             }
           }
         });
@@ -3365,7 +3103,7 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
       // If a dividend was paid in Month M last year, and we haven't passed Month M this year (or we passed it but assume next year... wait, REST of year).
       // Only look for months > currentMonth.
       if (sec.dividendHistory && Array.isArray(sec.dividendHistory)) {
-        sec.dividendHistory.forEach((dh: any) => {
+        sec.dividendHistory.forEach((dh: DividendHistoryEntry) => {
           const dDate = new Date(dh.date);
           if (dDate.getFullYear() === lastYear) {
             // Check if this "slot" is in the future for current year
@@ -3391,7 +3129,6 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
                   debug: `Hist(${dDate.toLocaleDateString()}): ${shares}x ${dh.amount} ${secCurrency}`
                 });
                 monthlyForecastMap[dDate.getMonth()] = (monthlyForecastMap[dDate.getMonth()] || 0) + finalVal;
-                projectedAnnual += finalVal;
               }
             }
           }
@@ -3418,7 +3155,7 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
     const relevantIsins = new Set(filteredTransactions.map(t => t.isin).filter(Boolean) as string[]);
 
     // Group transactions by ISIN for fast lookup
-    const txByIsin: Record<string, any[]> = {};
+    const txByIsin: Record<string, TransactionLike[]> = {};
     filteredTransactions.forEach(t => {
       const id = t.isin; // consistent ID
       if (!id) return;
@@ -3433,12 +3170,27 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
 
       // Sort Dividend History (Oldest first) needed? No, just iterate.
       // Sort Transactions (Oldest first) for running balance
-      const secTx = (txByIsin[isin] || []).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const secTx = (txByIsin[isin] || []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const events: EventEntry[] = [];
+      secTx.forEach(t => {
+        events.push({ time: new Date(t.date).getTime(), type: 'Tx', data: t });
+      });
+      if (sec.splits) {
+        Object.entries(sec.splits).forEach(([d, r]) => {
+          events.push({ time: new Date(d).getTime(), type: 'Split', ratio: r as number });
+        });
+      }
+      events.sort((a, b) => {
+        if (a.time !== b.time) return a.time - b.time;
+        if (a.type === 'Split' && b.type !== 'Split') return -1;
+        if (a.type !== 'Split' && b.type === 'Split') return 1;
+        return 0;
+      });
 
       // We only care about dividends in our relevant buckets (Comparison Years + Last/Current Year)
       // Optimization: Pre-filter dividends? Or just check date.
 
-      sec.dividendHistory.forEach((dh: any) => {
+      sec.dividendHistory.forEach((dh: DividendHistoryEntry) => {
         const dDate = new Date(dh.date);
         const month = dDate.getMonth();
         const year = dDate.getFullYear();
@@ -3446,14 +3198,21 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
         // CALCULATE SHARES AT DATE (dDate)
         // Sum buys/sells where date < dDate (Ex-Date usually determines entitlement, assuming dh.date is Ex-Date or Pay-Date close enough)
         let sharesAtDate = 0;
-        for (const t of secTx) {
-          if (new Date(t.date) > dDate) break; // Transaction happened after dividend
+        const targetTime = dDate.getTime();
+        for (const event of events) {
+          if (event.time > targetTime) break; // Event happened after dividend
 
-          const qty = Math.abs(t.shares || t.quantity || 0);
-          if (t.type === 'Buy' || t.type === 'Sparplan_Buy') {
-            sharesAtDate += qty;
-          } else if (t.type === 'Sell') {
-            sharesAtDate -= qty;
+          if (event.type === 'Split') {
+            const ratio = event.ratio || 1;
+            if (ratio > 0 && sharesAtDate > 0) sharesAtDate *= ratio;
+          } else if (event.type === 'Tx' && event.data) {
+            const t = event.data;
+            const qty = Math.abs(t.shares || t.quantity || 0);
+            if (t.type === 'Buy' || t.type === 'Sparplan_Buy') {
+              sharesAtDate += qty;
+            } else if (t.type === 'Sell') {
+              sharesAtDate -= qty;
+            }
           }
         }
 
@@ -3619,7 +3378,7 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
       annualData,
       combinedMonthlyMap
     };
-  }, [project, filteredTransactions, totalValue, totalInvested, holdings]);
+  }, [project, filteredTransactions, totalValue, totalInvested, holdings, baseCurrency]);
 
   // Prepare Yearly Data for Display
   const yearlyDisplayData = useMemo(() => {
@@ -3813,7 +3572,7 @@ const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: str
               return (
                 <div key={i} className="flex-1 flex flex-col justify-end items-center h-full group relative">
                   <div className="w-full flex justify-center items-end gap-px sm:gap-1 h-full px-0.5">
-                    {m.years.map((yData, idx) => (
+                    {m.years.map((yData) => (
                       <div
                         key={yData.year}
                         className={`flex-1 rounded-t-sm transition-all relative
@@ -4093,7 +3852,7 @@ const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPor
       return amountEur * rateTo;
     };
 
-    const txByIsin: Record<string, any[]> = {};
+    const txByIsin: Record<string, TransactionLike[]> = {};
     filteredTransactions.forEach(t => {
       if (!t.isin) return;
       if (!['Buy', 'Sell', 'Sparplan_Buy'].includes(t.type)) return;
@@ -4229,10 +3988,10 @@ const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: s
   const [txType, setTxType] = useState('Alle');
   const [txDateFrom, setTxDateFrom] = useState('');
   const [txDateTo, setTxDateTo] = useState('');
-  const [editingTx, setEditingTx] = useState<any | null>(null);
-  const [deletedTxs, setDeletedTxs] = useState<{ tx: any; deletedAt: string }[]>([]);
+  const [editingTx, setEditingTx] = useState<TransactionLike | null>(null);
+  const [deletedTxs, setDeletedTxs] = useState<DeletedTxEntry[]>([]);
   const [showDeletedModal, setShowDeletedModal] = useState(false);
-  const [toastEntry, setToastEntry] = useState<{ tx: any; deletedAt: string } | null>(null);
+  const [toastEntry, setToastEntry] = useState<DeletedTxEntry | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const filteredTransactions = useMemo(() => {
@@ -4293,7 +4052,7 @@ const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: s
     };
   }, [toastEntry]);
 
-  const handleDeleteTransaction = (target: any) => {
+  const handleDeleteTransaction = (target: TransactionLike) => {
     if (!updateProject) return;
     updateProject(prev => ({
       ...prev,
@@ -4305,7 +4064,7 @@ const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: s
     setToastEntry(entry);
   };
 
-  const handleRestoreTransaction = (entry: { tx: any; deletedAt: string }) => {
+  const handleRestoreTransaction = (entry: DeletedTxEntry) => {
     if (!updateProject) return;
     updateProject(prev => ({
       ...prev,
@@ -4441,6 +4200,7 @@ const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: s
       </div>
 
       <TransactionEditModal
+        key={editingTx?.id ?? 'edit'}
         isOpen={!!editingTx}
         onClose={() => setEditingTx(null)}
         transaction={editingTx}

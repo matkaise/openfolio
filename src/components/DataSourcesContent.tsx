@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { Database, FileText, Globe, Loader2, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
-import { Card } from '@/app/page'; // We might need to export Card from a common UI file later
+import { Database, FileText, Globe, Loader2, RefreshCw, CheckCircle } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import {
     AreaChart,
@@ -78,7 +77,7 @@ export const DataSourcesContent = () => {
     // Filter Security Data based on Time Range
     const getFilteredHistory = (history: Record<string, number> | undefined) => {
         if (!history) return [];
-        let entries = Object.entries(history).sort((a, b) => a[0].localeCompare(b[0]));
+        const entries = Object.entries(history).sort((a, b) => a[0].localeCompare(b[0]));
 
         const now = new Date();
         const cutoff = new Date();
@@ -415,7 +414,7 @@ export const DataSourcesContent = () => {
                                 <div className="h-full flex items-center justify-center flex-col text-slate-500">
                                     <BarChart3 size={48} className="mb-2 opacity-50" />
                                     <p>Keine historischen Daten verfügbar</p>
-                                    <p className="text-xs mt-2">Klicken Sie auf "Jetzt aktualisieren"</p>
+                                    <p className="text-xs mt-2">Klicken Sie auf &quot;Jetzt aktualisieren&quot;</p>
                                 </div>
                             )}
                         </div>

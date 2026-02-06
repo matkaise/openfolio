@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Sector } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 
 interface AllocationItem {
     id: string;
@@ -14,12 +14,21 @@ interface AllocationItem {
 
 interface AllocationChartProps {
     data: AllocationItem[];
-    centerLabel?: string;
     currency: string;
 }
 
-const renderActiveShape = (props: any) => {
-    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, value, percent } = props;
+type ActiveShapeProps = {
+    cx: number;
+    cy: number;
+    innerRadius: number;
+    outerRadius: number;
+    startAngle: number;
+    endAngle: number;
+    fill?: string;
+};
+
+const renderActiveShape = (props: ActiveShapeProps) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
 
     return (
         <g>
@@ -48,10 +57,10 @@ const renderActiveShape = (props: any) => {
 
 
 
-export const AllocationChart = ({ data, centerLabel, currency }: AllocationChartProps) => {
+export const AllocationChart = ({ data, currency }: AllocationChartProps) => {
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
-    const onPieEnter = (_: any, index: number) => {
+    const onPieEnter = (_: unknown, index: number) => {
         setActiveIndex(index);
     };
 
@@ -82,7 +91,6 @@ export const AllocationChart = ({ data, centerLabel, currency }: AllocationChart
                         ))}
                     </defs>
                     <Pie
-                        // @ts-ignore
                         activeIndex={activeIndex ?? -1}
                         activeShape={renderActiveShape}
                         data={data}

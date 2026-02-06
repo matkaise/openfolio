@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { ProjectData, createEmptyProject } from '@/types/domain';
 import { CurrencyService } from '@/lib/currencyService';
 
@@ -80,7 +80,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
 
     const openProject = useCallback(async () => {
         try {
-            // @ts-ignore - File System Access API types might need polyfill or ignore
+            // @ts-expect-error File System Access API types might need polyfill
             const [handle] = await window.showOpenFilePicker({
                 types: [{
                     description: 'OpenParqet Portfolio',
@@ -107,18 +107,20 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             // We pass 'data' directly because 'project' state is not updated yet in this closure
             performSync(data);
 
-        } catch (err: any) {
-            if (err.name !== 'AbortError') {
-                console.error('Failed to open project:', err);
-                alert('Fehler beim Öffnen der Datei: ' + err.message);
+        } catch (err: unknown) {
+            if (err && typeof err === 'object' && 'name' in err && (err as { name?: string }).name === 'AbortError') {
+                return;
             }
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            console.error('Failed to open project:', err);
+            alert('Fehler beim Öffnen der Datei: ' + message);
         }
     }, [performSync]);
 
     const saveProjectAs = useCallback(async () => {
         if (!project) return;
         try {
-            // @ts-ignore
+            // @ts-expect-error File System Access API types might need polyfill
             const handle = await window.showSaveFilePicker({
                 types: [{
                     description: 'OpenParqet Portfolio',
@@ -140,11 +142,13 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             setFileName(handle.name);
             setProject(projectToSave);
             setIsModified(false);
-        } catch (err: any) {
-            if (err.name !== 'AbortError') {
-                console.error('Failed to save project:', err);
-                alert('Fehler beim Speichern: ' + err.message);
+        } catch (err: unknown) {
+            if (err && typeof err === 'object' && 'name' in err && (err as { name?: string }).name === 'AbortError') {
+                return;
             }
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            console.error('Failed to save project:', err);
+            alert('Fehler beim Speichern: ' + message);
         }
     }, [project, fileName]);
 
