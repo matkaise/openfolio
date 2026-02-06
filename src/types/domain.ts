@@ -59,6 +59,7 @@ export interface Security {
         paymentDate?: string;
         amount?: number;
     }[];
+    dividendHistorySynced?: boolean;
     lastSync?: string; // ISO Date
 }
 

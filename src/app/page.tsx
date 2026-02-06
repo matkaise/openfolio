@@ -76,7 +76,9 @@ export default function PortfolioApp() {
       if (!symbol) return false;
       if (!sec.lastSync) return true;
       const diffHours = (now.getTime() - new Date(sec.lastSync).getTime()) / (1000 * 60 * 60);
-      return diffHours > 24;
+      const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
+      const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
+      return diffHours > 24 || missingHistory || missingDividends;
     });
 
     if (!needsSync) {

@@ -32,7 +32,10 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
         const lastSync = sec.lastSync ? new Date(sec.lastSync) : new Date(0);
         const diffHours = (now.getTime() - lastSync.getTime()) / (1000 * 60 * 60);
 
-        if (force || diffHours > 24) {
+        const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
+        const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
+
+        if (force || diffHours > 24 || missingHistory || missingDividends) {
             toUpdate.push(isin);
         }
     }
@@ -49,7 +52,10 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
             // If we have existing history, we only need new data? 
             // Currently simpler to re-fetch relevant chunk or full. 
             // Let's fetch from lastSync if available, UNLESS force is true (repair mode)
-            const from = (force || !sec.lastSync) ? '1970-01-01' : sec.lastSync.split('T')[0];
+            const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
+            const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
+            const requiresFullHistory = force || !sec.lastSync || missingHistory || missingDividends;
+            const from = requiresFullHistory ? '1970-01-01' : sec.lastSync.split('T')[0];
 
             const res = await fetch('/api/yahoo', {
                 method: 'POST',
@@ -86,8 +92,9 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
                         industry: data.industry,
                         // Dividends
                         annualDividendRate: data.annualDividendRate,
-                        dividendHistory: data.dividendHistory,
-                        upcomingDividends: data.upcomingDividends,
+                        dividendHistory: data.dividendHistory || [],
+                        upcomingDividends: data.upcomingDividends || [],
+                        dividendHistorySynced: true,
                         lastSync: now.toISOString()
                     };
                     hasChanges = true;
