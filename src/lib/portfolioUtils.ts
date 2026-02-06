@@ -268,12 +268,12 @@ export function calculatePortfolioHistory(
     }
 
     // Pre-calculate splits per ISIN for price adjustment
-    const splitsMap: Record<string, { date: Date, ratio: number }[]> = {};
+    const splitsMap: Record<string, { time: number; ratio: number }[]> = {};
     // Use splits from Securities now
     securities.forEach(sec => {
         if (sec.splits) {
             splitsMap[sec.isin] = Object.entries(sec.splits).map(([d, r]) => ({
-                date: new Date(d),
+                time: new Date(d).getTime(),
                 ratio: r
             }));
         }
@@ -355,29 +355,29 @@ export function calculatePortfolioHistory(
     // Sort and deduplicate (just in case)
     datePoints.sort((a, b) => a.getTime() - b.getTime());
 
-    const priceDateCache: Record<string, string[]> = {};
-    const fxDateCache: Record<string, string[]> = {};
+    const priceTimelineCache: Record<string, { dates: string[]; times: number[]; idx: number }> = {};
+    const fxTimelineCache: Record<string, { dates: string[]; times: number[]; idx: number }> = {};
 
     // Helper function to get price at a specific date
-    const getPriceAtDate = (isin: string, targetDate: Date): number => {
+    const getPriceAtTime = (isin: string, targetTime: number): number => {
         const sec = securityByIsin[isin];
         if (!sec || !sec.priceHistory) return 0;
 
-        const targetTime = targetDate.getTime();
-        const dates = priceDateCache[isin] || (priceDateCache[isin] = Object.keys(sec.priceHistory).sort());
-
-        // Find closest earlier or equal date
-        let closestDate = dates[0];
-        for (const d of dates) {
-            const dTime = new Date(d).getTime();
-            if (dTime <= targetTime) {
-                closestDate = d;
-            } else {
-                break;
-            }
+        let timeline = priceTimelineCache[isin];
+        if (!timeline) {
+            const dates = Object.keys(sec.priceHistory).sort();
+            const times = dates.map(d => new Date(d).getTime());
+            timeline = { dates, times, idx: 0 };
+            priceTimelineCache[isin] = timeline;
         }
 
-        return sec.priceHistory[closestDate] || 0;
+        // Find closest earlier or equal date
+        if (timeline.dates.length === 0) return 0;
+        while (timeline.idx + 1 < timeline.times.length && timeline.times[timeline.idx + 1] <= targetTime) {
+            timeline.idx++;
+        }
+
+        return sec.priceHistory[timeline.dates[timeline.idx]] || 0;
     };
 
     // Helper to get Split-Adjusted Price for chart consistency
@@ -385,8 +385,8 @@ export function calculatePortfolioHistory(
     // Our holdings are point-in-time (not adjusted yet).
     // So if we are in 2021 (pre-split), we have few shares, but price is tiny.
     // We must "Un-adjust" the price by multiplying by all FUTURE split ratios.
-    const getAdjustedPriceAtDate = (isin: string, targetDate: Date): number => {
-        const rawPrice = getPriceAtDate(isin, targetDate);
+    const getAdjustedPriceAtTime = (isin: string, targetTime: number): number => {
+        const rawPrice = getPriceAtTime(isin, targetTime);
         if (rawPrice === 0) return 0;
 
         const splits = splitsMap[isin];
@@ -395,7 +395,7 @@ export function calculatePortfolioHistory(
         // Multiply by all splits that happen AFTER targetDate
         let adjustmentFactor = 1;
         for (const split of splits) {
-            if (split.date > targetDate) {
+            if (split.time > targetTime) {
                 adjustmentFactor *= split.ratio;
             }
         }
@@ -404,37 +404,37 @@ export function calculatePortfolioHistory(
     };
 
     // Helper to get FX rate at date (reuse logic from calculateHoldings)
-    const getEurRate = (currency: string, date?: string): number => {
+    const getEurRateAtTime = (currency: string, targetTime?: number): number => {
         if (currency === 'EUR') return 1;
         const history = fxRates[currency];
         if (!history) return 1;
 
-        if (date) {
-            const targetDate = new Date(date).getTime();
-            const availableDates = fxDateCache[currency] || (fxDateCache[currency] = Object.keys(history).sort());
-            let closestDate = availableDates[0];
-            for (const d of availableDates) {
-                const dTime = new Date(d).getTime();
-                if (dTime <= targetDate) {
-                    closestDate = d;
-                } else {
-                    break;
-                }
-            }
-            return history[closestDate] || 1;
+        let timeline = fxTimelineCache[currency];
+        if (!timeline) {
+            const dates = Object.keys(history).sort();
+            const times = dates.map(d => new Date(d).getTime());
+            timeline = { dates, times, idx: 0 };
+            fxTimelineCache[currency] = timeline;
         }
 
-        const dates = fxDateCache[currency] || (fxDateCache[currency] = Object.keys(history).sort());
-        const latest = dates[dates.length - 1];
-        return history[latest] || 1;
+        if (timeline.dates.length === 0) return 1;
+
+        if (targetTime !== undefined) {
+            while (timeline.idx + 1 < timeline.times.length && timeline.times[timeline.idx + 1] <= targetTime) {
+                timeline.idx++;
+            }
+            return history[timeline.dates[timeline.idx]] || 1;
+        }
+
+        return history[timeline.dates[timeline.dates.length - 1]] || 1;
     };
 
-    const convert = (amount: number, from: string, to: string, date?: string): number => {
+    const convert = (amount: number, from: string, to: string, targetTime?: number): number => {
         if (from === to) return amount;
-        const rateFrom = getEurRate(from, date);
+        const rateFrom = getEurRateAtTime(from, targetTime);
         const amountEur = amount / rateFrom;
         if (to === 'EUR') return amountEur;
-        const rateTo = getEurRate(to, date);
+        const rateTo = getEurRateAtTime(to, targetTime);
         return amountEur * rateTo;
     };
 
@@ -466,7 +466,8 @@ export function calculatePortfolioHistory(
         const splits = splitsMap[isin];
         if (splits) {
             splits.forEach(split => {
-                events.push({ time: split.date.getTime(), date: split.date.toISOString().split('T')[0], type: 'Split', ratio: split.ratio });
+                const splitDate = new Date(split.time);
+                events.push({ time: split.time, date: splitDate.toISOString().split('T')[0], type: 'Split', ratio: split.ratio });
             });
         }
 
@@ -522,7 +523,7 @@ export function calculatePortfolioHistory(
                     const tx = event.data;
                     if (tx.type === 'Buy') {
                         const shares = Math.abs(tx.shares || 0);
-                        const amountBase = convert(Math.abs(tx.amount), tx.currency, baseCurrency, tx.date);
+                        const amountBase = convert(Math.abs(tx.amount), tx.currency, baseCurrency, event.time);
                         h.quantity += shares;
                         h.invested += amountBase;
                     } else if (tx.type === 'Sell') {
@@ -532,7 +533,7 @@ export function calculatePortfolioHistory(
                         h.quantity -= shares;
                         if (h.quantity < 0.000001) { h.quantity = 0; h.invested = 0; }
                     } else if (tx.type === 'Dividend') {
-                        const amountBase = convert(Math.abs(tx.amount), tx.currency, baseCurrency, tx.date);
+                        const amountBase = convert(Math.abs(tx.amount), tx.currency, baseCurrency, event.time);
                         h.dividend += amountBase;
                     }
                 }
@@ -556,9 +557,9 @@ export function calculatePortfolioHistory(
             const securityCurrency = sec?.currency || h.currency;
 
             // Use ADJUSTED price (un-adjusted for future splits) to match point-in-time holdings
-            const price = getAdjustedPriceAtDate(isin, datePoint);
+            const price = getAdjustedPriceAtTime(isin, dateTime);
             const valueInSecurityCurrency = h.quantity * price;
-            const valueInBaseCurrency = convert(valueInSecurityCurrency, securityCurrency, baseCurrency, dateStr);
+            const valueInBaseCurrency = convert(valueInSecurityCurrency, securityCurrency, baseCurrency, dateTime);
 
             totalValue += valueInBaseCurrency;
             totalInvested += h.invested;
