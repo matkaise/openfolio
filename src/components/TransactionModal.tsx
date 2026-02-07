@@ -3,8 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
-import { Transaction, type Portfolio } from '@/types/domain';
-import { parseFlatexCsv } from '@/lib/csvParser';
+import { Transaction, type CashAccount, type Portfolio } from '@/types/domain';
+import { parseFlatexCashBalancesCsv, parseFlatexCsv, type CashBalanceImportPoint } from '@/lib/csvParser';
 import { getCurrencyOptions } from '@/lib/fxUtils';
 
 interface TransactionModalProps {
@@ -15,6 +15,8 @@ interface TransactionModalProps {
 
 type Tab = 'import' | 'manual';
 type TransactionType = 'Buy' | 'Sell';
+type ManualHoldingType = 'security' | 'cash';
+type ManualCashType = 'Deposit' | 'Withdrawal' | 'Dividend' | 'Tax' | 'Fee';
 
 export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: TransactionModalProps) => {
     const { project, updateProject } = useProject();
@@ -23,17 +25,21 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     const [activeTab, setActiveTab] = useState<Tab>('import');
 
     // Manual Form State
+    const [manualHoldingType, setManualHoldingType] = useState<ManualHoldingType>('security');
     const [type, setType] = useState<TransactionType>('Buy');
+    const [cashType, setCashType] = useState<ManualCashType>('Deposit');
     const [identifier, setIdentifier] = useState(''); // ISIN/WKN/Ticker
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [shares, setShares] = useState('');
     const [price, setPrice] = useState('');
+    const [cashAmount, setCashAmount] = useState('');
     const [currency, setCurrency] = useState('EUR');
 
     // Import Form State
     const [selectedBroker, setSelectedBroker] = useState('');
     const [isDragging, setIsDragging] = useState(false);
     const [parsedTx, setParsedTx] = useState<Transaction[]>([]);
+    const [parsedCashBalances, setParsedCashBalances] = useState<CashBalanceImportPoint[]>([]);
     const [importStatus, setImportStatus] = useState<'idle' | 'processing' | 'ready' | 'success'>('idle');
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -66,17 +72,23 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             const text = await file.text();
             // In future: Switch parser based on selectedBroker
             const txs = parseFlatexCsv(text);
+            const cashBalances = parseFlatexCashBalancesCsv(text);
 
-            if (txs.length > 0) {
+            if (txs.length > 0 || cashBalances.length > 0) {
                 setParsedTx(txs);
+                setParsedCashBalances(cashBalances);
                 setImportStatus('ready');
             } else {
-                alert("Keine Transaktionen gefunden. Bitte CSV prüfen.");
+                alert("Keine Daten gefunden. Bitte CSV pruefen.");
+                setParsedTx([]);
+                setParsedCashBalances([]);
                 setImportStatus('idle');
             }
         } catch (err) {
             console.error(err);
             alert("Fehler beim Lesen der Datei.");
+            setParsedTx([]);
+            setParsedCashBalances([]);
             setImportStatus('idle');
         }
     };
@@ -96,7 +108,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     };
 
     const commitImport = () => {
-        if (parsedTx.length === 0) return;
+        if (parsedTx.length === 0 && parsedCashBalances.length === 0) return;
 
         updateProject(prev => {
             const updatedSecurities = { ...prev.securities };
@@ -132,11 +144,43 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 portfolioId: target.id
             }));
 
+            // Merge imported balances into one reference account per portfolio + currency
+            const existingCashAccounts = prev.cashAccounts || [];
+            const mergeKeyFor = (account: Pick<CashAccount, 'portfolioId' | 'currency'>) => `${account.portfolioId || ''}|${account.currency}`;
+            const cashAccountMap = new Map<string, CashAccount>(
+                existingCashAccounts.map(account => [mergeKeyFor(account), account])
+            );
+
+            parsedCashBalances.forEach(point => {
+                const key = `${target.id}|${point.currency}`;
+                const existing = cashAccountMap.get(key);
+
+                if (!existing) {
+                    cashAccountMap.set(key, {
+                        id: crypto.randomUUID(),
+                        name: `${target.name} ${point.currency} Konto`,
+                        portfolioId: target.id,
+                        currency: point.currency,
+                        balanceHistory: { [point.date]: point.balance }
+                    });
+                    return;
+                }
+
+                cashAccountMap.set(key, {
+                    ...existing,
+                    balanceHistory: {
+                        ...(existing.balanceHistory || {}),
+                        [point.date]: point.balance
+                    }
+                });
+            });
+
             return {
                 ...prev,
                 portfolios: updatedPortfolios,
                 transactions: [...prev.transactions, ...mappedTxs],
                 securities: updatedSecurities,
+                cashAccounts: Array.from(cashAccountMap.values()),
                 modified: new Date().toISOString()
             };
         });
@@ -153,23 +197,129 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
     if (!isOpen) return null;
 
-    const handleSaveManual = () => {
-        if (!identifier || !shares || !price) return;
+    const applyManualTransactionToExplicitCashHistory = (
+        cashAccounts: CashAccount[] | undefined,
+        portfolioId: string,
+        tx: Transaction
+    ): CashAccount[] | undefined => {
+        const isManualCashMovement =
+            tx.type === 'Deposit' ||
+            tx.type === 'Withdrawal' ||
+            tx.type === 'Dividend' ||
+            tx.type === 'Tax' ||
+            tx.type === 'Fee';
+        if (!isManualCashMovement) {
+            return cashAccounts;
+        }
 
-        const newTransaction: Transaction = {
-            id: crypto.randomUUID(),
-            date,
-            type,
-            isin: identifier.toUpperCase(), // Using ID field for ISIN/Ticker temporarily
-            name: identifier.toUpperCase(), // Placeholder name
-            shares: type === 'Sell' ? -Math.abs(parseFloat(shares)) : Math.abs(parseFloat(shares)),
-            amount: type === 'Sell'
-                ? Math.abs(parseFloat(shares)) * parseFloat(price) // Sell = Cash Inflow (+)
-                : -(Math.abs(parseFloat(shares)) * parseFloat(price)), // Buy = Cash Outflow (-)
-            currency,
-            broker: 'Manual',
-            originalData: { manualEntry: true, pricePerShare: parseFloat(price) }
+        const existing = cashAccounts || [];
+        const nextAccounts = [...existing];
+        const accountIndex = nextAccounts.findIndex(a => a.portfolioId === portfolioId && a.currency === tx.currency);
+
+        if (accountIndex === -1) {
+            nextAccounts.push({
+                id: crypto.randomUUID(),
+                name: `${targetPortfolio?.name || 'Depot'} ${tx.currency} Konto`,
+                portfolioId,
+                currency: tx.currency,
+                balanceHistory: {
+                    [tx.date]: tx.amount
+                }
+            });
+            return nextAccounts;
+        }
+
+        const account = nextAccounts[accountIndex];
+        const balanceHistory = { ...(account.balanceHistory || {}) };
+        const allDates = Object.keys(balanceHistory).sort();
+
+        if (allDates.length === 0) {
+            balanceHistory[tx.date] = tx.amount;
+        } else {
+            let baseline = 0;
+            for (const d of allDates) {
+                if (d <= tx.date) {
+                    baseline = balanceHistory[d] || 0;
+                } else {
+                    break;
+                }
+            }
+            if (balanceHistory[tx.date] === undefined) {
+                balanceHistory[tx.date] = baseline;
+            }
+
+            Object.keys(balanceHistory)
+                .filter(d => d >= tx.date)
+                .forEach(d => {
+                    balanceHistory[d] = (balanceHistory[d] || 0) + tx.amount;
+                });
+        }
+
+        nextAccounts[accountIndex] = {
+            ...account,
+            balanceHistory
         };
+
+        return nextAccounts;
+    };
+
+    const handleSaveManual = () => {
+        let newTransaction: Transaction | null = null;
+
+        if (manualHoldingType === 'security') {
+            if (!identifier || !shares || !price) return;
+            const parsedShares = Math.abs(parseFloat(shares));
+            const parsedPrice = parseFloat(price);
+            if (!Number.isFinite(parsedShares) || !Number.isFinite(parsedPrice) || parsedShares <= 0 || parsedPrice <= 0) {
+                return;
+            }
+
+            newTransaction = {
+                id: crypto.randomUUID(),
+                date,
+                type,
+                isin: identifier.toUpperCase(),
+                name: identifier.toUpperCase(),
+                shares: type === 'Sell' ? -parsedShares : parsedShares,
+                amount: type === 'Sell'
+                    ? parsedShares * parsedPrice
+                    : -(parsedShares * parsedPrice),
+                currency,
+                broker: 'Manual',
+                originalData: { manualEntry: true, pricePerShare: parsedPrice }
+            };
+        } else {
+            if (!cashAmount) return;
+            const parsedAmount = Math.abs(parseFloat(cashAmount));
+            if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+                return;
+            }
+
+            const signedAmount = (cashType === 'Deposit' || cashType === 'Dividend')
+                ? parsedAmount
+                : -parsedAmount;
+
+            const cashNameMap: Record<ManualCashType, string> = {
+                Deposit: 'Einzahlung',
+                Withdrawal: 'Auszahlung',
+                Dividend: 'Zinsen / Dividende',
+                Tax: 'Steuern',
+                Fee: 'Gebuehren'
+            };
+
+            newTransaction = {
+                id: crypto.randomUUID(),
+                date,
+                type: cashType,
+                name: cashNameMap[cashType],
+                amount: signedAmount,
+                currency,
+                broker: 'Manual',
+                originalData: { manualEntry: true, manualCashEntry: true }
+            };
+        }
+
+        if (!newTransaction) return;
 
         updateProject(prev => {
             // Handle Portfolio Creation
@@ -185,7 +335,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             const isin = newTransaction.isin;
 
             // Ensure security exists
-            if (isin && !updatedSecurities[isin]) {
+            if (manualHoldingType === 'security' && isin && !updatedSecurities[isin]) {
                 updatedSecurities[isin] = {
                     isin,
                     symbol: isin, // Default to ISIN/Ticker
@@ -201,6 +351,9 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 portfolios: updatedPortfolios,
                 transactions: [...prev.transactions, { ...newTransaction, portfolioId: target.id }],
                 securities: updatedSecurities,
+                cashAccounts: manualHoldingType === 'cash'
+                    ? applyManualTransactionToExplicitCashHistory(prev.cashAccounts, target.id, newTransaction)
+                    : prev.cashAccounts,
                 modified: new Date().toISOString()
             };
         });
@@ -288,7 +441,9 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 <Upload size={32} className={importStatus === 'ready' ? "text-emerald-500" : "text-slate-400"} />
                             </div>
                             <h3 className="font-medium text-white mb-1">
-                                {importStatus === 'ready' ? `${parsedTx.length} Transaktionen erkannt` : 'Datei hier ablegen'}
+                                {importStatus === 'ready'
+                                    ? `${parsedTx.length} Transaktionen, ${parsedCashBalances.length} Kontostaende erkannt`
+                                    : 'Datei hier ablegen'}
                             </h3>
                             <p className="text-sm text-slate-400">
                                 {importStatus === 'ready' ? 'Klicken zum Ändern oder "Import starten" drücken' : 'oder klicken zum Auswählen (CSV)'}
@@ -306,95 +461,168 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                     </div>
                 ) : (
                     <div className="space-y-6">
-                        {/* Type Selection */}
-                        <div className="flex bg-slate-800 p-1 rounded-lg w-full mb-6">
-                            <button
-                                onClick={() => setType('Buy')}
-                                className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${type === 'Buy' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'
-                                    }`}
+                        <div className="space-y-2">
+                            <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Holding Typ</label>
+                            <select
+                                value={manualHoldingType}
+                                onChange={(e) => setManualHoldingType(e.target.value as ManualHoldingType)}
+                                className="w-full bg-slate-800 border-none rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                             >
-                                Kauf
-                            </button>
-                            <button
-                                onClick={() => setType('Sell')}
-                                className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${type === 'Sell' ? 'bg-rose-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'
-                                    }`}
-                            >
-                                Verkauf
-                            </button>
+                                <option value="security">Wertpapier</option>
+                                <option value="cash">Cash</option>
+                            </select>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">WKN / ISIN / Ticker</label>
-                                <div className="relative">
-                                    <Hash size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                                    <input
-                                        type="text"
-                                        value={identifier}
-                                        onChange={(e) => setIdentifier(e.target.value)}
-                                        placeholder="z.B. US0378331005"
-                                        className="w-full bg-slate-800 border-none rounded-lg pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none placeholder-slate-600"
-                                    />
+                        {manualHoldingType === 'security' ? (
+                            <>
+                                <div className="flex bg-slate-800 p-1 rounded-lg w-full mb-6">
+                                    <button
+                                        onClick={() => setType('Buy')}
+                                        className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${type === 'Buy' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'
+                                            }`}
+                                    >
+                                        Kauf
+                                    </button>
+                                    <button
+                                        onClick={() => setType('Sell')}
+                                        className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${type === 'Sell' ? 'bg-rose-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'
+                                            }`}
+                                    >
+                                        Verkauf
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">WKN / ISIN / Ticker</label>
+                                        <div className="relative">
+                                            <Hash size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                            <input
+                                                type="text"
+                                                value={identifier}
+                                                onChange={(e) => setIdentifier(e.target.value)}
+                                                placeholder="z.B. US0378331005"
+                                                className="w-full bg-slate-800 border-none rounded-lg pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none placeholder-slate-600"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Datum</label>
+                                        <div className="relative">
+                                            <Calendar size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                            <input
+                                                type="date"
+                                                value={date}
+                                                onChange={(e) => setDate(e.target.value)}
+                                                className="w-full bg-slate-800 border-none rounded-lg pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Anzahl</label>
+                                        <div className="relative">
+                                            <Tag size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                            <input
+                                                type="number"
+                                                value={shares}
+                                                onChange={(e) => setShares(e.target.value)}
+                                                placeholder="0.00"
+                                                step="0.0001"
+                                                className="w-full bg-slate-800 border-none rounded-lg pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none placeholder-slate-600"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Preis pro Stueck</label>
+                                        <div className="relative">
+                                            <DollarSign size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                            <input
+                                                type="number"
+                                                value={price}
+                                                onChange={(e) => setPrice(e.target.value)}
+                                                placeholder="0.00"
+                                                step="0.01"
+                                                className="w-full bg-slate-800 border-none rounded-lg pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none placeholder-slate-600"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Waehrung</label>
+                                        <select
+                                            value={currency}
+                                            onChange={(e) => setCurrency(e.target.value)}
+                                            className="w-full bg-slate-800 border-none rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        >
+                                            {currencies.map(c => (
+                                                <option key={c} value={c}>{c}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Cash Typ</label>
+                                    <select
+                                        value={cashType}
+                                        onChange={(e) => setCashType(e.target.value as ManualCashType)}
+                                        className="w-full bg-slate-800 border-none rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    >
+                                        <option value="Deposit">Einzahlung</option>
+                                        <option value="Withdrawal">Auszahlung</option>
+                                        <option value="Dividend">Zinsen / Dividende</option>
+                                        <option value="Tax">Steuern</option>
+                                        <option value="Fee">Gebuehren</option>
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Datum</label>
+                                    <div className="relative">
+                                        <Calendar size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                        <input
+                                            type="date"
+                                            value={date}
+                                            onChange={(e) => setDate(e.target.value)}
+                                            className="w-full bg-slate-800 border-none rounded-lg pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Betrag</label>
+                                    <div className="relative">
+                                        <DollarSign size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                        <input
+                                            type="number"
+                                            value={cashAmount}
+                                            onChange={(e) => setCashAmount(e.target.value)}
+                                            placeholder="0.00"
+                                            step="0.01"
+                                            className="w-full bg-slate-800 border-none rounded-lg pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none placeholder-slate-600"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Waehrung</label>
+                                    <select
+                                        value={currency}
+                                        onChange={(e) => setCurrency(e.target.value)}
+                                        className="w-full bg-slate-800 border-none rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    >
+                                        {currencies.map(c => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
-
-                            <div className="space-y-2">
-                                <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Datum</label>
-                                <div className="relative">
-                                    <Calendar size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                                    <input
-                                        type="date"
-                                        value={date}
-                                        onChange={(e) => setDate(e.target.value)}
-                                        className="w-full bg-slate-800 border-none rounded-lg pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Anzahl</label>
-                                <div className="relative">
-                                    <Tag size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                                    <input
-                                        type="number"
-                                        value={shares}
-                                        onChange={(e) => setShares(e.target.value)}
-                                        placeholder="0.00"
-                                        step="0.0001"
-                                        className="w-full bg-slate-800 border-none rounded-lg pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none placeholder-slate-600"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Preis pro Stück</label>
-                                <div className="relative">
-                                    <DollarSign size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                                    <input
-                                        type="number"
-                                        value={price}
-                                        onChange={(e) => setPrice(e.target.value)}
-                                        placeholder="0.00"
-                                        step="0.01"
-                                        className="w-full bg-slate-800 border-none rounded-lg pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none placeholder-slate-600"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Währung</label>
-                                <select
-                                    value={currency}
-                                    onChange={(e) => setCurrency(e.target.value)}
-                                    className="w-full bg-slate-800 border-none rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                >
-                                    {currencies.map(c => (
-                                        <option key={c} value={c}>{c}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 )}
             </div>

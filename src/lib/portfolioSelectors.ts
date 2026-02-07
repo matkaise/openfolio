@@ -1,5 +1,5 @@
 import { calculateHoldings, type Holding } from '@/lib/portfolioUtils';
-import { type ProjectData, type Security, type Transaction } from '@/types/domain';
+import { type CashAccount, type ProjectData, type Security, type Transaction } from '@/types/domain';
 
 export const filterTransactionsByPortfolio = (
   project: ProjectData | null,
@@ -27,6 +27,19 @@ export const getLatestQuotes = (securities?: Record<string, Security>): Record<s
   });
 
   return quotes;
+};
+
+export const filterCashAccountsByPortfolio = (
+  project: ProjectData | null,
+  selectedPortfolioIds: string[]
+): CashAccount[] => {
+  if (!project?.cashAccounts) return [];
+  if (selectedPortfolioIds.length === 0) {
+    return project.cashAccounts;
+  }
+  return project.cashAccounts.filter(
+    a => !!a.portfolioId && selectedPortfolioIds.includes(a.portfolioId)
+  );
 };
 
 export const calculateProjectHoldings = (

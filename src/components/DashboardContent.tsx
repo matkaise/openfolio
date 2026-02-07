@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, Check, ChevronRight, PieChart, Wallet } from 'lucide-react';
 import { calculatePortfolioHistory } from '@/lib/portfolioUtils';
-import { buildMwrSeries } from '@/lib/performanceUtils';
-import { filterTransactionsByPortfolio, calculateProjectHoldings } from '@/lib/portfolioSelectors';
+import { buildMwrSeries, normalizeInvestedForExplicitCash } from '@/lib/performanceUtils';
+import { filterTransactionsByPortfolio, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency } from '@/lib/fxUtils';
 import { useProject } from '@/contexts/ProjectContext';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
@@ -20,8 +20,11 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
   const filteredTransactions = useMemo(() => (
     filterTransactionsByPortfolio(project, selectedPortfolioIds)
   ), [project, selectedPortfolioIds]);
+  const filteredCashAccounts = useMemo(() => (
+    filterCashAccountsByPortfolio(project, selectedPortfolioIds)
+  ), [project, selectedPortfolioIds]);
 
-  const { holdings, realizedPnL } = useMemo(() => {
+  const { holdings } = useMemo(() => {
     return calculateProjectHoldings(project, filteredTransactions);
   }, [project, filteredTransactions]);
 
@@ -33,33 +36,53 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       filteredTransactions,
       Object.values(project.securities || {}),
       project.fxData.rates,
+      filteredCashAccounts,
       project.settings.baseCurrency,
       timeRange
     );
-  }, [project, filteredTransactions, timeRange]);
+  }, [project, filteredTransactions, filteredCashAccounts, timeRange]);
+
+  const historyForPerformance = useMemo(() => {
+    if (!project) return historyData;
+
+    return normalizeInvestedForExplicitCash(
+      historyData,
+      filteredTransactions,
+      filteredCashAccounts,
+      project.fxData,
+      baseCurrency
+    );
+  }, [project, historyData, filteredCashAccounts, filteredTransactions, baseCurrency]);
 
   const performanceSeries = useMemo(() => {
-    if (historyData.length === 0) return [];
-    const start = historyData[0].date;
-    const end = historyData[historyData.length - 1].date;
-    return buildMwrSeries(historyData, start, end, {
+    if (historyForPerformance.length === 0) return [];
+    const start = historyForPerformance[0].date;
+    const end = historyForPerformance[historyForPerformance.length - 1].date;
+    return buildMwrSeries(historyForPerformance, start, end, {
       includeDividends,
       isFullRange: timeRange === 'MAX',
       transactions: filteredTransactions
     });
-  }, [historyData, includeDividends, timeRange, filteredTransactions]);
+  }, [historyForPerformance, includeDividends, timeRange, filteredTransactions]);
 
   const displayData = useMemo(() => {
     if (chartMode === 'value') return historyData;
     return performanceSeries;
   }, [historyData, chartMode, performanceSeries]);
 
-  const investedCapital = holdings.reduce((sum, h) => sum + (h.quantity * (h.averageBuyPrice || 0)), 0);
-  const currentMaketValue = holdings.reduce((sum, h) => sum + h.value, 0);
-  // totalReturn = (MarketValue + RealizedPnL) - Invested. (Simplified)
-  // Or just MarketValue - Invested for Unrealized.
-  // Let's stick to Unrealized for Dashboard Card for now + Realized.
-  const totalReturn = (currentMaketValue + realizedPnL) - investedCapital;
+  const latestHistoryPoint = historyData.length > 0 ? historyData[historyData.length - 1] : null;
+  const latestPerformancePoint = historyForPerformance.length > 0
+    ? historyForPerformance[historyForPerformance.length - 1]
+    : null;
+  const holdingsMarketValue = holdings.reduce((sum, h) => sum + h.value, 0);
+  const investedCapital = latestPerformancePoint
+    ? latestPerformancePoint.invested
+    : holdings.reduce((sum, h) => sum + (h.quantity * (h.averageBuyPrice || 0)), 0);
+  const currentMaketValue = latestHistoryPoint
+    ? latestHistoryPoint.value
+    : holdings.reduce((sum, h) => sum + h.value, 0);
+  const cashBalance = latestHistoryPoint ? (currentMaketValue - holdingsMarketValue) : 0;
+  const totalReturn = currentMaketValue - investedCapital;
 
   // Day change is missing real data source (need quotes). Mocking 0 for now or calculating if we had Yest Close.
   const dayChangePercent = 0;
@@ -286,11 +309,21 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       totalValue += h.value;
     });
 
+    // Show positive cash as separate allocation bucket.
+    if (cashBalance > 0.000001) {
+      groups['Cash'] = {
+        value: cashBalance,
+        count: 1
+      };
+      totalValue += cashBalance;
+    }
+
     // Define colors
     const colorMap: Record<string, string> = {
       'Einzelaktien': '#3b82f6', // blue-500
       'Aktie': '#3b82f6',
       'ETFs': '#10b981', // emerald-500
+      'Cash': '#f59e0b', // amber-500
       'Krypto': '#a855f7', // purple-500
       'Fonds': '#f97316', // orange-500
       'Derivate': '#ef4444', // red-500
@@ -307,7 +340,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
         color: colorMap[name] || '#64748b'
       }))
       .sort((a, b) => b.value - a.value);
-  }, [holdings]);
+  }, [holdings, cashBalance]);
 
   return (
     <>
@@ -328,7 +361,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
                 {dayChangePercent}%
               </span>
             </div>
-            <div className="mt-6 flex gap-8">
+            <div className="mt-6 flex flex-wrap gap-8">
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wider">Ertrag Gesamt</p>
                 <p className={`text-lg font-semibold ${totalReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -339,6 +372,12 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
                 <p className="text-xs text-slate-500 uppercase tracking-wider">Investiert</p>
                 <p className="text-lg font-semibold text-slate-300">
                   {investedCapital.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 uppercase tracking-wider">Cash</p>
+                <p className={`text-lg font-semibold ${cashBalance >= 0 ? 'text-slate-300' : 'text-rose-400'}`}>
+                  {cashBalance > 0 ? '+' : ''}{cashBalance.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
                 </p>
               </div>
             </div>

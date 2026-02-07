@@ -1,4 +1,4 @@
-import { Transaction, Security, CurrencyHistory } from '../types/domain';
+import { Transaction, Security, CurrencyHistory, CashAccount } from '../types/domain';
 
 export interface Holding {
     security: {
@@ -19,6 +19,28 @@ export interface Holding {
     totalReturnPercent: number;
     currency: string; // Original currency
 }
+
+const isBuyType = (type: Transaction['type']) => {
+    return type === 'Buy' || type === 'Sparplan_Buy';
+};
+
+const getAbsoluteAmount = (amount: number | undefined) => {
+    return Math.abs(amount || 0);
+};
+
+const getCashDeltaForTransaction = (tx: Transaction): number => {
+    const amount = getAbsoluteAmount(tx.amount);
+
+    if (isBuyType(tx.type) || tx.type === 'Fee' || tx.type === 'Tax' || tx.type === 'Withdrawal') {
+        return -amount;
+    }
+
+    if (tx.type === 'Sell' || tx.type === 'Dividend' || tx.type === 'Deposit') {
+        return amount;
+    }
+
+    return 0;
+};
 
 // ... inside calculateHoldings function ...
 
@@ -164,7 +186,7 @@ export function calculateHoldings(
                 const amountOriginal = Math.abs(tx.amount);
                 const amountBase = convert(amountOriginal, tx.currency, baseCurrency, tx.date);
 
-                if (tx.type === 'Buy') {
+                if (isBuyType(tx.type)) {
                     h.quantity += shares;
                     h.invested += amountBase;
                     h.investedOriginal += amountOriginal;
@@ -251,6 +273,7 @@ export function calculatePortfolioHistory(
     transactions: Transaction[],
     securities: Security[],
     fxRates: Record<string, CurrencyHistory>,
+    cashAccounts: CashAccount[] = [],
     baseCurrency: string = 'EUR',
     timeRange: string = '1J',
     granularity: 'daily' | 'weekly' = 'weekly'
@@ -357,6 +380,7 @@ export function calculatePortfolioHistory(
 
     const priceTimelineCache: Record<string, { dates: string[]; times: number[]; idx: number }> = {};
     const fxTimelineCache: Record<string, { dates: string[]; times: number[]; idx: number }> = {};
+    const cashTimelineCache: Record<string, { dates: string[]; times: number[]; idx: number }> = {};
 
     // Helper function to get price at a specific date
     const getPriceAtTime = (isin: string, targetTime: number): number => {
@@ -438,6 +462,28 @@ export function calculatePortfolioHistory(
         return amountEur * rateTo;
     };
 
+    const getCashAccountBalanceAtTime = (account: CashAccount, targetTime: number): number => {
+        if (!account.balanceHistory) return 0;
+        const cacheKey = account.id;
+
+        let timeline = cashTimelineCache[cacheKey];
+        if (!timeline) {
+            const dates = Object.keys(account.balanceHistory).sort();
+            const times = dates.map(d => new Date(d).getTime());
+            timeline = { dates, times, idx: 0 };
+            cashTimelineCache[cacheKey] = timeline;
+        }
+
+        if (timeline.dates.length === 0) return 0;
+        if (timeline.times[0] > targetTime) return 0;
+
+        while (timeline.idx + 1 < timeline.times.length && timeline.times[timeline.idx + 1] <= targetTime) {
+            timeline.idx++;
+        }
+
+        return account.balanceHistory[timeline.dates[timeline.idx]] || 0;
+    };
+
     // Prepare events per ISIN (transactions + splits) once for incremental replay
     const txByIsin: Record<string, Transaction[]> = {};
     transactions.forEach(tx => {
@@ -481,8 +527,11 @@ export function calculatePortfolioHistory(
         eventsByIsin[isin] = events;
     });
 
-    const stateByIsin: Record<string, { quantity: number; invested: number; currency: string; dividend: number }> = {};
+    const stateByIsin: Record<string, { quantity: number; invested: number; currency: string }> = {};
     const eventIndexByIsin: Record<string, number> = {};
+    const sortedTransactions = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const hasExplicitCashBalances = cashAccounts.some(a => !!a.balanceHistory && Object.keys(a.balanceHistory).length > 0);
+    const useImplicitFunding = !hasExplicitCashBalances;
 
     allIsins.forEach(isin => {
         const firstTx = txByIsin[isin]?.[0];
@@ -490,11 +539,15 @@ export function calculatePortfolioHistory(
         stateByIsin[isin] = {
             quantity: 0,
             invested: 0,
-            dividend: 0,
             currency: firstTx?.currency || sec?.currency || 'EUR'
         };
         eventIndexByIsin[isin] = 0;
     });
+
+    const cashByCurrency: Record<string, number> = {};
+    let transactionIndex = 0;
+    let totalExternalInvested = 0;
+    let totalDividend = 0;
 
     // Calculate portfolio value at each date point (incremental replay)
     const result: { date: string; value: number; invested: number; dividend: number }[] = [];
@@ -521,7 +574,7 @@ export function calculatePortfolioHistory(
                     if (ratio > 0 && h.quantity > 0) h.quantity *= ratio;
                 } else if (event.type === 'Tx' && event.data) {
                     const tx = event.data;
-                    if (tx.type === 'Buy') {
+                    if (isBuyType(tx.type)) {
                         const shares = Math.abs(tx.shares || 0);
                         const amountBase = convert(Math.abs(tx.amount), tx.currency, baseCurrency, event.time);
                         h.quantity += shares;
@@ -532,9 +585,6 @@ export function calculatePortfolioHistory(
                         h.invested -= (shares * avgCost);
                         h.quantity -= shares;
                         if (h.quantity < 0.000001) { h.quantity = 0; h.invested = 0; }
-                    } else if (tx.type === 'Dividend') {
-                        const amountBase = convert(Math.abs(tx.amount), tx.currency, baseCurrency, event.time);
-                        h.dividend += amountBase;
                     }
                 }
                 idx++;
@@ -543,14 +593,43 @@ export function calculatePortfolioHistory(
             eventIndexByIsin[isin] = idx;
         });
 
+        while (transactionIndex < sortedTransactions.length && new Date(sortedTransactions[transactionIndex].date).getTime() <= dateTime) {
+            const tx = sortedTransactions[transactionIndex];
+            const txCurrency = tx.currency || baseCurrency;
+            const txTime = new Date(tx.date).getTime();
+            const amountAbs = getAbsoluteAmount(tx.amount);
+
+            if (!hasExplicitCashBalances) {
+                const cashDelta = getCashDeltaForTransaction(tx);
+                const currentCash = cashByCurrency[txCurrency] || 0;
+
+                // Backward-compatibility: infer required funding when transaction replay would drive
+                // cash negative and no explicit cash balance history is available.
+                if (useImplicitFunding && cashDelta < 0 && currentCash + cashDelta < 0) {
+                    const requiredFunding = -(currentCash + cashDelta);
+                    cashByCurrency[txCurrency] = currentCash + requiredFunding;
+                    totalExternalInvested += convert(requiredFunding, txCurrency, baseCurrency, txTime);
+                }
+
+                cashByCurrency[txCurrency] = (cashByCurrency[txCurrency] || 0) + cashDelta;
+            }
+
+            if (tx.type === 'Deposit') {
+                totalExternalInvested += convert(amountAbs, txCurrency, baseCurrency, txTime);
+            } else if (tx.type === 'Withdrawal') {
+                totalExternalInvested -= convert(amountAbs, txCurrency, baseCurrency, txTime);
+            } else if (tx.type === 'Dividend') {
+                totalDividend += convert(amountAbs, txCurrency, baseCurrency, txTime);
+            }
+
+            transactionIndex++;
+        }
+
         // Calculate totals at this date
         let totalValue = 0;
-        let totalInvested = 0;
-        let totalDividend = 0;
 
         allIsins.forEach(isin => {
             const h = stateByIsin[isin];
-            if (h.dividend) totalDividend += h.dividend;
             if (h.quantity <= 0.000001) return;
 
             const sec = securityByIsin[isin];
@@ -562,13 +641,27 @@ export function calculatePortfolioHistory(
             const valueInBaseCurrency = convert(valueInSecurityCurrency, securityCurrency, baseCurrency, dateTime);
 
             totalValue += valueInBaseCurrency;
-            totalInvested += h.invested;
         });
+
+        let totalCashValue = 0;
+
+        if (hasExplicitCashBalances) {
+            totalCashValue = cashAccounts.reduce((sum, account) => {
+                const balance = getCashAccountBalanceAtTime(account, dateTime);
+                if (Math.abs(balance) < 0.0000001) return sum;
+                return sum + convert(balance, account.currency, baseCurrency, dateTime);
+            }, 0);
+        } else {
+            totalCashValue = Object.entries(cashByCurrency).reduce((sum, [currency, amount]) => {
+                if (Math.abs(amount) < 0.0000001) return sum;
+                return sum + convert(amount, currency, baseCurrency, dateTime);
+            }, 0);
+        }
 
         result.push({
             date: dateStr,
-            value: totalValue,
-            invested: totalInvested,
+            value: totalValue + totalCashValue,
+            invested: totalExternalInvested,
             dividend: totalDividend
         });
     }

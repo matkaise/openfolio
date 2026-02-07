@@ -4,7 +4,7 @@ export type ISIN = string;
 export interface Transaction {
     id: string;
     date: string; // ISO 8601
-    type: 'Buy' | 'Sell' | 'Dividend' | 'Tax' | 'Fee' | 'Deposit' | 'Withdrawal' | 'Split';
+    type: 'Buy' | 'Sell' | 'Sparplan_Buy' | 'Dividend' | 'Tax' | 'Fee' | 'Deposit' | 'Withdrawal' | 'Split';
     isin?: ISIN;
     name?: string; // Optional, might be filled from Security
     shares?: number;
@@ -85,6 +85,14 @@ export interface Portfolio {
     name: string;
 }
 
+export interface CashAccount {
+    id: string;
+    name: string;
+    portfolioId?: string;
+    currency: Currency;
+    balanceHistory?: Record<string, number>; // YYYY-MM-DD -> end-of-day balance
+}
+
 export interface ProjectData {
     version: number;
     id: string; // UUID
@@ -96,6 +104,7 @@ export interface ProjectData {
     portfolios: Portfolio[]; // List of user portfolios
     transactions: Transaction[];
     securities: Record<ISIN, Security>;
+    cashAccounts?: CashAccount[];
     fxData: FxData;
 }
 
@@ -112,6 +121,7 @@ export const createEmptyProject = (name: string = 'Mein Portfolio'): ProjectData
     },
     transactions: [],
     securities: {},
+    cashAccounts: [],
     fxData: {
         baseCurrency: 'EUR',
         rates: {},

@@ -3,8 +3,8 @@ import { Activity, AlertCircle, Banknote, BarChart3, Check, ChevronLeft, Chevron
 import { AreaChart, Area, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import { calculatePortfolioHistory, type Holding, type AnalysisMetrics } from '@/lib/portfolioUtils';
 import { calculateAnalysisMetrics } from '@/lib/analysisService';
-import { buildMwrSeries } from '@/lib/performanceUtils';
-import { filterTransactionsByPortfolio, calculateProjectHoldings } from '@/lib/portfolioSelectors';
+import { buildMwrSeries, normalizeInvestedForExplicitCash } from '@/lib/performanceUtils';
+import { filterTransactionsByPortfolio, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency as convertFxCurrency } from '@/lib/fxUtils';
 import { useProject } from '@/contexts/ProjectContext';
 import { ReturnChartModal } from '@/components/ReturnChartModal';
@@ -235,6 +235,9 @@ export const AnalysisContent = ({
   const filteredTransactions = useMemo(() => {
     return filterTransactionsByPortfolio(project, selectedPortfolioIds);
   }, [project, selectedPortfolioIds]);
+  const filteredCashAccounts = useMemo(() => {
+    return filterCashAccountsByPortfolio(project, selectedPortfolioIds);
+  }, [project, selectedPortfolioIds]);
 
   // Calculate Holdings for Analysis (needed for Sector/Region)
   const { holdings } = useMemo(() => {
@@ -398,7 +401,7 @@ export const AnalysisContent = ({
 
     // Check Cache
     // Added version suffix to force invalidation after TWR refactor
-    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v5`;
+    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v6`;
     if (cachedData && cachedData.key === cacheKey) {
       setHistoryData(cachedData.historyData);
       setAnalysisMetrics(cachedData.analysisMetrics);
@@ -415,26 +418,35 @@ export const AnalysisContent = ({
         filteredTransactions,
         Object.values(project.securities || {}),
         project.fxData.rates,
+        filteredCashAccounts,
         project.settings.baseCurrency,
         'MAX', // Full history
         'daily' // High precision for TWR/Drawdown
       );
 
-      const metrics = calculateAnalysisMetrics(data, riskFreeRate, { includeDividends });
+      const normalizedHistory = normalizeInvestedForExplicitCash(
+        data,
+        filteredTransactions,
+        filteredCashAccounts,
+        project.fxData,
+        baseCurrency
+      );
 
-      setHistoryData(data);
+      const metrics = calculateAnalysisMetrics(normalizedHistory, riskFreeRate, { includeDividends });
+
+      setHistoryData(normalizedHistory);
       setAnalysisMetrics(metrics);
 
       // Update Cache
       if (onCacheUpdate) {
-        onCacheUpdate({ key: cacheKey, historyData: data, analysisMetrics: metrics });
+        onCacheUpdate({ key: cacheKey, historyData: normalizedHistory, analysisMetrics: metrics });
       }
 
       setIsCalculating(false);
     }, 100); // 100ms delay to ensure loading state is visible and UI feels responsive
 
     return () => clearTimeout(timer);
-  }, [project, filteredTransactions, selectedPortfolioIds, cachedData, includeDividends, riskFreeRate, onCacheUpdate, baseCurrency]);
+  }, [project, filteredTransactions, filteredCashAccounts, selectedPortfolioIds, cachedData, includeDividends, riskFreeRate, onCacheUpdate, baseCurrency]);
 
   // Removed old synchronous useMemos and redundant loading effects
 

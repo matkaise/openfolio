@@ -1,4 +1,6 @@
 import { type HistoryPoint } from '@/types/portfolioView';
+import { type CashAccount, type FxData, type Transaction } from '@/types/domain';
+import { convertCurrency } from '@/lib/fxUtils';
 
 type TransactionDate = { date: string };
 
@@ -9,6 +11,63 @@ type BuildMwrOptions = {
 };
 
 type PerformancePoint = { date: string; value: number };
+
+export const normalizeInvestedForExplicitCash = (
+  sourceHistory: HistoryPoint[],
+  transactions: Transaction[],
+  cashAccounts: CashAccount[],
+  fxData: FxData | null | undefined,
+  baseCurrency: string
+): HistoryPoint[] => {
+  if (sourceHistory.length === 0) return sourceHistory;
+
+  const hasExplicitCashBalances = cashAccounts.some(
+    account => !!account.balanceHistory && Object.keys(account.balanceHistory).length > 0
+  );
+  if (!hasExplicitCashBalances) {
+    return sourceHistory;
+  }
+
+  const toTime = (dateStr: string) => new Date(dateStr).setHours(0, 0, 0, 0);
+
+  const tradeFlows = transactions
+    .filter(tx => tx.type === 'Buy' || tx.type === 'Sparplan_Buy' || tx.type === 'Sell')
+    .map(tx => {
+      const amountBase = convertCurrency(
+        fxData,
+        Math.abs(tx.amount || 0),
+        tx.currency,
+        baseCurrency,
+        tx.date
+      );
+
+      return {
+        time: toTime(tx.date),
+        flow: (tx.type === 'Sell' ? -1 : 1) * amountBase
+      };
+    })
+    .sort((a, b) => a.time - b.time);
+
+  if (tradeFlows.length === 0) {
+    return sourceHistory;
+  }
+
+  let flowIndex = 0;
+  let cumulativeTradeFlow = 0;
+
+  return sourceHistory.map(point => {
+    const pointTime = toTime(point.date);
+    while (flowIndex < tradeFlows.length && tradeFlows[flowIndex].time <= pointTime) {
+      cumulativeTradeFlow += tradeFlows[flowIndex].flow;
+      flowIndex += 1;
+    }
+
+    return {
+      ...point,
+      invested: point.invested + cumulativeTradeFlow
+    };
+  });
+};
 
 export const buildMwrSeries = (
   sourceHistory: HistoryPoint[],

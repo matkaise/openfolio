@@ -1,5 +1,11 @@
 import { Transaction } from '../types/domain';
 
+export type CashBalanceImportPoint = {
+    date: string; // YYYY-MM-DD
+    currency: string;
+    balance: number;
+};
+
 // Helper to parse Floats (handles "1.234,56" vs "1234.56")
 // The sample provided shows DOT as decimal separator e.g. "-1.43", "1.0770".
 // But German CSVs often use Comma. We will try to detect or strictly follow the sample.
@@ -150,6 +156,41 @@ export const parseFlatexCsv = (text: string): Transaction[] => {
     }
 
     return transactions;
+};
+
+export const parseFlatexCashBalancesCsv = (text: string): CashBalanceImportPoint[] => {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length === 0) return [];
+
+    const header = lines[0];
+    if (!(header.includes('Valutadatum') && header.includes('Beschreibung'))) {
+        return [];
+    }
+
+    const byCurrencyAndDate: Record<string, CashBalanceImportPoint> = {};
+
+    for (let i = 1; i < lines.length; i++) {
+        const row = parseCsvLine(lines[i]);
+        if (row.length < 11) continue;
+
+        const date = parseDate(row[0]);
+        const currency = row[9] || row[7];
+        const balance = parseNumber(row[10] || row[8]);
+
+        if (!currency || Number.isNaN(balance)) continue;
+
+        // Keep the last seen balance for each day/currency.
+        byCurrencyAndDate[`${currency}|${date}`] = {
+            date,
+            currency,
+            balance
+        };
+    }
+
+    return Object.values(byCurrencyAndDate).sort((a, b) => {
+        if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
+        return a.date.localeCompare(b.date);
+    });
 };
 
 // Simple CSV Splitter that handles quoted fields
