@@ -197,6 +197,7 @@ export const AnalysisContent = ({
   onToggleDividends: () => void
 }) => {
   const { project } = useProject();
+  const baseCurrency = project?.settings.baseCurrency || 'EUR';
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [showDrawdown, setShowDrawdown] = useState(false);
   const [isCalculating, setIsCalculating] = useState(true);
@@ -397,7 +398,7 @@ export const AnalysisContent = ({
 
     // Check Cache
     // Added version suffix to force invalidation after TWR refactor
-    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|v4`;
+    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v5`;
     if (cachedData && cachedData.key === cacheKey) {
       setHistoryData(cachedData.historyData);
       setAnalysisMetrics(cachedData.analysisMetrics);
@@ -433,7 +434,7 @@ export const AnalysisContent = ({
     }, 100); // 100ms delay to ensure loading state is visible and UI feels responsive
 
     return () => clearTimeout(timer);
-  }, [project, filteredTransactions, selectedPortfolioIds, cachedData, includeDividends, riskFreeRate, onCacheUpdate]);
+  }, [project, filteredTransactions, selectedPortfolioIds, cachedData, includeDividends, riskFreeRate, onCacheUpdate, baseCurrency]);
 
   // Removed old synchronous useMemos and redundant loading effects
 
