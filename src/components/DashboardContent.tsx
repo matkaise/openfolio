@@ -45,6 +45,45 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     );
   }, [project, filteredTransactions, filteredCashAccounts, timeRange]);
 
+  const kpiHistoryData = useMemo(() => {
+    if (!project) return [];
+
+    return calculatePortfolioHistory(
+      filteredTransactions,
+      Object.values(project.securities || {}),
+      project.fxData.rates,
+      filteredCashAccounts,
+      project.settings.baseCurrency,
+      'MAX'
+    );
+  }, [project, filteredTransactions, filteredCashAccounts]);
+
+  const dailyHistoryData = useMemo(() => {
+    if (!project) return [];
+
+    return calculatePortfolioHistory(
+      filteredTransactions,
+      Object.values(project.securities || {}),
+      project.fxData.rates,
+      filteredCashAccounts,
+      project.settings.baseCurrency,
+      '1M',
+      'daily'
+    );
+  }, [project, filteredTransactions, filteredCashAccounts]);
+
+  const kpiHistoryForPerformance = useMemo(() => {
+    if (!project) return kpiHistoryData;
+
+    return normalizeInvestedForExplicitCash(
+      kpiHistoryData,
+      filteredTransactions,
+      filteredCashAccounts,
+      project.fxData,
+      baseCurrency
+    );
+  }, [project, kpiHistoryData, filteredCashAccounts, filteredTransactions, baseCurrency]);
+
   const historyForPerformance = useMemo(() => {
     if (!project) return historyData;
 
@@ -73,18 +112,18 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     return performanceSeries;
   }, [historyData, chartMode, performanceSeries]);
 
-  const latestHistoryPoint = historyData.length > 0 ? historyData[historyData.length - 1] : null;
-  const latestPerformancePoint = historyForPerformance.length > 0
-    ? historyForPerformance[historyForPerformance.length - 1]
+  const latestKpiHistoryPoint = kpiHistoryData.length > 0 ? kpiHistoryData[kpiHistoryData.length - 1] : null;
+  const latestKpiPerformancePoint = kpiHistoryForPerformance.length > 0
+    ? kpiHistoryForPerformance[kpiHistoryForPerformance.length - 1]
     : null;
   const holdingsMarketValue = holdings.reduce((sum, h) => sum + h.value, 0);
-  const investedCapital = latestPerformancePoint
-    ? latestPerformancePoint.invested
+  const investedCapital = latestKpiPerformancePoint
+    ? latestKpiPerformancePoint.invested
     : holdings.reduce((sum, h) => sum + (h.quantity * (h.averageBuyPrice || 0)), 0);
-  const currentMaketValue = latestHistoryPoint
-    ? latestHistoryPoint.value
+  const currentMaketValue = latestKpiHistoryPoint
+    ? latestKpiHistoryPoint.value
     : holdings.reduce((sum, h) => sum + h.value, 0);
-  const cashBalance = latestHistoryPoint ? (currentMaketValue - holdingsMarketValue) : 0;
+  const cashBalance = latestKpiHistoryPoint ? (currentMaketValue - holdingsMarketValue) : 0;
   const totalReturn = currentMaketValue - investedCapital;
   const wealthGoalStep = 25000;
   const goalSource = resolveWealthGoalSource(project?.settings);
@@ -135,12 +174,13 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     setGoalInput('');
   };
 
-  const previousHistoryPoint = historyData.length > 1 ? historyData[historyData.length - 2] : null;
-  const dayChangeValue = (latestHistoryPoint && previousHistoryPoint)
-    ? latestHistoryPoint.value - previousHistoryPoint.value
+  const latestDailyPoint = dailyHistoryData.length > 0 ? dailyHistoryData[dailyHistoryData.length - 1] : null;
+  const previousDailyPoint = dailyHistoryData.length > 1 ? dailyHistoryData[dailyHistoryData.length - 2] : null;
+  const dayChangeValue = (latestDailyPoint && previousDailyPoint)
+    ? latestDailyPoint.value - previousDailyPoint.value
     : 0;
-  const rawDayChangePercent = (previousHistoryPoint && Math.abs(previousHistoryPoint.value) > 0.000001)
-    ? (dayChangeValue / previousHistoryPoint.value) * 100
+  const rawDayChangePercent = (previousDailyPoint && Math.abs(previousDailyPoint.value) > 0.000001)
+    ? (dayChangeValue / previousDailyPoint.value) * 100
     : 0;
   const dayChangePercent = Math.abs(rawDayChangePercent) < 0.005 ? 0 : rawDayChangePercent;
   const dayChangePercentLabel = `${dayChangePercent > 0 ? '+' : ''}${dayChangePercent.toLocaleString('de-DE', {
