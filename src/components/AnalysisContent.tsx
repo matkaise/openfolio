@@ -18,16 +18,16 @@ const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: ()
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
       <div
-        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
+        className="md3-card rounded-[28px] w-full max-w-4xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <Activity className="text-rose-500" />
+          <h3 className="text-xl font-bold md3-text-main flex items-center gap-2">
+            <Activity className="md3-negative" />
             Drawdown Historie
           </h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
-            <X className="text-slate-400 hover:text-white" />
+          <button onClick={onClose} className="w-10 h-10 rounded-full md3-list-item flex items-center justify-center transition-all">
+            <X className="md3-text-muted" />
           </button>
         </div>
         <div className="h-80 w-full">
@@ -41,7 +41,7 @@ const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: ()
             tooltipLabel="Abstand zum Hoch"
           />
         </div>
-        <p className="text-slate-400 text-sm mt-4 text-center">
+        <p className="md3-text-muted text-sm mt-4 text-center">
           Der Chart zeigt den prozentualen Rückgang vom jeweils letzten Höchststand (High-Water Mark) des Portfolios.
         </p>
       </div>
@@ -76,23 +76,23 @@ const HoldingsGroupModal = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
       <div
-        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
+        className="md3-card rounded-[28px] w-full max-w-3xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h3 className="text-xl font-bold text-white">{title}</h3>
-            <p className="text-xs text-slate-400 mt-1">
+            <h3 className="text-xl font-bold md3-text-main">{title}</h3>
+            <p className="text-xs md3-text-muted mt-1">
               {sortedHoldings.length} Positionen - {groupShare.toFixed(1)}% vom Portfolio
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
-            <X className="text-slate-400 hover:text-white" />
+          <button onClick={onClose} className="w-10 h-10 rounded-full md3-list-item flex items-center justify-center transition-all">
+            <X className="md3-text-muted" />
           </button>
         </div>
 
         <div
-          className="max-h-[60vh] overflow-y-auto divide-y divide-slate-800 pr-2 -mr-2 [scrollbar-width:thin] [scrollbar-color:rgba(148,163,184,0.5)_rgba(15,23,42,0.3)]"
+          className="max-h-[60vh] overflow-y-auto divide-y divide-current/10 pr-2 -mr-2 [scrollbar-width:thin]"
           style={{ scrollbarGutter: 'stable both-edges' }}
         >
           {sortedHoldings.map(h => {
@@ -100,14 +100,14 @@ const HoldingsGroupModal = ({
             return (
               <div key={h.security.isin} className="py-3 flex items-center justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="text-sm text-white font-medium truncate">{h.security.name}</p>
-                  <p className="text-xs text-slate-400 truncate">
+                  <p className="text-sm md3-text-main font-medium truncate">{h.security.name}</p>
+                  <p className="text-xs md3-text-muted truncate">
                     {h.security.isin}{h.security.quoteType ? ` - ${h.security.quoteType}` : ''}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-white">{formatCurrency(h.value)}</p>
-                  <p className="text-xs text-slate-400">{percentOfGroup.toFixed(1)}% der Gruppe</p>
+                  <p className="text-sm md3-text-main">{formatCurrency(h.value)}</p>
+                  <p className="text-xs md3-text-muted">{percentOfGroup.toFixed(1)}% der Gruppe</p>
                 </div>
               </div>
             );
@@ -140,16 +140,16 @@ const RiskMetricModal = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
       <div
-        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
+        className="md3-card rounded-[28px] w-full max-w-4xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <Activity className="text-emerald-500" />
+          <h3 className="text-xl font-bold md3-text-main flex items-center gap-2">
+            <Activity className="md3-accent" />
             {title}
           </h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
-            <X className="text-slate-400 hover:text-white" />
+          <button onClick={onClose} className="w-10 h-10 rounded-full md3-list-item flex items-center justify-center transition-all">
+            <X className="md3-text-muted" />
           </button>
         </div>
 
@@ -166,7 +166,7 @@ const RiskMetricModal = ({
               tooltipLabel={tooltipLabel}
             />
           ) : (
-            <div className="h-full flex items-center justify-center text-slate-500">
+            <div className="h-full flex items-center justify-center md3-text-muted">
               Keine Daten fÃ¼r diesen Zeitraum verfÃ¼gbar.
             </div>
           )}
@@ -481,6 +481,7 @@ export const AnalysisContent = ({
   // Calculate Aggregated Returns (Quarterly / Yearly)
   const aggregatedReturns = useMemo(() => {
     if (!analysisMetrics?.monthlyReturnsMap) return { quarterly: [], yearly: [] };
+    const monthlyReturnsMap = analysisMetrics.monthlyReturnsMap;
 
     const quarterNames = ['Q1', 'Q2', 'Q3', 'Q4'];
     const quarterly = [];
@@ -495,8 +496,8 @@ export const AnalysisContent = ({
       for (let m = 0; m < 3; m++) {
         const monthIndex = q * 3 + m + 1;
         const monthKey = `${selectedYear}-${String(monthIndex).padStart(2, '0')}`;
-        if (analysisMetrics.monthlyReturnsMap[monthKey] !== undefined) {
-          growingReturn *= (1 + (analysisMetrics.monthlyReturnsMap[monthKey] / 100));
+        if (monthlyReturnsMap[monthKey] !== undefined) {
+          growingReturn *= (1 + (monthlyReturnsMap[monthKey] / 100));
           hasData = true;
         }
       }
@@ -518,8 +519,8 @@ export const AnalysisContent = ({
       // Aggregate all 12 months for that year
       for (let m = 1; m <= 12; m++) {
         const monthKey = `${year}-${String(m).padStart(2, '0')}`;
-        if (analysisMetrics.monthlyReturnsMap[monthKey] !== undefined) {
-          growingReturn *= (1 + (analysisMetrics.monthlyReturnsMap[monthKey] / 100));
+        if (monthlyReturnsMap[monthKey] !== undefined) {
+          growingReturn *= (1 + (monthlyReturnsMap[monthKey] / 100));
           hasData = true;
         }
       }
@@ -751,7 +752,10 @@ export const AnalysisContent = ({
     portfolioPerformanceSeries.forEach(p => addPoint(p.date, 'portfolio', p.value));
     benchmarkSeries.forEach(b => b.series.forEach(p => addPoint(p.date, b.key, p.value)));
 
-    return Array.from(dataMap.keys()).sort().map(date => dataMap.get(date));
+    return Array.from(dataMap.keys())
+      .sort()
+      .map(date => dataMap.get(date))
+      .filter((row): row is PerformanceRow => row !== undefined);
   }, [portfolioPerformanceSeries, benchmarkSeries]);
 
   const portfolioGradientOffset = useMemo(() => {
@@ -825,17 +829,17 @@ export const AnalysisContent = ({
 
   // Helper to get volatility label
   const getVolatilityLabel = (vol: number) => {
-    if (vol < 10) return { text: 'Niedrig', color: 'text-emerald-400' };
-    if (vol < 20) return { text: 'Mittel', color: 'text-yellow-400' };
-    return { text: 'Hoch', color: 'text-rose-400' };
+    if (vol < 10) return { text: 'Niedrig', color: 'md3-positive' };
+    if (vol < 20) return { text: 'Mittel', color: 'md3-warning' };
+    return { text: 'Hoch', color: 'md3-negative' };
   };
 
   // Helper to get Sharpe Ratio label
   const getSharpeLabel = (sharpe: number) => {
-    if (sharpe > 1.5) return { text: 'Sehr gut', color: 'text-emerald-400' };
-    if (sharpe > 1.0) return { text: 'Gut', color: 'text-emerald-400' };
-    if (sharpe > 0.5) return { text: 'OK', color: 'text-yellow-400' };
-    return { text: 'Schwach', color: 'text-rose-400' };
+    if (sharpe > 1.5) return { text: 'Sehr gut', color: 'md3-positive' };
+    if (sharpe > 1.0) return { text: 'Gut', color: 'md3-positive' };
+    if (sharpe > 0.5) return { text: 'OK', color: 'md3-warning' };
+    return { text: 'Schwach', color: 'md3-negative' };
   };
 
   const currentVolatility = riskSeries.volatility.length > 0
@@ -863,16 +867,16 @@ export const AnalysisContent = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="analysis-md3 space-y-6">
 
       {/* Loading State */}
       {isCalculating && (
         <div className="flex flex-col items-center justify-center py-20 space-y-4 animate-pulse">
-          <Loader2 className="w-12 h-12 text-emerald-500 animate-spin" />
-          <p className="text-slate-400 text-sm">Analysedaten werden berechnet...</p>
+          <Loader2 className="w-12 h-12 md3-accent animate-spin" />
+          <p className="md3-text-muted text-sm">Analysedaten werden berechnet...</p>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full mt-8">
             {[1, 2, 3, 4].map(i => (
-              <div key={i} className="bg-slate-800/50 rounded-xl p-4 h-24 animate-pulse" />
+              <div key={i} className="md3-list-item rounded-xl p-4 h-24 animate-pulse" />
             ))}
           </div>
         </div>
@@ -905,14 +909,14 @@ export const AnalysisContent = ({
                 isPercentage: true,
                 tooltipLabel: 'Volatilität (annualisiert)'
               })}
-              className="cursor-pointer hover:bg-slate-800 transition-colors group relative rounded-xl"
+              className="cursor-pointer transition-colors group relative rounded-xl"
             >
-              <Card className="flex flex-col items-center justify-center p-4 hover:border-slate-600 transition-colors">
+              <Card className="md3-list-item flex flex-col items-center justify-center p-4 transition-colors">
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <BarChart3 size={14} className="text-slate-500" />
+                  <BarChart3 size={14} className="md3-text-muted" />
                 </div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Volatilität (1J)</p>
-                <span className="text-xl font-bold text-white">{currentVolatility.toFixed(1)}%</span>
+                <p className="text-xs md3-text-muted uppercase tracking-wider mb-1">Volatilität (1J)</p>
+                <span className="text-xl font-bold md3-text-main">{currentVolatility.toFixed(1)}%</span>
                 <span className={`text-xs mt-1 ${volLabel.color}`}>{volLabel.text}</span>
               </Card>
             </div>
@@ -924,36 +928,36 @@ export const AnalysisContent = ({
                 isPercentage: false,
                 tooltipLabel: 'Sharpe Ratio'
               })}
-              className="cursor-pointer hover:bg-slate-800 transition-colors group relative rounded-xl"
+              className="cursor-pointer transition-colors group relative rounded-xl"
             >
-              <Card className="flex flex-col items-center justify-center p-4 hover:border-slate-600 transition-colors">
+              <Card className="md3-list-item flex flex-col items-center justify-center p-4 transition-colors">
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <BarChart3 size={14} className="text-slate-500" />
+                  <BarChart3 size={14} className="md3-text-muted" />
                 </div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Sharpe Ratio (1J)</p>
-                <span className="text-xl font-bold text-white">{currentSharpe.toFixed(2)}</span>
+                <p className="text-xs md3-text-muted uppercase tracking-wider mb-1">Sharpe Ratio (1J)</p>
+                <span className="text-xl font-bold md3-text-main">{currentSharpe.toFixed(2)}</span>
                 <span className={`text-xs mt-1 ${sharpeLabel.color}`}>{sharpeLabel.text}</span>
               </Card>
             </div>
             <div
               onClick={() => setShowDrawdown(true)}
-              className="cursor-pointer hover:bg-slate-800 transition-colors group relative rounded-xl"
+              className="cursor-pointer transition-colors group relative rounded-xl"
             >
-              <Card className="flex flex-col items-center justify-center p-4 hover:border-slate-600 transition-colors">
+              <Card className="md3-list-item flex flex-col items-center justify-center p-4 transition-colors">
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <BarChart3 size={14} className="text-slate-500" />
+                  <BarChart3 size={14} className="md3-text-muted" />
                 </div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Max Drawdown</p>
-                <span className="text-xl font-bold text-rose-400">{analysisMetrics.maxDrawdown.toFixed(1)}%</span>
-                <span className="text-xs text-slate-500 mt-1">
+                <p className="text-xs md3-text-muted uppercase tracking-wider mb-1">Max Drawdown</p>
+                <span className="text-xl font-bold md3-negative">{analysisMetrics.maxDrawdown.toFixed(1)}%</span>
+                <span className="text-xs md3-text-muted mt-1">
                   {analysisMetrics.maxDrawdownDate ? new Date(analysisMetrics.maxDrawdownDate).toLocaleDateString('de-DE', { month: 'short', year: 'numeric' }) : 'N/A'}
                 </span>
               </Card>
             </div>
-            <Card className="flex flex-col items-center justify-center p-4">
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Dividendenrendite</p>
-              <span className="text-xl font-bold text-white">1.92%</span>
-              <span className="text-xs text-slate-500 mt-1">Ø 245€ / Monat</span>
+            <Card className="md3-list-item flex flex-col items-center justify-center p-4">
+              <p className="text-xs md3-text-muted uppercase tracking-wider mb-1">Dividendenrendite</p>
+              <span className="text-xl font-bold md3-text-main">1.92%</span>
+              <span className="text-xs md3-text-muted mt-1">Ø 245€ / Monat</span>
             </Card>
           </div>
 
@@ -961,16 +965,16 @@ export const AnalysisContent = ({
           <Card>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <Activity size={18} className="text-emerald-400" />
-                <h3 className="font-semibold text-white">Performancevergleich</h3>
+                <Activity size={18} className="md3-accent" />
+                <h3 className="font-semibold md3-text-main">Performancevergleich</h3>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <div className="flex bg-slate-900/50 p-1 rounded-lg">
+                <div className="md3-segment flex p-1 rounded-lg">
                   {(['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map(range => (
                     <button
                       key={range}
                       onClick={() => setPerformanceRange(range)}
-                      className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${performanceRange === range ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                      className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${performanceRange === range ? 'md3-chip-tonal' : 'md3-text-muted hover:opacity-90'}`}
                     >
                       {range}
                     </button>
@@ -979,8 +983,8 @@ export const AnalysisContent = ({
                 <button
                   onClick={onToggleDividends}
                   className={`px-3 py-1 text-xs rounded-md font-medium transition-all flex items-center gap-1 ${includeDividends
-                    ? 'bg-emerald-500/20 text-emerald-400'
-                    : 'bg-slate-900/50 text-slate-500 hover:text-slate-300'
+                    ? 'md3-chip-accent'
+                    : 'md3-segment md3-text-muted hover:opacity-90'
                     }`}
                 >
                   {includeDividends && <Check size={12} />}
@@ -995,34 +999,34 @@ export const AnalysisContent = ({
                 onChange={(e) => setBenchmarkInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAddBenchmark(); }}
                 placeholder="Benchmark Symbol (z.B. SPY, ^GDAXI)"
-                className="flex-1 bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                className="md3-field flex-1 rounded-lg px-3 py-2 text-sm md3-text-main focus:outline-none"
               />
               <button
                 onClick={handleAddBenchmark}
                 disabled={isBenchmarkLoading || !benchmarkInput.trim()}
-                className={`px-3 py-2 text-sm rounded-lg font-medium transition-all ${isBenchmarkLoading || !benchmarkInput.trim() ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-500'}`}
+                className={`px-3 py-2 text-sm rounded-lg font-medium transition-all ${isBenchmarkLoading || !benchmarkInput.trim() ? 'md3-segment md3-text-muted cursor-not-allowed' : 'md3-filled-btn'}`}
               >
                 {isBenchmarkLoading ? 'Lädt...' : 'Hinzufügen'}
               </button>
             </div>
 
             {benchmarkError && (
-              <p className="text-xs text-rose-400 mt-2">{benchmarkError}</p>
+              <p className="text-xs md3-negative mt-2">{benchmarkError}</p>
             )}
             {isBenchmarkCurrencyLoading && (
-              <p className="text-xs text-slate-500 mt-2">Benchmark-Währungen werden aktualisiert...</p>
+              <p className="text-xs md3-text-muted mt-2">Benchmark-Währungen werden aktualisiert...</p>
             )}
 
             <div className="flex flex-wrap gap-2 mt-3">
-              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-300 text-xs">
+              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full md3-chip-accent text-xs">
                 Portfolio
               </span>
               {benchmarkList.map(b => (
-                <span key={b.symbol} className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-slate-800 text-slate-300 text-xs">
+                <span key={b.symbol} className="inline-flex items-center gap-2 px-2 py-1 rounded-full md3-chip-tonal text-xs">
                   {b.name || b.symbol}
                   <button
                     onClick={() => removeBenchmark(b.symbol)}
-                    className="text-slate-500 hover:text-white"
+                    className="md3-text-muted hover:opacity-90"
                     aria-label={`Benchmark ${b.symbol} entfernen`}
                   >
                     <X size={12} />
@@ -1052,29 +1056,32 @@ export const AnalysisContent = ({
                         if (['3J', '5J', 'MAX'].includes(performanceRange)) return d.getFullYear().toString();
                         return `${d.getDate()}.${d.getMonth() + 1}.`;
                       }}
-                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      tick={{ fontSize: 11, fill: 'var(--md3-on-surface-variant)' }}
                       minTickGap={80}
                       axisLine={false}
                       tickLine={false}
                     />
                     <YAxis
                       tickFormatter={(val: number) => `${val.toFixed(1)}%`}
-                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      tick={{ fontSize: 11, fill: 'var(--md3-on-surface-variant)' }}
                       axisLine={false}
                       tickLine={false}
                       width={60}
                     />
                     <Tooltip
-                      contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', fontSize: '12px' }}
-                      labelStyle={{ color: '#94a3b8' }}
-                      formatter={(value: number | string, name: string) => [`${Number(value).toFixed(2)}%`, name]}
-                      labelFormatter={(label: string) => new Date(label).toLocaleDateString('de-DE')}
+                      contentStyle={{ backgroundColor: 'var(--md3-surface-container-high)', border: 'none', fontSize: '12px', borderRadius: '12px' }}
+                      labelStyle={{ color: 'var(--md3-on-surface-variant)' }}
+                      formatter={(value: number | string | undefined, name: string | undefined) => [`${Number(value ?? 0).toFixed(2)}%`, name ?? 'Wert']}
+                      labelFormatter={(label: React.ReactNode) => {
+                        if (typeof label !== 'string' && typeof label !== 'number') return '';
+                        return new Date(String(label)).toLocaleDateString('de-DE');
+                      }}
                     />
                     <Legend
                       verticalAlign="bottom"
                       align="center"
                       iconType="circle"
-                      wrapperStyle={{ color: '#94a3b8', paddingTop: 8 }}
+                      wrapperStyle={{ color: 'var(--md3-on-surface-variant)', paddingTop: 8 }}
                     />
                     <Area
                       type="monotone"
@@ -1099,7 +1106,7 @@ export const AnalysisContent = ({
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+                <div className="h-full flex items-center justify-center md3-text-muted text-sm">
                   Keine Performance-Daten für den ausgewählten Zeitraum.
                 </div>
               )}
@@ -1111,19 +1118,19 @@ export const AnalysisContent = ({
             <Card className="lg:col-span-2">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
                 <div className="flex items-center gap-4">
-                  <h3 className="font-semibold text-white flex items-center gap-2">
-                    <Activity size={18} className="text-emerald-400" />
+                  <h3 className="font-semibold md3-text-main flex items-center gap-2">
+                    <Activity size={18} className="md3-accent" />
                     Rendite
-                    {returnViewMode !== 'yearly' && <span className="text-slate-500 font-normal">({selectedYear})</span>}
+                    {returnViewMode !== 'yearly' && <span className="md3-text-muted font-normal">({selectedYear})</span>}
                   </h3>
 
                   {/* View Toggle */}
-                  <div className="flex bg-slate-900/50 p-1 rounded-lg">
+                  <div className="md3-segment flex p-1 rounded-lg">
                     {(['monthly', 'quarterly', 'yearly'] as const).map(mode => (
                       <button
                         key={mode}
                         onClick={() => setReturnViewMode(mode)}
-                        className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${returnViewMode === mode ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                        className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${returnViewMode === mode ? 'md3-chip-tonal' : 'md3-text-muted hover:opacity-90'}`}
                       >
                         {mode === 'monthly' ? 'Monat' : mode === 'quarterly' ? 'Quartal' : 'Jahr'}
                       </button>
@@ -1137,14 +1144,14 @@ export const AnalysisContent = ({
                     <button
                       onClick={() => navigateYear('prev')}
                       disabled={!hasPrevYear}
-                      className={`p-1 rounded hover:bg-slate-800 transition-colors ${!hasPrevYear ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400'}`}
+                      className={`p-1.5 rounded-full transition-colors ${!hasPrevYear ? 'md3-text-muted opacity-40 cursor-not-allowed' : 'md3-list-item md3-text-muted'}`}
                     >
                       <ChevronLeft size={20} />
                     </button>
                     <button
                       onClick={() => navigateYear('next')}
                       disabled={!hasNextYear}
-                      className={`p-1 rounded hover:bg-slate-800 transition-colors ${!hasNextYear ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400'}`}
+                      className={`p-1.5 rounded-full transition-colors ${!hasNextYear ? 'md3-text-muted opacity-40 cursor-not-allowed' : 'md3-list-item md3-text-muted'}`}
                     >
                       <ChevronRight size={20} />
                     </button>
@@ -1163,13 +1170,12 @@ export const AnalysisContent = ({
                     <div
                       key={m.month}
                       onClick={() => handleTileClick(startDate, endDate, `${m.month} ${selectedYear}`)}
-                      className="bg-slate-900/50 rounded-lg p-3 flex flex-col items-center justify-center hover:bg-slate-800 transition cursor-pointer group relative"
+                      className="md3-list-item rounded-lg p-3 flex flex-col items-center justify-center transition cursor-pointer group relative"
                     >
-                      <span className="text-xs text-slate-500 mb-1">{m.month}</span>
-                      <span className={`font-bold ${m.return >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      <span className="text-xs md3-text-muted mb-1">{m.month}</span>
+                      <span className={`font-bold ${m.return >= 0 ? 'md3-positive' : 'md3-negative'}`}>
                         {m.return > 0 ? '+' : ''}{m.return}%
                       </span>
-                      <div className="absolute inset-0 border-2 border-emerald-500/0 group-hover:border-emerald-500/20 rounded-lg transition-all"></div>
                     </div>
                   );
                 })}
@@ -1178,13 +1184,12 @@ export const AnalysisContent = ({
                   <div
                     key={q.label}
                     onClick={() => handleTileClick(q.startDate, q.endDate, `${q.label} ${selectedYear}`)}
-                    className="bg-slate-900/50 rounded-lg p-4 flex flex-col items-center justify-center hover:bg-slate-800 transition cursor-pointer group relative"
+                    className="md3-list-item rounded-lg p-4 flex flex-col items-center justify-center transition cursor-pointer group relative"
                   >
-                    <span className="text-xs text-slate-500 mb-1 uppercase tracking-wider">{q.label}</span>
-                    <span className={`text-lg font-bold ${q.return >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <span className="text-xs md3-text-muted mb-1 uppercase tracking-wider">{q.label}</span>
+                    <span className={`text-lg font-bold ${q.return >= 0 ? 'md3-positive' : 'md3-negative'}`}>
                       {q.return > 0 ? '+' : ''}{q.return}%
                     </span>
-                    <div className="absolute inset-0 border-2 border-emerald-500/0 group-hover:border-emerald-500/20 rounded-lg transition-all"></div>
                   </div>
                 ))}
 
@@ -1192,13 +1197,12 @@ export const AnalysisContent = ({
                   <div
                     key={y.year}
                     onClick={() => handleTileClick(y.startDate, y.endDate, `Jahr ${y.year}`)}
-                    className="bg-slate-900/50 rounded-lg p-4 flex flex-col items-center justify-center hover:bg-slate-800 transition cursor-pointer group relative"
+                    className="md3-list-item rounded-lg p-4 flex flex-col items-center justify-center transition cursor-pointer group relative"
                   >
-                    <span className="text-xs text-slate-500 mb-1">{y.year}</span>
-                    <span className={`text-lg font-bold ${y.return >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <span className="text-xs md3-text-muted mb-1">{y.year}</span>
+                    <span className={`text-lg font-bold ${y.return >= 0 ? 'md3-positive' : 'md3-negative'}`}>
                       {y.return > 0 ? '+' : ''}{y.return}%
                     </span>
-                    <div className="absolute inset-0 border-2 border-emerald-500/0 group-hover:border-emerald-500/20 rounded-lg transition-all"></div>
                   </div>
                 ))}
               </div>
@@ -1225,8 +1229,8 @@ export const AnalysisContent = ({
 
             {/* Region Allocation */}
             <Card>
-              <h3 className="font-semibold text-white flex items-center gap-2 mb-6">
-                <Globe size={18} className="text-blue-400" />
+              <h3 className="font-semibold md3-text-main flex items-center gap-2 mb-6">
+                <Globe size={18} className="md3-accent" />
                 Regionen
               </h3>
               <div className="space-y-4">
@@ -1235,22 +1239,22 @@ export const AnalysisContent = ({
                     key={region.name}
                     type="button"
                     onClick={() => openGroupOverlay(`Region: ${region.name}`, region)}
-                    className="w-full text-left group -mx-2 px-2 py-2 rounded-lg transition-all hover:bg-slate-800/60 hover:-translate-y-0.5 hover:shadow-lg/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 cursor-pointer"
+                    className="w-full text-left group -mx-2 px-2 py-2 rounded-lg transition-all md3-list-item focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md3-primary)]/40 cursor-pointer"
                   >
                     <div className="flex justify-between text-sm mb-1">
-                      <span className="text-slate-300 group-hover:text-white transition-colors flex items-center gap-2">
+                      <span className="md3-text-main transition-colors flex items-center gap-2">
                         {region.name}
-                        <span className="text-[10px] uppercase tracking-wider text-slate-500 group-hover:text-slate-300 transition-colors">Details</span>
+                        <span className="text-[10px] uppercase tracking-wider md3-text-muted transition-colors">Details</span>
                       </span>
-                      <span className="text-slate-400 flex items-center gap-1">
+                      <span className="md3-text-muted flex items-center gap-1">
                         {region.value}%
-                        <ChevronRight className="w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5" />
+                        <ChevronRight className="w-3 h-3 md3-text-muted opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5" />
                       </span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--md3-surface-container-highest)' }}>
                       <div
-                        className="bg-blue-500 h-2 rounded-full transition-all group-hover:brightness-110"
-                        style={{ width: `${region.value}%` }}
+                        className="h-2 rounded-full transition-all group-hover:brightness-110"
+                        style={{ width: `${region.value}%`, backgroundColor: 'var(--md3-primary)' }}
                       ></div>
                     </div>
                   </button>
@@ -1262,8 +1266,8 @@ export const AnalysisContent = ({
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Industry Allocation */}
             <Card>
-              <h3 className="font-semibold text-white flex items-center gap-2 mb-6">
-                <Banknote size={18} className="text-amber-400" />
+              <h3 className="font-semibold md3-text-main flex items-center gap-2 mb-6">
+                <Banknote size={18} className="md3-accent" />
                 Branchen
               </h3>
               <div className="space-y-4">
@@ -1272,22 +1276,22 @@ export const AnalysisContent = ({
                     key={industry.name}
                     type="button"
                     onClick={() => openGroupOverlay(`Branche: ${industry.name}`, industry)}
-                    className="w-full text-left group -mx-2 px-2 py-2 rounded-lg transition-all hover:bg-slate-800/60 hover:-translate-y-0.5 hover:shadow-lg/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 cursor-pointer"
+                    className="w-full text-left group -mx-2 px-2 py-2 rounded-lg transition-all md3-list-item focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md3-primary)]/40 cursor-pointer"
                   >
                     <div className="flex justify-between text-sm mb-1">
-                      <span className="text-slate-300 group-hover:text-white transition-colors flex items-center gap-2">
+                      <span className="md3-text-main transition-colors flex items-center gap-2">
                         {industry.name}
-                        <span className="text-[10px] uppercase tracking-wider text-slate-500 group-hover:text-slate-300 transition-colors">Details</span>
+                        <span className="text-[10px] uppercase tracking-wider md3-text-muted transition-colors">Details</span>
                       </span>
-                      <span className="text-slate-400 flex items-center gap-1">
+                      <span className="md3-text-muted flex items-center gap-1">
                         {industry.value}%
-                        <ChevronRight className="w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5" />
+                        <ChevronRight className="w-3 h-3 md3-text-muted opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5" />
                       </span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--md3-surface-container-highest)' }}>
                       <div
-                        className="bg-amber-500 h-2 rounded-full transition-all group-hover:brightness-110"
-                        style={{ width: `${industry.value}%` }}
+                        className="h-2 rounded-full transition-all group-hover:brightness-110"
+                        style={{ width: `${industry.value}%`, backgroundColor: 'var(--md3-primary)' }}
                       ></div>
                     </div>
                   </button>
@@ -1296,8 +1300,8 @@ export const AnalysisContent = ({
             </Card>
             {/* Sector Allocation */}
             <Card>
-              <h3 className="font-semibold text-white flex items-center gap-2 mb-6">
-                <BarChart3 size={18} className="text-purple-400" />
+              <h3 className="font-semibold md3-text-main flex items-center gap-2 mb-6">
+                <BarChart3 size={18} className="md3-accent" />
                 Sektoren
               </h3>
               <div className="space-y-4">
@@ -1306,22 +1310,22 @@ export const AnalysisContent = ({
                     key={sector.name}
                     type="button"
                     onClick={() => openGroupOverlay(`Sektor: ${sector.name}`, sector)}
-                    className="w-full text-left group -mx-2 px-2 py-2 rounded-lg transition-all hover:bg-slate-800/60 hover:-translate-y-0.5 hover:shadow-lg/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40 cursor-pointer"
+                    className="w-full text-left group -mx-2 px-2 py-2 rounded-lg transition-all md3-list-item focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md3-primary)]/40 cursor-pointer"
                   >
                     <div className="flex justify-between text-sm mb-1">
-                      <span className="text-slate-300 group-hover:text-white transition-colors flex items-center gap-2">
+                      <span className="md3-text-main transition-colors flex items-center gap-2">
                         {sector.name}
-                        <span className="text-[10px] uppercase tracking-wider text-slate-500 group-hover:text-slate-300 transition-colors">Details</span>
+                        <span className="text-[10px] uppercase tracking-wider md3-text-muted transition-colors">Details</span>
                       </span>
-                      <span className="text-slate-400 flex items-center gap-1">
+                      <span className="md3-text-muted flex items-center gap-1">
                         {sector.value}%
-                        <ChevronRight className="w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5" />
+                        <ChevronRight className="w-3 h-3 md3-text-muted opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5" />
                       </span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--md3-surface-container-highest)' }}>
                       <div
-                        className="bg-purple-500 h-2 rounded-full transition-all group-hover:brightness-110"
-                        style={{ width: `${sector.value}%` }}
+                        className="h-2 rounded-full transition-all group-hover:brightness-110"
+                        style={{ width: `${sector.value}%`, backgroundColor: 'var(--md3-primary)' }}
                       ></div>
                     </div>
                   </button>
@@ -1344,23 +1348,23 @@ export const AnalysisContent = ({
                 if (risks.length > 0) {
                   return (
                     <div className="flex items-start gap-4">
-                      <div className="p-3 bg-yellow-500/10 rounded-xl max-h-min">
-                        <AlertCircle size={32} className="text-yellow-500" />
+                      <div className="p-3 md3-warning-soft rounded-xl max-h-min">
+                        <AlertCircle size={32} className="md3-warning" />
                       </div>
                       <div className="flex-1">
-                        <h4 className="text-lg font-bold text-white mb-2">Klumpenrisiken erkannt</h4>
+                        <h4 className="text-lg font-bold md3-text-main mb-2">Klumpenrisiken erkannt</h4>
                         <div className="space-y-3">
                           {risks.map((risk, index) => (
-                            <div key={index} className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+                            <div key={index} className="md3-list-item p-3 rounded-lg">
                               <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{risk.type}</span>
-                                <span className="text-xs font-bold text-rose-400">{risk.data.value}%</span>
+                                <span className="text-xs md3-text-muted uppercase tracking-wider font-semibold">{risk.type}</span>
+                                <span className="text-xs font-bold md3-negative">{risk.data.value}%</span>
                               </div>
-                              <div className="text-white font-medium">{risk.data.name}</div>
+                              <div className="md3-text-main font-medium">{risk.data.name}</div>
                             </div>
                           ))}
                         </div>
-                        <p className="text-slate-400 text-sm mt-3 leading-relaxed">
+                        <p className="md3-text-muted text-sm mt-3 leading-relaxed">
                           Eine höhere Diversifikation in diesen Bereichen könnte die Volatilität senken.
                         </p>
                       </div>
@@ -1370,12 +1374,12 @@ export const AnalysisContent = ({
 
                 return (
                   <div className="flex items-start gap-4">
-                    <div className="p-3 bg-emerald-500/10 rounded-xl">
-                      <Check size={32} className="text-emerald-500" />
+                    <div className="p-3 md3-positive-soft rounded-xl">
+                      <Check size={32} className="md3-positive" />
                     </div>
                     <div>
-                      <h4 className="text-lg font-bold text-white">Gut diversifiziert</h4>
-                      <p className="text-slate-400 text-sm mt-1 leading-relaxed">
+                      <h4 className="text-lg font-bold md3-text-main">Gut diversifiziert</h4>
+                      <p className="md3-text-muted text-sm mt-1 leading-relaxed">
                         Kein Bereich (Sektor, Region, Branche) dominiert das Portfolio übermäßig (über 30%).
                       </p>
                     </div>
@@ -1389,6 +1393,9 @@ export const AnalysisContent = ({
     </div>
   );
 };
+
+
+
 
 
 

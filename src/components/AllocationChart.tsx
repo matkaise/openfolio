@@ -55,7 +55,8 @@ const renderActiveShape = (props: ActiveShapeProps) => {
     );
 };
 
-
+// Recharts v3 typings dropped activeIndex although runtime still supports it.
+const PieWithActive = Pie as unknown as React.ComponentType<Record<string, unknown>>;
 
 export const AllocationChart = ({ data, currency }: AllocationChartProps) => {
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -90,7 +91,7 @@ export const AllocationChart = ({ data, currency }: AllocationChartProps) => {
                             </linearGradient>
                         ))}
                     </defs>
-                    <Pie
+                    <PieWithActive
                         activeIndex={activeIndex ?? -1}
                         activeShape={renderActiveShape}
                         data={data}
@@ -107,7 +108,7 @@ export const AllocationChart = ({ data, currency }: AllocationChartProps) => {
                         {data.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={`url(#gradient-${index})`} stroke={entry.color} strokeWidth={0} />
                         ))}
-                    </Pie>
+                    </PieWithActive>
                 </PieChart>
             </ResponsiveContainer>
 

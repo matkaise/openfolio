@@ -1,8 +1,32 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #1a1c1e;
+  --foreground: #e2e2e6;
+  --md3-bg: #1a1c1e;
+  --md3-on-bg: #e2e2e6;
+  --md3-surface: #1a1c1e;
+  --md3-on-surface: #e2e2e6;
+  --md3-surface-variant: #43474e;
+  --md3-on-surface-variant: #c3c7cf;
+  --md3-outline: #8d9199;
+  --md3-primary: #9ecaff;
+  --md3-on-primary: #003258;
+  --md3-primary-container: #00497d;
+  --md3-on-primary-container: #d1e4ff;
+  --md3-secondary-container: #3b4858;
+  --md3-on-secondary-container: #d7e3f7;
+  --md3-tertiary: #d6bee4;
+  --md3-on-tertiary: #3b2948;
+  --md3-surface-container: #1e2023;
+  --md3-surface-container-high: #282a2d;
+  --md3-surface-container-highest: #33353a;
+  --md3-inverse-surface: #e2e2e6;
+  --md3-inverse-primary: #0061a4;
+  --md3-gradient-a: rgba(96, 165, 250, 0.18);
+  --md3-gradient-b: rgba(129, 140, 248, 0.16);
+  --md3-orb-a: rgba(59, 130, 246, 0.3);
+  --md3-orb-b: rgba(129, 140, 248, 0.22);
 }
 
 @theme inline {
@@ -12,15 +36,392 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  min-height: 100vh;
+  background: var(--md3-bg);
+  color: var(--md3-on-bg);
+  font-family: "Google Sans", "Google Sans Text", "Roboto", var(--font-geist-sans), system-ui, sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.md3-app {
+  position: relative;
+  min-height: 100vh;
+  color: var(--md3-on-bg);
+  background: var(--md3-bg);
+}
+
+.md3-blob-a,
+.md3-blob-b {
+  display: none;
+}
+
+.md3-blob-a {
+  width: 52vw;
+  height: 52vw;
+  left: -10%;
+  top: -12%;
+  background: var(--md3-orb-a);
+}
+
+.md3-blob-b {
+  width: 44vw;
+  height: 44vw;
+  right: -10%;
+  bottom: -14%;
+  background: var(--md3-orb-b);
+}
+
+.md3-surface {
+  background: var(--md3-surface);
+  color: var(--md3-on-surface);
+}
+
+.md3-card {
+  background: var(--md3-surface-container);
+  border: none;
+  border-radius: 32px;
+  box-shadow: none;
+}
+
+.md3-card-primary {
+  background: var(--md3-primary-container);
+  color: var(--md3-on-primary-container);
+}
+
+.md3-card-secondary {
+  background: var(--md3-secondary-container);
+  color: var(--md3-on-secondary-container);
+}
+
+.md3-sidebar {
+  background: var(--md3-surface);
+  border: none;
+  border-radius: 32px;
+  box-shadow: none;
+}
+
+.md3-list-item {
+  background: var(--md3-surface-container-high);
+  border: none;
+  border-radius: 24px;
+  transition: background-color 0.2s ease;
+}
+
+.md3-list-item:hover {
+  background: var(--md3-surface-container-highest);
+}
+
+.md3-segment {
+  background: var(--md3-surface-container-high);
+  border-radius: 16px;
+}
+
+.md3-accent {
+  color: var(--md3-primary) !important;
+}
+
+.md3-text-main {
+  color: var(--md3-on-surface) !important;
+}
+
+.md3-text-muted {
+  color: var(--md3-on-surface-variant) !important;
+}
+
+.md3-chip-tonal {
+  background: var(--md3-secondary-container);
+  color: var(--md3-on-secondary-container);
+  border-radius: 12px;
+}
+
+.md3-chip-accent {
+  background: var(--md3-primary-container);
+  color: var(--md3-on-primary-container);
+  border-radius: 12px;
+}
+
+.md3-positive {
+  color: #18a957 !important;
+}
+
+.md3-positive-soft {
+  background: color-mix(in srgb, #18a957 18%, transparent 82%);
+  color: #18a957 !important;
+}
+
+.md3-negative {
+  color: #c73a59 !important;
+}
+
+.md3-negative-soft {
+  background: color-mix(in srgb, #c73a59 16%, transparent 84%);
+  color: #c73a59 !important;
+}
+
+.md3-warning {
+  color: #b26a00 !important;
+}
+
+.md3-warning-soft {
+  background: color-mix(in srgb, #b26a00 16%, transparent 84%);
+  color: #b26a00 !important;
+}
+
+.md3-chip {
+  min-height: 40px;
+  border-radius: 16px;
+  background: var(--md3-surface-container-high);
+  border: none;
+}
+
+.md3-fab {
+  min-height: 56px;
+  border-radius: 16px;
+  background: var(--md3-primary-container);
+  color: var(--md3-on-primary-container);
+  border: 1px solid color-mix(in srgb, var(--md3-primary) 40%, transparent 60%);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.md3-fab:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+
+.md3-fab:active {
+  transform: scale(0.98);
+}
+
+.md3-filled-btn {
+  min-height: 44px;
+  border-radius: 20px;
+  background: var(--md3-primary);
+  color: var(--md3-on-primary);
+  border: 1px solid color-mix(in srgb, var(--md3-primary) 68%, white 32%);
+}
+
+.md3-filled-btn:hover {
+  filter: brightness(1.05);
+}
+
+.md3-filled-btn:active {
+  transform: scale(0.98);
+}
+
+.md3-icon-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--md3-on-surface);
+  background: var(--md3-surface-container-high);
+  border: none;
+  transition: transform 0.18s ease, background-color 0.18s ease;
+}
+
+.md3-icon-btn:hover {
+  background: color-mix(in srgb, var(--md3-surface-container-highest) 88%, transparent 12%);
+}
+
+.md3-icon-btn:active {
+  transform: scale(0.95);
+}
+
+.md3-field {
+  min-height: 48px;
+  border-radius: 9999px;
+  background: var(--md3-surface-container-high);
+  border: none;
+  color: var(--md3-on-surface);
+}
+
+.md3-field input,
+.md3-field select {
+  background: transparent;
+  color: inherit;
+}
+
+.md3-field input::placeholder {
+  color: color-mix(in srgb, var(--md3-on-surface-variant) 70%, transparent 30%);
+}
+
+.md3-field:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--md3-primary) 22%, transparent 78%);
+}
+
+.md3-nav-active {
+  background: var(--md3-secondary-container);
+  color: var(--md3-on-secondary-container);
+}
+
+.md3-nav-inactive {
+  color: var(--md3-on-surface-variant);
+}
+
+.md3-nav-inactive:hover {
+  background: color-mix(in srgb, var(--md3-surface-container-highest) 52%, transparent 48%);
+  color: var(--md3-on-surface);
+}
+
+.md3-divider {
+  border-color: color-mix(in srgb, var(--md3-outline) 30%, transparent 70%);
+}
+
+.md3-theme-dot {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.56);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.theme-md3 [class*="bg-slate-900"],
+.theme-md3 [class*="bg-slate-800"],
+.theme-md3 [class*="bg-slate-700"],
+.theme-md3 [class*="bg-slate-600"],
+.theme-md3 [class*="bg-slate-950"] {
+  background-color: var(--md3-surface-container-high) !important;
+}
+
+.theme-md3 [class*="bg-slate-900/"] {
+  background-color: var(--md3-surface-container) !important;
+}
+
+.theme-md3 [class*="bg-slate-950/"] {
+  background-color: var(--md3-surface-container) !important;
+}
+
+.theme-md3 [class*="bg-slate-800/"] {
+  background-color: var(--md3-surface-container-high) !important;
+}
+
+.theme-md3 [class*="bg-slate-700/"],
+.theme-md3 [class*="bg-slate-600/"] {
+  background-color: var(--md3-surface-container-highest) !important;
+}
+
+.theme-md3 [class*="border-slate-"] {
+  border-color: transparent !important;
+}
+
+.theme-md3 [class*="shadow"] {
+  box-shadow: none !important;
+}
+
+.theme-md3 [class*="rounded-2xl"] {
+  border-radius: 32px !important;
+}
+
+.theme-md3 [class*="rounded-xl"] {
+  border-radius: 24px !important;
+}
+
+.theme-md3 [class*="text-slate-200"],
+.theme-md3 [class*="text-slate-300"] {
+  color: var(--md3-on-surface) !important;
+}
+
+.theme-md3 [class*="text-slate-400"],
+.theme-md3 [class*="text-slate-500"],
+.theme-md3 [class*="text-slate-600"] {
+  color: var(--md3-on-surface-variant) !important;
+}
+
+.theme-md3 [class*="text-slate-700"],
+.theme-md3 [class*="text-slate-800"],
+.theme-md3 [class*="text-slate-900"] {
+  color: var(--md3-on-surface) !important;
+}
+
+.theme-md3 [class*="text-white"] {
+  color: var(--md3-on-surface) !important;
+}
+
+.theme-md3 [class*="bg-white/"] {
+  background-color: color-mix(in srgb, var(--md3-surface) 82%, transparent 18%) !important;
+}
+
+.theme-md3 [class*="hover:bg-slate-"]:hover {
+  background-color: color-mix(in srgb, var(--md3-surface-container-highest) 52%, transparent 48%) !important;
+}
+
+.theme-md3 [class*="text-blue-"] {
+  color: var(--md3-primary) !important;
+}
+
+.theme-md3 [class*="bg-blue-"] {
+  background-color: color-mix(in srgb, var(--md3-primary-container) 78%, transparent 22%) !important;
+  border-color: color-mix(in srgb, var(--md3-primary) 38%, transparent 62%) !important;
+}
+
+.theme-md3 [class*="text-emerald-"] {
+  color: #18a957 !important;
+}
+
+.theme-md3 [class*="bg-emerald-"] {
+  background-color: var(--md3-primary) !important;
+}
+
+.theme-md3 [class*="bg-emerald-"][class*="/"] {
+  background-color: color-mix(in srgb, #18a957 16%, transparent 84%) !important;
+}
+
+.theme-md3 [class*="hover:bg-emerald-"]:hover {
+  background-color: color-mix(in srgb, var(--md3-primary) 92%, black 8%) !important;
+}
+
+.theme-md3 [class*="border-emerald-"] {
+  border-color: color-mix(in srgb, var(--md3-primary) 32%, transparent 68%) !important;
+}
+
+.theme-md3 [class*="text-rose-"] {
+  color: #c73a59 !important;
+}
+
+.theme-md3 [class*="bg-rose-"][class*="/"] {
+  background-color: color-mix(in srgb, #c73a59 14%, transparent 86%) !important;
+}
+
+.theme-md3 [class*="bg-rose-"] {
+  background-color: #c73a59 !important;
+}
+
+.theme-md3 [class*="border-rose-"] {
+  border-color: color-mix(in srgb, #c73a59 28%, transparent 72%) !important;
+}
+
+.theme-md3 [class*="from-blue-"] {
+  --tw-gradient-from: var(--md3-primary) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: color-mix(in srgb, var(--md3-primary) 0%, transparent 100%) var(--tw-gradient-to-position) !important;
+}
+
+.theme-md3 [class*="to-indigo-"],
+.theme-md3 [class*="to-blue-"] {
+  --tw-gradient-to: color-mix(in srgb, var(--md3-primary) 86%, black 14%) var(--tw-gradient-to-position) !important;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--md3-primary) 48%, transparent 52%) color-mix(in srgb, var(--md3-surface-container-high) 58%, transparent 42%);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--md3-surface-container-high) 58%, transparent 42%);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--md3-primary) 48%, transparent 52%);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--md3-primary) 70%, transparent 30%);
 }

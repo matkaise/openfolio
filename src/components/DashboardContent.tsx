@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+﻿import React, { useMemo, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, Check, ChevronRight, PieChart, Wallet } from 'lucide-react';
 import { calculatePortfolioHistory } from '@/lib/portfolioUtils';
 import { buildMwrSeries, normalizeInvestedForExplicitCash } from '@/lib/performanceUtils';
@@ -298,7 +298,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
         'MUTUALFUND': 'Fonds',
         'FUTURE': 'Derivate',
         'INDEX': 'Indizes',
-        'CURRENCY': 'Währungen'
+        'CURRENCY': 'WÃ¤hrungen'
       };
 
       const normalizedType = yahooTypeMap[type.toUpperCase()] || (type === 'Stock' ? 'Einzelaktien' : type);
@@ -346,37 +346,37 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     <>
       {/* KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="col-span-1 md:col-span-2 relative overflow-hidden group">
+        <Card className="col-span-1 md:col-span-2 relative overflow-hidden group !p-8 md3-card-primary">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Wallet size={120} className="text-emerald-500" />
+            <Wallet size={120} className="md3-accent" />
           </div>
           <div className="relative z-10">
-            <h3 className="text-slate-400 font-medium mb-1">Gesamtwert Portfolio</h3>
+            <h3 className="md3-text-muted mb-1 font-medium">Gesamtwert Portfolio</h3>
             <div className="flex items-baseline space-x-3">
-              <span className="text-4xl font-bold text-white tracking-tight">
+              <span className="md3-text-main text-4xl font-bold tracking-tight">
                 {currentMaketValue.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
               </span>
-              <span className={`flex items-center px-2 py-0.5 rounded text-sm font-medium ${dayChangePercent >= 0 ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'}`}>
+              <span className={`flex items-center rounded px-2 py-0.5 text-sm font-medium ${dayChangePercent >= 0 ? 'md3-positive-soft' : 'md3-negative-soft'}`}>
                 {dayChangePercent >= 0 ? <ArrowUpRight size={14} className="mr-1" /> : <ArrowDownRight size={14} className="mr-1" />}
                 {dayChangePercent}%
               </span>
             </div>
             <div className="mt-6 flex flex-wrap gap-8">
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider">Ertrag Gesamt</p>
-                <p className={`text-lg font-semibold ${totalReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <p className="md3-text-muted text-xs uppercase tracking-wider">Ertrag Gesamt</p>
+                <p className={`text-lg font-semibold ${totalReturn >= 0 ? 'md3-positive' : 'md3-negative'}`}>
                   {totalReturn > 0 ? '+' : ''}{totalReturn.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider">Investiert</p>
-                <p className="text-lg font-semibold text-slate-300">
+                <p className="md3-text-muted text-xs uppercase tracking-wider">Investiert</p>
+                <p className="md3-text-main text-lg font-semibold">
                   {investedCapital.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider">Cash</p>
-                <p className={`text-lg font-semibold ${cashBalance >= 0 ? 'text-slate-300' : 'text-rose-400'}`}>
+                <p className="md3-text-muted text-xs uppercase tracking-wider">Cash</p>
+                <p className={`text-lg font-semibold ${cashBalance >= 0 ? 'md3-text-main' : 'md3-negative'}`}>
                   {cashBalance > 0 ? '+' : ''}{cashBalance.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
                 </p>
               </div>
@@ -384,36 +384,36 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
           </div>
         </Card>
 
-        <Card className="flex flex-col justify-between">
+        <Card className="flex flex-col justify-between !p-7 md3-card-secondary">
           <div className="flex items-center justify-between">
-            <h3 className="text-slate-400 font-medium">Dividenden ({dividendRange})</h3>
-            <div className="flex bg-slate-900/50 p-1 rounded-lg">
+            <h3 className="md3-text-muted font-medium">Dividenden ({dividendRange})</h3>
+            <div className="md3-segment flex p-1">
               <button
                 onClick={() => setDividendRange('YTD')}
-                className={`px-2 py-0.5 text-[10px] rounded-md font-medium transition-all ${dividendRange === 'YTD' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`rounded-md px-2 py-0.5 text-[10px] font-medium transition-all ${dividendRange === 'YTD' ? 'md3-chip-accent' : 'md3-text-muted'}`}
               >
                 YTD
               </button>
               <button
                 onClick={() => setDividendRange('1J')}
-                className={`px-2 py-0.5 text-[10px] rounded-md font-medium transition-all ${dividendRange === '1J' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`rounded-md px-2 py-0.5 text-[10px] font-medium transition-all ${dividendRange === '1J' ? 'md3-chip-accent' : 'md3-text-muted'}`}
               >
                 1J
               </button>
             </div>
           </div>
           <div className="mt-2">
-            <span className="text-3xl font-bold text-white">
+            <span className="md3-text-main text-3xl font-bold">
               {(
                 dividendRange === '1J'
                   ? dividendSummary.monthlyBars1J.reduce((sum, v) => sum + v, 0)
                   : dividendSummary.ytdValue
               ).toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}
             </span>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="md3-text-muted mt-1 text-sm">
               {dividendSummary.nextPayout ? (
                 <>
-                  {'N\u00e4chste Auszahlung:'} <span className="font-semibold text-slate-200">{dividendSummary.nextPayout.amount.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}</span> ({dividendSummary.nextPayout.name}) - <span className="font-semibold text-slate-200">{dividendSummary.nextPayout.date}</span>
+                  {'N\u00e4chste Auszahlung:'} <span className="md3-text-main font-semibold">{dividendSummary.nextPayout.amount.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}</span> ({dividendSummary.nextPayout.name}) - <span className="md3-text-main font-semibold">{dividendSummary.nextPayout.date}</span>
                   {dividendSummary.isTheoretical ? <span className="text-xs text-slate-600 ml-2">Prognose</span> : null}
                 </>
               ) : (
@@ -426,7 +426,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
               const bars = dividendRange === '1J' ? dividendSummary.monthlyBars1J : dividendSummary.monthlyBarsYTD;
               const max = Math.max(...bars, 1);
               return bars.map((val, i) => (
-                <div key={i} className="flex-1 bg-blue-500/20 hover:bg-blue-500/40 rounded-t transition-colors relative group" style={{ height: `${(val / max) * 100}%` }}>
+                <div key={i} className="relative flex-1 rounded-t bg-blue-500/20 transition-colors hover:bg-blue-500/40 group" style={{ height: `${(val / max) * 100}%` }}>
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-slate-700 text-xs px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                     {val.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}
                   </div>
@@ -438,22 +438,20 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       </div>
 
       {/* Charts Section */}
-      < div className="grid grid-cols-1 lg:grid-cols-3 gap-6" >
-        {/* Performance Chart */}
-        < Card className="lg:col-span-2 min-h-[350px]" >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4 relative">
-            {/* Left: Toggles */}
-            <div className="flex items-center gap-4 z-10">
-              <div className="flex bg-slate-900/50 p-1 rounded-lg">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Card className="min-h-[350px] lg:col-span-2 !p-7">
+          <div className="relative mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="z-10 flex items-center gap-4">
+              <div className="md3-segment flex p-1">
                 <button
                   onClick={() => setChartMode('value')}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${chartMode === 'value' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${chartMode === 'value' ? 'md3-chip-accent' : 'md3-text-muted'}`}
                 >
                   Wert
                 </button>
                 <button
                   onClick={() => setChartMode('performance')}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${chartMode === 'performance' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${chartMode === 'performance' ? 'md3-chip-accent' : 'md3-text-muted'}`}
                 >
                   %
                 </button>
@@ -461,10 +459,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
               {chartMode === 'performance' && (
                 <button
                   onClick={onToggleDividends}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-all flex items-center gap-1 ${includeDividends
-                    ? 'bg-emerald-500/20 text-emerald-400'
-                    : 'bg-slate-900/50 text-slate-500 hover:text-slate-300'
-                    }`}
+                  className={`flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium transition-all ${includeDividends ? 'md3-chip-accent' : 'md3-text-muted md3-segment'}`}
                 >
                   {includeDividends && <Check size={12} />}
                   Dividenden
@@ -472,47 +467,38 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
               )}
             </div>
 
-            {/* Center: Time Range */}
-            <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex bg-slate-900/50 p-1 rounded-lg overflow-x-auto max-w-full">
+            <div className="absolute left-1/2 hidden max-w-full -translate-x-1/2 overflow-x-auto md3-segment p-1 md:flex">
               {['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'].map((range) => (
                 <button
                   key={range}
                   onClick={() => setTimeRange(range)}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${timeRange === range
-                    ? 'bg-slate-700 text-white shadow-sm'
-                    : 'text-slate-500 hover:text-slate-300'
-                    }`}
-                >
-                  {range}
-                </button>
-              ))}
-            </div>
-            {/* Mobile fallback for TimeRange (not absolute centered) */}
-            <div className="md:hidden flex bg-slate-900/50 p-1 rounded-lg overflow-x-auto max-w-full self-start">
-              {['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'].map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${timeRange === range
-                    ? 'bg-slate-700 text-white shadow-sm'
-                    : 'text-slate-500 hover:text-slate-300'
-                    }`}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${timeRange === range ? 'md3-chip-tonal' : 'md3-text-muted'}`}
                 >
                   {range}
                 </button>
               ))}
             </div>
 
-            {/* Right: Badge */}
-            <div className="flex items-center z-10">
+            <div className="md3-segment flex max-w-full self-start overflow-x-auto p-1 md:hidden">
+              {['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'].map((range) => (
+                <button
+                  key={range}
+                  onClick={() => setTimeRange(range)}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${timeRange === range ? 'md3-chip-tonal' : 'md3-text-muted'}`}
+                >
+                  {range}
+                </button>
+              ))}
+            </div>
+
+            <div className="z-10 flex items-center">
               {displayData.length > 1 && (
-                <div className="bg-slate-800/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-slate-700/50">
-                  <span className={`text-sm font-medium ${chartMetrics.badgeValue >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <div className="md3-segment px-3 py-1.5">
+                  <span className={`text-sm font-medium ${chartMetrics.badgeValue >= 0 ? 'md3-positive' : 'md3-negative'}`}>
                     {chartMetrics.badgeValue >= 0 ? '+' : ''}
                     {chartMode === 'value'
                       ? chartMetrics.badgeValue.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })
-                      : `${chartMetrics.badgeValue.toFixed(2)}%`
-                    } {timeRange}
+                      : `${chartMetrics.badgeValue.toFixed(2)}%`} {timeRange}
                   </span>
                 </div>
               )}
@@ -527,40 +513,38 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
             isPercentage={chartMode === 'performance'}
             color={chartMetrics.color}
           />
-        </Card >
+        </Card>
 
-        {/* Allocation Chart */}
-        <Card className="p-5">
-          <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
-            <PieChart size={18} className="text-emerald-500" />
+        <Card className="!p-6">
+          <h3 className="md3-text-main mb-4 flex items-center gap-2 font-semibold">
+            <PieChart size={18} className="md3-accent" />
             Allokation
           </h3>
 
           <div className="flex flex-col items-center gap-6">
-            <div className="w-full h-52 relative">
+            <div className="relative h-52 w-full">
               {allocationData.length > 0 ? (
-                <AllocationChart
-                  data={allocationData}
-                  currency={project?.settings.baseCurrency || 'EUR'}
-                />
+                <AllocationChart data={allocationData} currency={project?.settings.baseCurrency || 'EUR'} />
               ) : (
-                <div className="flex h-full items-center justify-center text-slate-500 text-sm">
+                <div className="flex h-full items-center justify-center text-sm text-slate-500">
                   Portfolio leer
                 </div>
               )}
             </div>
 
-            <div className="w-full border-t border-slate-800/50 pt-4">
-              <div className="space-y-2 overflow-y-auto max-h-52 custom-scrollbar pr-2">
-                {allocationData.map(item => (
-                  <div key={item.id} className="flex items-center justify-between text-sm group hover:bg-slate-800/50 p-2 rounded-lg transition-colors cursor-default">
+            <div className="w-full pt-4">
+              <div className="custom-scrollbar max-h-52 space-y-2 overflow-y-auto pr-2">
+                {allocationData.map((item) => (
+                  <div key={item.id} className="md3-list-item group flex cursor-default items-center justify-between p-3 text-sm">
                     <div className="flex items-center space-x-3">
-                      <span className="w-2.5 h-2.5 rounded-full shadow-sm shadow-black/50 ring-2 ring-slate-900" style={{ backgroundColor: item.color }}></span>
-                      <span className="text-slate-200 font-medium truncate max-w-[150px]">{item.name}</span>
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="md3-text-main max-w-[150px] truncate font-medium">{item.name}</span>
                     </div>
                     <div className="flex items-center space-x-4">
-                      <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider w-12 text-right">{item.percentage.toFixed(1)}%</span>
-                      <span className="font-bold text-white text-xs w-24 text-right">{item.value.toLocaleString('de-DE', { maximumFractionDigits: 0 })} {project?.settings.baseCurrency}</span>
+                      <span className="w-12 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.percentage.toFixed(1)}%</span>
+                      <span className="md3-text-main w-24 text-right text-xs font-bold">
+                        {item.value.toLocaleString('de-DE', { maximumFractionDigits: 0 })} {project?.settings.baseCurrency}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -568,49 +552,49 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
             </div>
           </div>
         </Card>
-      </div >
+      </div>
 
       {/* Holdings List (Compact) */}
-      < div className="mt-2" >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">Top Holding Performance</h3>
+      <Card className="mt-2 !p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="md3-text-main text-xl font-semibold">Top Holding Performance</h3>
           <button
             onClick={onShowPortfolio}
-            className="text-sm text-emerald-400 hover:text-emerald-300 flex items-center"
+            className="md3-accent flex items-center text-sm opacity-90 hover:opacity-100"
           >
             Alles sehen <ChevronRight size={16} />
           </button>
         </div>
         <div className="space-y-3">
           {holdings.length === 0 ? (
-            <div className="text-slate-400 text-sm p-4 text-center bg-slate-800/20 rounded-xl">Keine Positionen vorhanden.</div>
+            <div className="md3-list-item p-5 text-center text-sm text-slate-400">Keine Positionen vorhanden.</div>
           ) : (
             holdings.slice(0, 5).map((stock) => (
-              <div key={stock.security.isin} onClick={() => onSelectSecurity(stock.security.isin)} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl flex items-center justify-between hover:bg-slate-800/80 transition cursor-pointer">
+              <div key={stock.security.isin} onClick={() => onSelectSecurity(stock.security.isin)} className="md3-list-item flex cursor-pointer items-center justify-between p-4">
                 <div className="flex items-center space-x-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs bg-slate-700`}>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-white">
                     {stock.security.name.slice(0, 2).toUpperCase()}
                   </div>
                   <div>
-                    <h4 className="font-medium text-white">{stock.security.name}</h4>
-                    <div className="flex items-center space-x-2 text-xs text-slate-400 mt-0.5">
-                      <span className="bg-slate-700 px-1.5 rounded">{stock.security.quoteType || 'Aktie'}</span>
+                    <h4 className="md3-text-main font-medium">{stock.security.name}</h4>
+                    <div className="mt-0.5 flex items-center space-x-2 text-xs text-slate-400">
+                      <span className="rounded bg-slate-700 px-1.5">{stock.security.quoteType || 'Aktie'}</span>
                       <span>{stock.quantity} Stk.</span>
-                      <span className="text-slate-500">•</span>
-                      <span>Ø {stock.averageBuyPriceInOriginalCurrency.toLocaleString('de-DE', { style: 'currency', currency: stock.currency })}</span>
-                      <span className="text-slate-500">•</span>
+                      <span className="text-slate-500">|</span>
+                      <span>Avg {stock.averageBuyPriceInOriginalCurrency.toLocaleString('de-DE', { style: 'currency', currency: stock.currency })}</span>
+                      <span className="text-slate-500">|</span>
                       <span>Aktuell: {stock.currentPriceInOriginalCurrency.toLocaleString('de-DE', { style: 'currency', currency: stock.currency })}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <p className="font-medium text-white">{stock.value.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}</p>
+                  <p className="md3-text-main font-medium">{stock.value.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}</p>
                   <div className="flex flex-col items-end">
-                    <p className={`text-xs ${(stock.totalReturn) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <p className={`text-xs ${stock.totalReturn >= 0 ? 'md3-positive' : 'md3-negative'}`}>
                       {stock.totalReturn > 0 ? '+' : ''}{stock.totalReturn.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
                     </p>
-                    <p className={`text-xs ${(stock.totalReturnPercent) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <p className={`text-xs ${stock.totalReturnPercent >= 0 ? 'md3-positive' : 'md3-negative'}`}>
                       {stock.totalReturnPercent > 0 ? '+' : ''}{stock.totalReturnPercent.toLocaleString('de-DE', { maximumFractionDigits: 2 })}%
                     </p>
                   </div>
@@ -619,7 +603,8 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
             ))
           )}
         </div>
-      </div >
+      </Card>
     </>
-  )
+  );
 };
+

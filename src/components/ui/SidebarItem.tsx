@@ -13,13 +13,16 @@ export const SidebarItem = ({
   onClick: () => void;
 }) => (
   <button
+    type="button"
     onClick={onClick}
-    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${active
-      ? 'bg-emerald-500/10 text-emerald-400 font-medium'
-      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-      }`}
+    className={`group relative flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-left transition-all duration-200 ${active ? 'md3-nav-active' : 'md3-nav-inactive'}`}
   >
-    <Icon size={20} />
-    <span>{label}</span>
+    <span
+      className="flex h-8 w-12 items-center justify-center rounded-full transition-colors"
+      style={active ? { background: 'color-mix(in srgb, var(--md3-primary) 22%, transparent 78%)' } : undefined}
+    >
+      <Icon size={20} strokeWidth={active ? 2.4 : 2} />
+    </span>
+    <span className={`text-sm tracking-wide ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>
   </button>
 );
