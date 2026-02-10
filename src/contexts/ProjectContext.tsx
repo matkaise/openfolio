@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { ProjectData, createEmptyProject } from '@/types/domain';
 import { CurrencyService } from '@/lib/currencyService';
+import { normalizeProjectWealthGoal } from '@/lib/wealthGoalUtils';
 
 interface ProjectContextType {
     project: ProjectData | null;
@@ -91,7 +92,8 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
 
             const file = await handle.getFile();
             const text = await file.text();
-            const data = JSON.parse(text) as ProjectData;
+            const parsedData = JSON.parse(text) as ProjectData;
+            const data = normalizeProjectWealthGoal(parsedData);
 
             // Basic validation
             if (!data.version || !data.transactions) {

@@ -78,6 +78,9 @@ export interface FxData {
 export interface ProjectSettings {
     baseCurrency: Currency; // Portfolio display currency (e.g. EUR)
     taxRate?: number;
+    wealthGoal?: number; // Single stored target value
+    wealthGoalCurrency?: Currency; // Currency in which wealthGoal was last saved
+    wealthGoals?: Record<Currency, number>; // Legacy: only for migration of old project files
 }
 
 export interface Portfolio {
@@ -118,6 +121,8 @@ export const createEmptyProject = (name: string = 'Mein Portfolio'): ProjectData
     modified: new Date().toISOString(),
     settings: {
         baseCurrency: 'EUR',
+        wealthGoal: 100000,
+        wealthGoalCurrency: 'EUR',
     },
     transactions: [],
     securities: {},

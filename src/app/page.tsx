@@ -29,6 +29,7 @@ import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { TransactionModal } from '@/components/TransactionModal';
 import { SecurityDetailModal } from '@/components/SecurityDetailModal';
 import { syncProjectQuotes, repairProjectSecurities } from '@/lib/marketDataService';
+import { normalizeWealthGoalSettings } from '@/lib/wealthGoalUtils';
 import { type AnalysisCache } from '@/types/portfolioView';
 import { SidebarItem } from '@/components/ui/SidebarItem';
 import { DashboardContent } from '@/components/DashboardContent';
@@ -638,10 +639,18 @@ export default function PortfolioApp() {
                   <select
                     value={project?.settings?.baseCurrency || 'EUR'}
                     onChange={(e) => {
-                      updateProject((prev) => ({
-                        ...prev,
-                        settings: { ...prev.settings, baseCurrency: e.target.value }
-                      }));
+                      const nextCurrency = e.target.value;
+                      updateProject((prev) => {
+                        const normalizedSettings = normalizeWealthGoalSettings(prev.settings);
+
+                        return {
+                          ...prev,
+                          settings: {
+                            ...normalizedSettings,
+                            baseCurrency: nextCurrency
+                          }
+                        };
+                      });
                     }}
                     className="cursor-pointer border-none py-1 text-sm font-semibold outline-none"
                   >

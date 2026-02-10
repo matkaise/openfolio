@@ -1,9 +1,10 @@
 ﻿import React, { useMemo, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, Check, ChevronRight, PieChart, Wallet } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Check, ChevronRight, PenLine, PieChart, Wallet, X } from 'lucide-react';
 import { calculatePortfolioHistory } from '@/lib/portfolioUtils';
 import { buildMwrSeries, normalizeInvestedForExplicitCash } from '@/lib/performanceUtils';
 import { filterTransactionsByPortfolio, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency } from '@/lib/fxUtils';
+import { resolveWealthGoalSource } from '@/lib/wealthGoalUtils';
 import { useProject } from '@/contexts/ProjectContext';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { AllocationChart } from '@/components/AllocationChart';
@@ -11,10 +12,12 @@ import { Card } from '@/components/ui/Card';
 import { type DividendHistoryEntry, type EventEntry, type TransactionLike, type UpcomingDividendEntry } from '@/types/portfolioView';
 
 export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectSecurity, onShowPortfolio, includeDividends, onToggleDividends }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioIds: string[], onSelectSecurity: (isin: string) => void, onShowPortfolio: () => void, includeDividends: boolean, onToggleDividends: () => void }) => {
-  const { project } = useProject();
+  const { project, updateProject } = useProject();
   const [chartMode, setChartMode] = useState<'value' | 'performance'>('value');
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
   const [dividendRange, setDividendRange] = useState<'YTD' | '1J'>('YTD');
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [goalInput, setGoalInput] = useState('');
 
   // Filter transactions based on selected Portfolio
   const filteredTransactions = useMemo(() => (
@@ -83,9 +86,67 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     : holdings.reduce((sum, h) => sum + h.value, 0);
   const cashBalance = latestHistoryPoint ? (currentMaketValue - holdingsMarketValue) : 0;
   const totalReturn = currentMaketValue - investedCapital;
+  const wealthGoalStep = 25000;
+  const goalSource = resolveWealthGoalSource(project?.settings);
+  const storedGoal = goalSource.amount;
+  const storedGoalCurrency = goalSource.currency || baseCurrency;
+  const convertedStoredGoal = (project && typeof storedGoal === 'number' && Number.isFinite(storedGoal) && storedGoal > 0)
+    ? convertCurrency(project.fxData, storedGoal, storedGoalCurrency, baseCurrency)
+    : undefined;
+  const normalizedConvertedGoal = Number.isFinite(convertedStoredGoal) && convertedStoredGoal > 0
+    ? convertedStoredGoal
+    : undefined;
+  const suggestedGoal = Math.max(100000, Math.ceil(currentMaketValue / wealthGoalStep) * wealthGoalStep);
+  const wealthGoal = normalizedConvertedGoal
+    ?? (currentMaketValue >= suggestedGoal ? suggestedGoal + wealthGoalStep : suggestedGoal);
+  const wealthGoalProgress = wealthGoal > 0 ? Math.min((currentMaketValue / wealthGoal) * 100, 100) : 0;
+  const wealthGoalRemaining = Math.max(wealthGoal - currentMaketValue, 0);
 
-  // Day change is missing real data source (need quotes). Mocking 0 for now or calculating if we had Yest Close.
-  const dayChangePercent = 0;
+  const startGoalEdit = () => {
+    setGoalInput(String(Math.round(wealthGoal)));
+    setIsEditingGoal(true);
+  };
+
+  const cancelGoalEdit = () => {
+    setIsEditingGoal(false);
+    setGoalInput('');
+  };
+
+  const saveGoalEdit = () => {
+    if (!project) return;
+    const numericGoal = Number(goalInput.replace(/[^\d]/g, ''));
+    if (!Number.isFinite(numericGoal) || numericGoal < 1000) return;
+
+    updateProject((prev) => {
+      const withoutLegacyGoals = { ...prev.settings };
+      delete withoutLegacyGoals.wealthGoals;
+
+      return {
+        ...prev,
+        settings: {
+          ...withoutLegacyGoals,
+          wealthGoal: numericGoal,
+          wealthGoalCurrency: prev.settings.baseCurrency
+        }
+      };
+    });
+
+    setIsEditingGoal(false);
+    setGoalInput('');
+  };
+
+  const previousHistoryPoint = historyData.length > 1 ? historyData[historyData.length - 2] : null;
+  const dayChangeValue = (latestHistoryPoint && previousHistoryPoint)
+    ? latestHistoryPoint.value - previousHistoryPoint.value
+    : 0;
+  const rawDayChangePercent = (previousHistoryPoint && Math.abs(previousHistoryPoint.value) > 0.000001)
+    ? (dayChangeValue / previousHistoryPoint.value) * 100
+    : 0;
+  const dayChangePercent = Math.abs(rawDayChangePercent) < 0.005 ? 0 : rawDayChangePercent;
+  const dayChangePercentLabel = `${dayChangePercent > 0 ? '+' : ''}${dayChangePercent.toLocaleString('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}%`;
 
   const chartMetrics = useMemo(() => {
     let badgeValue = 0;
@@ -345,8 +406,8 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
   return (
     <>
       {/* KPI Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="col-span-1 md:col-span-2 relative overflow-hidden group !p-8 md3-card-primary">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:items-stretch">
+        <Card className="col-span-1 md:col-span-2 relative overflow-hidden group !p-8 md3-card-primary h-full flex flex-col justify-between">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <Wallet size={120} className="md3-accent" />
           </div>
@@ -358,7 +419,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
               </span>
               <span className={`flex items-center rounded px-2 py-0.5 text-sm font-medium ${dayChangePercent >= 0 ? 'md3-positive-soft' : 'md3-negative-soft'}`}>
                 {dayChangePercent >= 0 ? <ArrowUpRight size={14} className="mr-1" /> : <ArrowDownRight size={14} className="mr-1" />}
-                {dayChangePercent}%
+                {dayChangePercentLabel}
               </span>
             </div>
             <div className="mt-6 flex flex-wrap gap-8">
@@ -366,6 +427,12 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
                 <p className="md3-text-muted text-xs uppercase tracking-wider">Ertrag Gesamt</p>
                 <p className={`text-lg font-semibold ${totalReturn >= 0 ? 'md3-positive' : 'md3-negative'}`}>
                   {totalReturn > 0 ? '+' : ''}{totalReturn.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
+                </p>
+              </div>
+              <div>
+                <p className="md3-text-muted text-xs uppercase tracking-wider">Tagesgewinn</p>
+                <p className={`text-lg font-semibold ${dayChangeValue >= 0 ? 'md3-positive' : 'md3-negative'}`}>
+                  {dayChangeValue > 0 ? '+' : ''}{dayChangeValue.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
                 </p>
               </div>
               <div>
@@ -381,10 +448,98 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
                 </p>
               </div>
             </div>
+
+            <div
+              className="mt-6 rounded-2xl p-3"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--md3-primary) 10%, var(--md3-surface-container-high) 90%)' }}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="md3-text-muted text-[11px] uppercase tracking-wider">Zielvermögen</span>
+                {isEditingGoal ? (
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className="flex items-center rounded-full px-2 py-1"
+                      style={{ backgroundColor: 'var(--md3-surface-container-highest)' }}
+                    >
+                      <input
+                        value={goalInput}
+                        onChange={(e) => setGoalInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveGoalEdit();
+                          if (e.key === 'Escape') cancelGoalEdit();
+                        }}
+                        inputMode="numeric"
+                        className="w-20 bg-transparent text-xs font-semibold outline-none"
+                        style={{ color: 'var(--md3-on-surface)' }}
+                        aria-label="Zielvermögen"
+                      />
+                      <span className="ml-1 text-[10px] font-semibold md3-text-muted">{baseCurrency}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={saveGoalEdit}
+                      className="h-7 w-7 rounded-full md3-chip-accent inline-flex items-center justify-center"
+                      aria-label="Ziel speichern"
+                    >
+                      <Check size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelGoalEdit}
+                      className="h-7 w-7 rounded-full md3-segment md3-text-muted inline-flex items-center justify-center"
+                      aria-label="Bearbeiten abbrechen"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="md3-text-main text-xs font-semibold">
+                      {wealthGoal.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR', maximumFractionDigits: 0 })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={startGoalEdit}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full md3-chip-tonal"
+                      aria-label="Ziel bearbeiten"
+                      title="Ziel bearbeiten"
+                    >
+                      <PenLine size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div
+                className="mt-2 h-2.5 rounded-full overflow-hidden"
+                style={{ backgroundColor: 'color-mix(in srgb, var(--md3-primary) 18%, var(--md3-surface-container-highest) 82%)' }}
+              >
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${wealthGoalProgress}%`,
+                    background: 'linear-gradient(90deg, color-mix(in srgb, var(--md3-primary) 86%, white 14%) 0%, color-mix(in srgb, var(--md3-primary) 70%, white 30%) 100%)'
+                  }}
+                />
+              </div>
+
+              <div className="mt-2 flex items-end justify-between gap-3">
+                <div>
+                  <p className="md3-text-muted text-[11px] uppercase tracking-wider">Fortschritt</p>
+                  <p className="md3-text-main text-sm font-semibold">{wealthGoalProgress.toFixed(1)}%</p>
+                </div>
+                <div className="text-right">
+                  <p className="md3-text-muted text-[11px] uppercase tracking-wider">Bis Ziel</p>
+                  <p className="md3-accent text-sm font-semibold">
+                    {wealthGoalRemaining.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR', maximumFractionDigits: 0 })}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </Card>
 
-        <Card className="flex flex-col justify-between !p-7 md3-card-secondary">
+        <Card className="flex flex-col justify-between !p-7 md3-card-secondary h-full">
           <div className="flex items-center justify-between">
             <h3 className="md3-text-muted font-medium">Dividenden ({dividendRange})</h3>
             <div className="md3-segment flex p-1">
@@ -421,25 +576,68 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
               )}
             </p>
           </div>
-          <div className="h-16 flex items-end space-x-1 mt-4">
-            {(() => {
-              const bars = dividendRange === '1J' ? dividendSummary.monthlyBars1J : dividendSummary.monthlyBarsYTD;
-              const max = Math.max(...bars, 1);
-              return bars.map((val, i) => (
-                <div key={i} className="relative flex-1 rounded-t bg-blue-500/20 transition-colors hover:bg-blue-500/40 group" style={{ height: `${(val / max) * 100}%` }}>
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-slate-700 text-xs px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    {val.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}
-                  </div>
+          {(() => {
+            const bars = dividendRange === '1J' ? dividendSummary.monthlyBars1J : dividendSummary.monthlyBarsYTD;
+            const max = Math.max(...bars, 0);
+            const hasDividendData = max > 0;
+            const now = new Date();
+            const monthLabels = dividendRange === '1J'
+              ? Array.from({ length: 12 }, (_, i) => {
+                const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
+                return d.toLocaleDateString('de-DE', { month: 'short' }).replace('.', '');
+              })
+              : Array.from({ length: bars.length }, (_, i) => {
+                const d = new Date(now.getFullYear(), i, 1);
+                return d.toLocaleDateString('de-DE', { month: 'short' }).replace('.', '');
+              });
+
+            return (
+              <div className="mt-4">
+                <div className="mb-1 flex items-center justify-between text-[11px] md3-text-muted">
+                  <span>Monatliche Dividenden</span>
+                  <span>{dividendRange === '1J' ? 'letzte 12 Monate' : 'seit Januar'}</span>
                 </div>
-              ));
-            })()}
-          </div>
+                <div className="h-14 flex items-end gap-1">
+                  {bars.map((val, i) => (
+                    <div
+                      key={i}
+                      className="relative flex-1 h-full rounded-md group"
+                      style={{ backgroundColor: 'color-mix(in srgb, var(--md3-primary) 14%, var(--md3-surface-container-highest) 86%)' }}
+                      aria-label={`${monthLabels[i]}: ${val.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}`}
+                    >
+                      <div
+                        className="absolute inset-x-0 bottom-0 rounded-t-[6px] transition-all duration-200 group-hover:brightness-105"
+                        style={{
+                          height: `${hasDividendData ? Math.max((val / max) * 100, val > 0 ? 14 : 4) : 8}%`,
+                          backgroundColor: 'color-mix(in srgb, var(--md3-primary) 78%, white 22%)',
+                          opacity: hasDividendData ? (val > 0 ? 1 : 0.35) : 0.5
+                        }}
+                      />
+                      <div
+                        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-1.5 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-xs md3-text-main z-10"
+                        style={{ backgroundColor: 'var(--md3-surface-container-highest)' }}
+                      >
+                        {monthLabels[i]}: {val.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-1 grid text-[10px] md3-text-muted" style={{ gridTemplateColumns: `repeat(${monthLabels.length}, minmax(0, 1fr))` }}>
+                  {monthLabels.map((label, i) => (
+                    <span key={`${label}-${i}`} className="text-center truncate">
+                      {monthLabels.length > 8 && i % 2 === 1 ? '' : label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </Card>
       </div>
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="min-h-[350px] lg:col-span-2 !p-7">
+        <Card className="lg:col-span-2 !p-7 flex flex-col">
           <div className="relative mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="z-10 flex items-center gap-4">
               <div className="md3-segment flex p-1">
@@ -505,14 +703,17 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
             </div>
           </div>
 
-          <SimpleAreaChart
-            data={displayData}
-            currency={project?.settings.baseCurrency || 'EUR'}
-            timeRange={timeRange}
-            showAxes={true}
-            isPercentage={chartMode === 'performance'}
-            color={chartMetrics.color}
-          />
+          <div className="flex-1 min-h-[280px]">
+            <SimpleAreaChart
+              data={displayData}
+              currency={project?.settings.baseCurrency || 'EUR'}
+              timeRange={timeRange}
+              height="100%"
+              showAxes={true}
+              isPercentage={chartMode === 'performance'}
+              color={chartMetrics.color}
+            />
+          </div>
         </Card>
 
         <Card className="!p-6">
