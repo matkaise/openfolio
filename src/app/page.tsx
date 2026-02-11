@@ -332,6 +332,17 @@ export default function PortfolioApp() {
 
   const [importTargetPortfolio, setImportTargetPortfolio] = useState<{ id: string; name: string; isNew: boolean } | null>(null);
 
+  const resolveThemeId = useCallback((value?: string) => {
+    if (value && value in MATERIAL_THEMES) return value as keyof typeof MATERIAL_THEMES;
+    return 'baseline';
+  }, []);
+
+  useEffect(() => {
+    if (!project) return;
+    setActiveThemeId(resolveThemeId(project.settings?.themeId));
+    setIsDarkMode(Boolean(project.settings?.isDarkMode));
+  }, [project?.id, project?.settings?.themeId, project?.settings?.isDarkMode, resolveThemeId, project]);
+
   // Sync Market Data on load and auto-repair missing securities.
   useEffect(() => {
     if (!isLoaded || !project) return;
@@ -474,7 +485,17 @@ export default function PortfolioApp() {
                     <button
                       type="button"
                       key={theme.id}
-                      onClick={() => setActiveThemeId(theme.id as keyof typeof MATERIAL_THEMES)}
+                      onClick={() => {
+                        const nextTheme = theme.id as keyof typeof MATERIAL_THEMES;
+                        setActiveThemeId(nextTheme);
+                        updateProject((prev) => ({
+                          ...prev,
+                          settings: {
+                            ...prev.settings,
+                            themeId: nextTheme
+                          }
+                        }));
+                      }}
                       className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition"
                       style={{
                         background: active ? 'var(--md3-secondary-container)' : 'var(--md3-surface-container)',
@@ -671,7 +692,17 @@ export default function PortfolioApp() {
 
                 <button
                   type="button"
-                  onClick={() => setIsDarkMode((v) => !v)}
+                  onClick={() => {
+                    const next = !isDarkMode;
+                    setIsDarkMode(next);
+                    updateProject((prev) => ({
+                      ...prev,
+                      settings: {
+                        ...prev.settings,
+                        isDarkMode: next
+                      }
+                    }));
+                  }}
                   className="md3-icon-btn"
                   aria-label="Toggle appearance"
                 >

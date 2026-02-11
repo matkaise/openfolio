@@ -81,6 +81,8 @@ export interface ProjectSettings {
     wealthGoal?: number; // Single stored target value
     wealthGoalCurrency?: Currency; // Currency in which wealthGoal was last saved
     wealthGoals?: Record<Currency, number>; // Legacy: only for migration of old project files
+    themeId?: string;
+    isDarkMode?: boolean;
 }
 
 export interface Portfolio {
@@ -123,6 +125,8 @@ export const createEmptyProject = (name: string = 'Mein Portfolio'): ProjectData
         baseCurrency: 'EUR',
         wealthGoal: 100000,
         wealthGoalCurrency: 'EUR',
+        themeId: 'baseline',
+        isDarkMode: false,
     },
     transactions: [],
     securities: {},
