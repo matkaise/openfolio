@@ -279,6 +279,14 @@ export function calculatePortfolioHistory(
     granularity: 'daily' | 'weekly' = 'weekly'
 ): { date: string; value: number; invested: number; dividend: number }[] {
 
+    const dateKeyToUtcMs = (dateStr: string): number => {
+        const parts = dateStr.split('-').map(Number);
+        if (parts.length === 3 && parts.every(p => Number.isFinite(p))) {
+            return Date.UTC(parts[0], parts[1] - 1, parts[2]);
+        }
+        return new Date(dateStr).getTime();
+    };
+
     // Determine date range
     const now = new Date();
     let startDate = new Date();
@@ -296,7 +304,7 @@ export function calculatePortfolioHistory(
     securities.forEach(sec => {
         if (sec.splits) {
             splitsMap[sec.isin] = Object.entries(sec.splits).map(([d, r]) => ({
-                time: new Date(d).getTime(),
+                time: dateKeyToUtcMs(d),
                 ratio: r
             }));
         }
@@ -390,7 +398,7 @@ export function calculatePortfolioHistory(
         let timeline = priceTimelineCache[isin];
         if (!timeline) {
             const dates = Object.keys(sec.priceHistory).sort();
-            const times = dates.map(d => new Date(d).getTime());
+            const times = dates.map(d => dateKeyToUtcMs(d));
             timeline = { dates, times, idx: 0 };
             priceTimelineCache[isin] = timeline;
         }
@@ -436,7 +444,7 @@ export function calculatePortfolioHistory(
         let timeline = fxTimelineCache[currency];
         if (!timeline) {
             const dates = Object.keys(history).sort();
-            const times = dates.map(d => new Date(d).getTime());
+            const times = dates.map(d => dateKeyToUtcMs(d));
             timeline = { dates, times, idx: 0 };
             fxTimelineCache[currency] = timeline;
         }
@@ -469,7 +477,7 @@ export function calculatePortfolioHistory(
         let timeline = cashTimelineCache[cacheKey];
         if (!timeline) {
             const dates = Object.keys(account.balanceHistory).sort();
-            const times = dates.map(d => new Date(d).getTime());
+            const times = dates.map(d => dateKeyToUtcMs(d));
             timeline = { dates, times, idx: 0 };
             cashTimelineCache[cacheKey] = timeline;
         }
@@ -506,7 +514,7 @@ export function calculatePortfolioHistory(
 
         const txs = txByIsin[isin] || [];
         txs.forEach(tx => {
-            events.push({ time: new Date(tx.date).getTime(), date: tx.date, type: 'Tx', data: tx });
+            events.push({ time: dateKeyToUtcMs(tx.date), date: tx.date, type: 'Tx', data: tx });
         });
 
         const splits = splitsMap[isin];
@@ -529,7 +537,7 @@ export function calculatePortfolioHistory(
 
     const stateByIsin: Record<string, { quantity: number; invested: number; currency: string }> = {};
     const eventIndexByIsin: Record<string, number> = {};
-    const sortedTransactions = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const sortedTransactions = [...transactions].sort((a, b) => dateKeyToUtcMs(a.date) - dateKeyToUtcMs(b.date));
     const hasExplicitCashBalances = cashAccounts.some(a => !!a.balanceHistory && Object.keys(a.balanceHistory).length > 0);
     const useImplicitFunding = !hasExplicitCashBalances;
 
@@ -558,7 +566,7 @@ export function calculatePortfolioHistory(
         const month = String(datePoint.getMonth() + 1).padStart(2, '0');
         const day = String(datePoint.getDate()).padStart(2, '0');
         const dateStr = `${year}-${month}-${day}`;
-        const dateTime = datePoint.getTime();
+        const dateTime = dateKeyToUtcMs(dateStr);
 
         // Apply events up to this date
         allIsins.forEach(isin => {
@@ -593,10 +601,10 @@ export function calculatePortfolioHistory(
             eventIndexByIsin[isin] = idx;
         });
 
-        while (transactionIndex < sortedTransactions.length && new Date(sortedTransactions[transactionIndex].date).getTime() <= dateTime) {
+        while (transactionIndex < sortedTransactions.length && dateKeyToUtcMs(sortedTransactions[transactionIndex].date) <= dateTime) {
             const tx = sortedTransactions[transactionIndex];
             const txCurrency = tx.currency || baseCurrency;
-            const txTime = new Date(tx.date).getTime();
+            const txTime = dateKeyToUtcMs(tx.date);
             const amountAbs = getAbsoluteAmount(tx.amount);
 
             if (!hasExplicitCashBalances) {

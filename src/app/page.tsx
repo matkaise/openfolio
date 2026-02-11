@@ -48,7 +48,7 @@ const NAV_ITEMS = [
 ] as const;
 
 type NavKey = (typeof NAV_ITEMS)[number]['key'];
-type TabKey = NavKey | 'Import';
+type TabKey = NavKey | 'Import' | 'Einstellungen';
 
 type ThemeTones = {
   bg: string;
@@ -446,6 +446,52 @@ export default function PortfolioApp() {
         return <TransactionsContent selectedPortfolioIds={selectedPortfolioIds} />;
       case 'Datenquellen':
         return <DataSourcesContent />;
+      case 'Einstellungen':
+        return (
+          <div className="space-y-6">
+            <div className="md3-card p-6">
+              <div className="flex items-start gap-4">
+                <div
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                  style={{
+                    background: 'var(--md3-secondary-container)',
+                    color: 'var(--md3-on-secondary-container)'
+                  }}
+                >
+                  <Sparkles size={22} />
+                </div>
+                <div className="space-y-1">
+                  <h2 className="text-xl font-semibold">Design</h2>
+                  <p className="text-sm" style={{ color: 'var(--md3-on-surface-variant)' }}>
+                    Waehle dein Farbschema fuer die App.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {Object.values(MATERIAL_THEMES).map((theme) => {
+                  const active = theme.id === activeThemeId;
+                  return (
+                    <button
+                      type="button"
+                      key={theme.id}
+                      onClick={() => setActiveThemeId(theme.id as keyof typeof MATERIAL_THEMES)}
+                      className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition"
+                      style={{
+                        background: active ? 'var(--md3-secondary-container)' : 'var(--md3-surface-container)',
+                        color: active ? 'var(--md3-on-secondary-container)' : 'var(--md3-on-surface-variant)'
+                      }}
+                    >
+                      <span className="md3-theme-dot" style={{ backgroundColor: theme.swatch }} />
+                      <span className="text-sm font-semibold">{theme.name}</span>
+                      {active && <Sparkles size={15} className="ml-auto" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
       case 'Import':
         return (
           <ImportContent
@@ -481,7 +527,7 @@ export default function PortfolioApp() {
           className={`
             fixed inset-y-0 left-0 z-40 w-[84vw] max-w-[320px] transform p-0 transition-transform duration-300 ease-out
             ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-            md:relative md:translate-x-0 md:w-72
+            md:translate-x-0 md:w-72
           `}
         >
           <div className="md3-sidebar flex h-full flex-col p-4">
@@ -533,32 +579,10 @@ export default function PortfolioApp() {
             </nav>
 
             <div className="mt-auto space-y-3 pt-4">
-              <div className="space-y-2">
-                {Object.values(MATERIAL_THEMES).map((theme) => {
-                  const active = theme.id === activeThemeId;
-                  return (
-                    <button
-                      type="button"
-                      key={theme.id}
-                      onClick={() => setActiveThemeId(theme.id as keyof typeof MATERIAL_THEMES)}
-                      className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition"
-                      style={{
-                        background: active ? 'var(--md3-secondary-container)' : 'transparent',
-                        color: active ? 'var(--md3-on-secondary-container)' : 'var(--md3-on-surface-variant)'
-                      }}
-                    >
-                      <span className="md3-theme-dot" style={{ backgroundColor: theme.swatch }} />
-                      <span className="text-sm font-semibold">{theme.name}</span>
-                      {active && <Sparkles size={15} className="ml-auto" />}
-                    </button>
-                  );
-                })}
-              </div>
-
               <button
                 type="button"
                 onClick={() => {
-                  setActiveTab('Datenquellen');
+                  setActiveTab('Einstellungen');
                   closeSidebar();
                 }}
                 className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 transition"
@@ -610,7 +634,7 @@ export default function PortfolioApp() {
           </div>
         </aside>
 
-        <main className="flex min-h-[100dvh] flex-1 flex-col overflow-hidden" style={{ background: 'var(--md3-bg)' }}>
+        <main className="flex min-h-[100dvh] flex-1 flex-col overflow-hidden md:pl-72" style={{ background: 'var(--md3-bg)' }}>
           <header
             className="sticky top-0 z-20 px-4 py-3 md:px-8"
             style={{ background: 'var(--md3-surface)' }}

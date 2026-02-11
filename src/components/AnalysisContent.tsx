@@ -183,6 +183,7 @@ const toDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+
 export const AnalysisContent = ({
   selectedPortfolioIds,
   cachedData,
@@ -401,7 +402,7 @@ export const AnalysisContent = ({
 
     // Check Cache
     // Added version suffix to force invalidation after TWR refactor
-    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v6`;
+    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v7`;
     if (cachedData && cachedData.key === cacheKey) {
       setHistoryData(cachedData.historyData);
       setAnalysisMetrics(cachedData.analysisMetrics);
@@ -615,6 +616,27 @@ export const AnalysisContent = ({
     });
   }, [historyData, performanceRangeDates.start, performanceRangeDates.end, includeDividends, performanceRange, filteredTransactions]);
 
+  const alignSeriesToDates = useCallback((series: { date: string; value: number }[], dates: string[]) => {
+    if (!series.length || !dates.length) return [];
+
+    const sortedSeries = [...series].sort((a, b) => a.date.localeCompare(b.date));
+    let idx = 0;
+    let lastValue: number | null = null;
+    const aligned: { date: string; value: number }[] = [];
+
+    for (const date of dates) {
+      while (idx < sortedSeries.length && sortedSeries[idx].date <= date) {
+        lastValue = sortedSeries[idx].value;
+        idx += 1;
+      }
+      if (lastValue !== null) {
+        aligned.push({ date, value: lastValue });
+      }
+    }
+
+    return aligned;
+  }, []);
+
   useEffect(() => {
     const missingCurrency = benchmarkList.filter(b => !b.currency && !benchmarkCurrencyAttempts.current.has(b.symbol));
     if (missingCurrency.length === 0 || isBenchmarkCurrencyLoading) return;
@@ -750,13 +772,17 @@ export const AnalysisContent = ({
     };
 
     portfolioPerformanceSeries.forEach(p => addPoint(p.date, 'portfolio', p.value));
-    benchmarkSeries.forEach(b => b.series.forEach(p => addPoint(p.date, b.key, p.value)));
+    const portfolioDates = portfolioPerformanceSeries.map(p => p.date);
+    benchmarkSeries.forEach(b => {
+      const aligned = alignSeriesToDates(b.series, portfolioDates);
+      aligned.forEach(p => addPoint(p.date, b.key, p.value));
+    });
 
     return Array.from(dataMap.keys())
       .sort()
       .map(date => dataMap.get(date))
       .filter((row): row is PerformanceRow => row !== undefined);
-  }, [portfolioPerformanceSeries, benchmarkSeries]);
+  }, [portfolioPerformanceSeries, benchmarkSeries, alignSeriesToDates]);
 
   const portfolioGradientOffset = useMemo(() => {
     const values = performanceComparisonData
@@ -795,9 +821,21 @@ export const AnalysisContent = ({
         throw new Error(data.error || 'Benchmark konnte nicht geladen werden.');
       }
 
+      const localSecurity = project?.securities?.[symbol]
+        || Object.values(project?.securities || {}).find(
+          (sec) => (sec.symbol || sec.isin || '').toUpperCase() === symbol
+        );
+      const localHistory = localSecurity?.priceHistory;
+      const hasLocalHistory = !!localHistory && Object.keys(localHistory).length > 0;
+
       setBenchmarkList(prev => [
         ...prev,
-        { symbol, name: data.longName || symbol, history: data.history, currency: data.currency }
+        {
+          symbol,
+          name: data.longName || localSecurity?.name || symbol,
+          history: hasLocalHistory ? localHistory : data.history,
+          currency: localSecurity?.currency || data.currency
+        }
       ]);
       setBenchmarkInput('');
     } catch (err: unknown) {

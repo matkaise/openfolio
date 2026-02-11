@@ -103,9 +103,23 @@ export async function POST(req: NextRequest) {
 
             const history: Record<string, number> = {};
 
+            const normalizeDate = (value: number | Date) => {
+                if (value instanceof Date) return value;
+                const ts = value < 100000000000 ? value * 1000 : value;
+                return new Date(ts);
+            };
+
+            const toDateKey = (value: number | Date) => {
+                const d = normalizeDate(value);
+                const year = d.getUTCFullYear();
+                const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(d.getUTCDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
             quotes.forEach((q) => {
                 if (q.date && q.close) {
-                    const dateStr = new Date(q.date).toISOString().split('T')[0];
+                    const dateStr = toDateKey(q.date);
                     history[dateStr] = q.close;
                 }
             });
@@ -118,7 +132,7 @@ export async function POST(req: NextRequest) {
                 if (result.events.splits) {
                     const rawSplits = result.events.splits;
                     Object.values(rawSplits).forEach((s) => {
-                        const dateStr = new Date(s.date instanceof Date ? s.date : (s.date < 100000000000 ? s.date * 1000 : s.date)).toISOString().split('T')[0];
+                        const dateStr = toDateKey(s.date);
                         if (s.numerator && s.denominator) {
                             splits[dateStr] = s.numerator / s.denominator;
                         }
@@ -127,7 +141,7 @@ export async function POST(req: NextRequest) {
                 if (result.events.dividends) {
                     const rawDivs = result.events.dividends;
                     Object.values(rawDivs).forEach((d) => {
-                        const dateStr = new Date(d.date instanceof Date ? d.date : (d.date < 100000000000 ? d.date * 1000 : d.date)).toISOString().split('T')[0];
+                        const dateStr = toDateKey(d.date);
                         if (d.amount) {
                             dividendHistory.push({ date: dateStr, amount: d.amount });
                         }
@@ -158,8 +172,8 @@ export async function POST(req: NextRequest) {
             }
             if (calendarEvents.exDividendDate) {
                 upcomingDividends.push({
-                    exDate: new Date(calendarEvents.exDividendDate).toISOString().split('T')[0],
-                    paymentDate: calendarEvents.dividendDate ? new Date(calendarEvents.dividendDate).toISOString().split('T')[0] : undefined,
+                    exDate: toDateKey(calendarEvents.exDividendDate),
+                    paymentDate: calendarEvents.dividendDate ? toDateKey(calendarEvents.dividendDate) : undefined,
                     amount: undefined // Often not provided in calendar events summary, or is in earnings
                 });
             }

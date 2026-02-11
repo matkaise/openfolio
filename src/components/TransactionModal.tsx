@@ -5,6 +5,7 @@ import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase } from 'l
 import { useProject } from '@/contexts/ProjectContext';
 import { Transaction, type CashAccount, type Portfolio } from '@/types/domain';
 import { parseFlatexCashBalancesCsv, parseFlatexCsv, type CashBalanceImportPoint } from '@/lib/csvParser';
+import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
 import { getCurrencyOptions } from '@/lib/fxUtils';
 
 interface TransactionModalProps {
@@ -197,72 +198,6 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
     if (!isOpen) return null;
 
-    const applyManualTransactionToExplicitCashHistory = (
-        cashAccounts: CashAccount[] | undefined,
-        portfolioId: string,
-        tx: Transaction
-    ): CashAccount[] | undefined => {
-        const isManualCashMovement =
-            tx.type === 'Deposit' ||
-            tx.type === 'Withdrawal' ||
-            tx.type === 'Dividend' ||
-            tx.type === 'Tax' ||
-            tx.type === 'Fee';
-        if (!isManualCashMovement) {
-            return cashAccounts;
-        }
-
-        const existing = cashAccounts || [];
-        const nextAccounts = [...existing];
-        const accountIndex = nextAccounts.findIndex(a => a.portfolioId === portfolioId && a.currency === tx.currency);
-
-        if (accountIndex === -1) {
-            nextAccounts.push({
-                id: crypto.randomUUID(),
-                name: `${targetPortfolio?.name || 'Depot'} ${tx.currency} Konto`,
-                portfolioId,
-                currency: tx.currency,
-                balanceHistory: {
-                    [tx.date]: tx.amount
-                }
-            });
-            return nextAccounts;
-        }
-
-        const account = nextAccounts[accountIndex];
-        const balanceHistory = { ...(account.balanceHistory || {}) };
-        const allDates = Object.keys(balanceHistory).sort();
-
-        if (allDates.length === 0) {
-            balanceHistory[tx.date] = tx.amount;
-        } else {
-            let baseline = 0;
-            for (const d of allDates) {
-                if (d <= tx.date) {
-                    baseline = balanceHistory[d] || 0;
-                } else {
-                    break;
-                }
-            }
-            if (balanceHistory[tx.date] === undefined) {
-                balanceHistory[tx.date] = baseline;
-            }
-
-            Object.keys(balanceHistory)
-                .filter(d => d >= tx.date)
-                .forEach(d => {
-                    balanceHistory[d] = (balanceHistory[d] || 0) + tx.amount;
-                });
-        }
-
-        nextAccounts[accountIndex] = {
-            ...account,
-            balanceHistory
-        };
-
-        return nextAccounts;
-    };
-
     const handleSaveManual = () => {
         let newTransaction: Transaction | null = null;
 
@@ -352,7 +287,9 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 transactions: [...prev.transactions, { ...newTransaction, portfolioId: target.id }],
                 securities: updatedSecurities,
                 cashAccounts: manualHoldingType === 'cash'
-                    ? applyManualTransactionToExplicitCashHistory(prev.cashAccounts, target.id, newTransaction)
+                    ? applyManualCashEntryToExplicitHistory(prev.cashAccounts, target.id, newTransaction, {
+                        portfolioName: target.name
+                    })
                     : prev.cashAccounts,
                 modified: new Date().toISOString()
             };
