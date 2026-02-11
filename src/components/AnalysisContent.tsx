@@ -18,7 +18,7 @@ const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: ()
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
       <div
-        className="md3-card rounded-[28px] w-full max-w-4xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
+        className="md3-card rounded-[32px] w-full max-w-4xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-6">
@@ -76,7 +76,7 @@ const HoldingsGroupModal = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
       <div
-        className="md3-card rounded-[28px] w-full max-w-3xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
+        className="md3-card rounded-[32px] w-full max-w-3xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-6">
@@ -140,7 +140,7 @@ const RiskMetricModal = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
       <div
-        className="md3-card rounded-[28px] w-full max-w-4xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
+        className="md3-card rounded-[32px] w-full max-w-4xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-6">

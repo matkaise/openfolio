@@ -6,9 +6,7 @@ import {
   PieChart,
   Wallet,
   Calendar,
-  Bell,
   Plus,
-  Menu,
   X,
   Search,
   FileText,
@@ -18,8 +16,7 @@ import {
   Moon,
   Sun,
   Sparkles,
-  Settings,
-  ChevronDown
+  Settings
 } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { ProjectLauncher } from '@/components/ProjectLauncher';
@@ -614,22 +611,6 @@ export default function PortfolioApp() {
                 <span>Schliessen</span>
               </button>
 
-              <div className="md3-card mt-2 flex items-center gap-3 rounded-[20px] px-3 py-3">
-                <div
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold"
-                  style={{
-                    background: 'var(--md3-primary-container)',
-                    color: 'var(--md3-on-primary-container)'
-                  }}
-                >
-                  {(project?.name || 'PF').slice(0, 2).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold" style={{ color: 'var(--md3-on-surface)' }}>{project?.name}</div>
-                  <div className="truncate text-xs" style={{ color: 'var(--md3-on-surface-variant)' }}>Lokal</div>
-                </div>
-                <ChevronDown size={16} style={{ color: 'var(--md3-on-surface-variant)' }} />
-              </div>
             </div>
           </div>
         </aside>
@@ -640,23 +621,7 @@ export default function PortfolioApp() {
             style={{ background: 'var(--md3-surface)' }}
           >
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  className="md3-icon-btn md:hidden"
-                  onClick={() => setIsSidebarOpen(true)}
-                  aria-label="Open navigation"
-                >
-                  <Menu size={20} />
-                </button>
-                <div>
-                  <h1 className="text-xl font-bold tracking-tight md:text-2xl">{activeTab}</h1>
-                  <p className="hidden text-xs sm:block" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                    Willkommen zurueck.
-                  </p>
-                </div>
-              </div>
-
+              <div className="flex items-center gap-3" />
               <div className="flex items-center gap-2 md:gap-3">
                 <div className="md3-field hidden items-center gap-2 px-3 sm:flex">
                   <span className="text-xs font-semibold" style={{ color: 'var(--md3-on-surface-variant)' }}>Waehrung</span>
@@ -710,28 +675,11 @@ export default function PortfolioApp() {
                 >
                   {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
                 </button>
-
-                <button type="button" className="md3-icon-btn relative" aria-label="Notifications">
-                  <Bell size={20} />
-                  <span
-                    className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full"
-                    style={{ backgroundColor: 'var(--md3-tertiary)' }}
-                  />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('Import')}
-                  className="md3-filled-btn hidden items-center gap-2 px-4 text-sm font-semibold sm:flex"
-                >
-                  <Plus size={17} />
-                  <span>Import</span>
-                </button>
               </div>
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto px-4 pb-[calc(6.8rem+env(safe-area-inset-bottom))] pt-4 md:px-8 md:pb-10 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto px-4 pb-[calc(6.8rem+env(safe-area-inset-bottom))] pt-6 md:px-8 md:pb-10 custom-scrollbar">
             <div className="mx-auto w-full max-w-none space-y-6">
               {renderContent()}
             </div>
