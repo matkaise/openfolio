@@ -10,6 +10,7 @@ import {
     ReferenceDot,
     Tooltip
 } from 'recharts';
+import { parseDateOnlyUTC } from '@/lib/dateUtils';
 
 type ChartPoint = { date: string; value: number };
 
@@ -35,7 +36,6 @@ export const SimpleAreaChart = ({
     markers?: { date: string, label?: string, color?: string, type?: 'Buy' | 'Sell' }[]
 }) => {
     const gradientId = `colorGradient-${React.useId().replace(/:/g, '')}`;
-    const parseDateOnlyUTC = (dateStr: string) => new Date(`${dateStr}T00:00:00Z`);
 
     if (!data || data.length === 0) {
         return (

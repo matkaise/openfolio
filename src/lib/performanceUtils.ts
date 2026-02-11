@@ -1,6 +1,7 @@
 import { type HistoryPoint } from '@/types/portfolioView';
 import { type CashAccount, type FxData, type Transaction } from '@/types/domain';
 import { convertCurrency } from '@/lib/fxUtils';
+import { toUtcTime } from '@/lib/dateUtils';
 
 type TransactionDate = { date: string };
 
@@ -28,7 +29,7 @@ export const normalizeInvestedForExplicitCash = (
     return sourceHistory;
   }
 
-  const toTime = (dateStr: string) => new Date(dateStr).setHours(0, 0, 0, 0);
+  const toTime = (dateStr: string) => toUtcTime(dateStr);
 
   const tradeFlows = transactions
     .filter(tx => tx.type === 'Buy' || tx.type === 'Sparplan_Buy' || tx.type === 'Sell')
@@ -96,8 +97,8 @@ export const buildMwrSeries = (
 
   if (!isStartOfHistory && transactions && transactions.length > 0) {
     const firstTxDateStr = transactions.reduce((min, t) => t.date < min ? t.date : min, '9999-12-31');
-    const firstTxTime = new Date(firstTxDateStr).setHours(0, 0, 0, 0);
-    const startTime = new Date(startPoint.date).setHours(0, 0, 0, 0);
+    const firstTxTime = toUtcTime(firstTxDateStr);
+    const startTime = toUtcTime(startPoint.date);
     if (Math.abs(startTime - firstTxTime) < 86400000) {
       isStartOfHistory = true;
     }

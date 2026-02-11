@@ -6,6 +6,7 @@ import { calculateAnalysisMetrics } from '@/lib/analysisService';
 import { buildMwrSeries, normalizeInvestedForExplicitCash } from '@/lib/performanceUtils';
 import { filterTransactionsByPortfolio, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency as convertFxCurrency } from '@/lib/fxUtils';
+import { parseDateOnlyUTC, toDateKeyUTC } from '@/lib/dateUtils';
 import { useProject } from '@/contexts/ProjectContext';
 import { ReturnChartModal } from '@/components/ReturnChartModal';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
@@ -174,22 +175,6 @@ const RiskMetricModal = ({
       </div>
     </div>
   );
-};
-
-const parseDateOnlyUTC = (dateStr: string) => new Date(`${dateStr}T00:00:00Z`);
-
-const toDateKey = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const toDateKeyUTC = (date: Date) => {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 };
 
 
@@ -517,7 +502,7 @@ export const AnalysisContent = ({
         return: hasData ? Math.round((growingReturn - 1) * 100 * 10) / 10 : 0,
         hasData,
         startDate: `${selectedYear}-${String(q * 3 + 1).padStart(2, '0')}-01`,
-        endDate: toDateKey(new Date(selectedYear, (q + 1) * 3, 0)) // Last day of quarter
+        endDate: toDateKeyUTC(new Date(Date.UTC(selectedYear, (q + 1) * 3, 0))) // Last day of quarter
       });
     }
 
@@ -1230,7 +1215,7 @@ export const AnalysisContent = ({
                   // Calculate mock dates for click
                   const monthIndex = index + 1;
                   const startDate = `${selectedYear}-${String(monthIndex).padStart(2, '0')}-01`;
-                  const endDate = toDateKey(new Date(selectedYear, monthIndex, 0));
+                  const endDate = toDateKeyUTC(new Date(Date.UTC(selectedYear, monthIndex, 0)));
 
                   return (
                     <div

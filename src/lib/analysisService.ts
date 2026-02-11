@@ -1,5 +1,6 @@
 
 import { AnalysisMetrics, calculateTWRSeries } from './portfolioUtils';
+import { parseDateOnlyUTC } from './dateUtils';
 
 /**
  * Calculate portfolio analysis metrics
@@ -28,52 +29,34 @@ export function calculateAnalysisMetrics(
     const twrSeries = calculateTWRSeries(historyData, includeDividends);
 
     // Helper to find TWR value at a specific date
-    const getTwrValue = (d: string) => {
-        const found = twrSeries.find(item => item.date === d);
-        return found ? found.value : 0;
-    };
+    const twrByDate = new Map<string, number>();
+    twrSeries.forEach(point => twrByDate.set(point.date, point.value));
+    const getTwrValue = (d: string) => twrByDate.get(d) ?? 0;
 
     const monthlyReturnsMap: Record<string, number> = {};
     const months: string[] = [];
-    const monthSet = new Set<string>();
+    const monthRanges = new Map<string, { start: string; end: string }>();
 
-    // Identify months present in data
-    historyData.forEach(d => {
-        const monthKey = d.date.slice(0, 7); // YYYY-MM (timezone-safe)
-        if (!monthSet.has(monthKey)) {
-            monthSet.add(monthKey);
+    // Identify months present in data and store range for each month
+    historyData.forEach(point => {
+        const monthKey = point.date.slice(0, 7); // YYYY-MM (timezone-safe)
+        const existing = monthRanges.get(monthKey);
+        if (!existing) {
+            monthRanges.set(monthKey, { start: point.date, end: point.date });
             months.push(monthKey);
+        } else {
+            existing.end = point.date;
         }
     });
 
     for (let i = 0; i < months.length; i++) {
         const monthKey = months[i];
+        const range = monthRanges.get(monthKey);
+        if (!range) continue;
 
-        // Find start and end dates for this month in the data
-        const currentMonthData = historyData.filter(d => d.date.startsWith(monthKey));
-
-        if (currentMonthData.length === 0) continue;
-
-        const endDate = currentMonthData[currentMonthData.length - 1].date;
-        const startDate = currentMonthData[0].date;
-
-        // TWR Cumulative Values (Percentages)
-        const endTwr = getTwrValue(endDate);
-
-        // Find previous month's end TWR to act as baseline
-        let startTwr = 0;
-        if (i > 0) {
-            const prevMonthKey = months[i - 1];
-            const prevMonthData = historyData.filter(d => d.date.startsWith(prevMonthKey));
-            if (prevMonthData.length > 0) {
-                const prevEndDate = prevMonthData[prevMonthData.length - 1].date;
-                startTwr = getTwrValue(prevEndDate);
-            } else {
-                startTwr = getTwrValue(startDate); // Fallback
-            }
-        } else {
-            startTwr = 0;
-        }
+        const endTwr = getTwrValue(range.end);
+        const prevRange = i > 0 ? monthRanges.get(months[i - 1]) : undefined;
+        const startTwr = prevRange ? getTwrValue(prevRange.end) : 0;
 
         const indexEnd = 1 + (endTwr / 100);
         const indexStart = 1 + (startTwr / 100);
@@ -90,11 +73,11 @@ export function calculateAnalysisMetrics(
         index: 1 + (p.value / 100)
     }));
 
-    const lastTwrDate = new Date(twrIndexSeries[twrIndexSeries.length - 1].date);
+    const lastTwrDate = parseDateOnlyUTC(twrIndexSeries[twrIndexSeries.length - 1].date);
     const oneYearAgo = new Date(lastTwrDate);
-    oneYearAgo.setFullYear(lastTwrDate.getFullYear() - 1);
+    oneYearAgo.setUTCFullYear(lastTwrDate.getUTCFullYear() - 1);
 
-    const firstInWindow = twrIndexSeries.findIndex(p => new Date(p.date) >= oneYearAgo);
+    const firstInWindow = twrIndexSeries.findIndex(p => parseDateOnlyUTC(p.date) >= oneYearAgo);
     const windowStart = Math.max(firstInWindow, 1);
 
     let windowDailyReturns: number[] = [];
@@ -134,8 +117,8 @@ export function calculateAnalysisMetrics(
         const startIndex = effectiveStartIndex;
         const startValue = twrIndexSeries[startIndex].index;
         const endValue = twrIndexSeries[twrIndexSeries.length - 1].index;
-        const startDate = new Date(twrIndexSeries[startIndex].date);
-        const endDate = new Date(twrIndexSeries[twrIndexSeries.length - 1].date);
+        const startDate = parseDateOnlyUTC(twrIndexSeries[startIndex].date);
+        const endDate = parseDateOnlyUTC(twrIndexSeries[twrIndexSeries.length - 1].date);
         const daysDiff = (endDate.getTime() - startDate.getTime()) / msPerDay;
         const yearsElapsed = daysDiff / annualizationDays;
 
