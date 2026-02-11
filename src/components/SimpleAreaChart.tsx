@@ -34,6 +34,8 @@ export const SimpleAreaChart = ({
     tooltipLabel?: string,
     markers?: { date: string, label?: string, color?: string, type?: 'Buy' | 'Sell' }[]
 }) => {
+    const gradientId = `colorGradient-${React.useId().replace(/:/g, '')}`;
+
     if (!data || data.length === 0) {
         return (
             <div className={`w-full flex items-center justify-center text-slate-500 text-sm`} style={{ height }}>
@@ -86,7 +88,7 @@ export const SimpleAreaChart = ({
             <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={data} margin={{ top: 6, right: showAxes ? 16 : 0, bottom: showAxes ? 0 : 0, left: 0 }}>
                     <defs>
-                        <linearGradient id={`colorGradient-${color}`} x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor={color} stopOpacity={0.3} />
                             <stop offset="95%" stopColor={color} stopOpacity={0} />
                         </linearGradient>
@@ -137,7 +139,7 @@ export const SimpleAreaChart = ({
                         dataKey="value"
                         stroke={isPercentage ? "url(#splitStroke)" : color}
                         strokeWidth={2}
-                        fill={isPercentage ? "url(#splitFill)" : `url(#colorGradient-${color})`}
+                        fill={isPercentage ? "url(#splitFill)" : `url(#${gradientId})`}
                     />
                     {markers.map((m, i) => (
                         <ReferenceDot

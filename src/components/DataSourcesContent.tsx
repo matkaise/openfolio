@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { Database, FileText, Globe, Loader2, RefreshCw, CheckCircle } from 'lucide-react';
+import { Globe, Loader2, RefreshCw, CheckCircle } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import {
     AreaChart,
@@ -133,73 +133,60 @@ export const DataSourcesContent = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <div className="flex items-center space-x-3">
-                    <div className="p-3 bg-slate-700/50 rounded-lg">
-                        <Database size={24} className="text-emerald-500" />
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-bold text-white">Datenquellen</h2>
-                        <p className="text-sm text-slate-400">Verwalte deine Broker-Importe und API-Verbindungen</p>
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6">
                 {/* ECB Feed Card */}
-                <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
-                    <div className="flex justify-between items-start mb-6">
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <Globe size={18} className="text-blue-400" />
-                                <h3 className="font-semibold text-white">EZB Währungskurse</h3>
+                <div className="md3-card p-6">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                                <Globe size={18} className="md3-accent" />
+                                <h3 className="font-semibold md3-text-main">EZB Waehrungskurse</h3>
                             </div>
-                            <p className="text-sm text-slate-400">Offizielle Referenzkurse der Europäischen Zentralbank.</p>
+                            <p className="text-sm md3-text-muted">Offizielle Referenzkurse der Europaeischen Zentralbank.</p>
                         </div>
                         <div className="flex items-center gap-2">
                             {isSyncing ? (
-                                <span className="flex items-center text-xs text-blue-400 bg-blue-400/10 px-2 py-1 rounded">
-                                    <Loader2 size={12} className="animate-spin mr-1" />
+                                <span className="md3-chip-accent inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
+                                    <Loader2 size={12} className="animate-spin" />
                                     Synchronisiere...
                                 </span>
                             ) : (
-                                <span className="flex items-center text-xs text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">
-                                    <CheckCircle size={12} className="mr-1" />
+                                <span className="md3-positive-soft inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
+                                    <CheckCircle size={12} />
                                     Aktuell
                                 </span>
                             )}
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between bg-slate-900/50 rounded-xl p-4 mb-6">
+                    <div className="md3-list-item mt-6 flex items-center justify-between gap-4 p-4">
                         <div>
-                            <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Letztes Update</p>
-                            <p className="text-white font-mono mt-1">
+                            <p className="md3-text-muted text-xs uppercase font-bold tracking-wider">Letztes Update</p>
+                            <p className="md3-text-main font-mono mt-1">
                                 {project?.fxData.lastUpdated || 'Nie'}
                             </p>
                         </div>
 
                         <button
+                            type="button"
                             onClick={() => syncFx()}
                             disabled={isSyncing}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${isSyncing
-                                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                                }`}
+                            className="md3-icon-btn h-10 w-10 disabled:opacity-60 disabled:cursor-not-allowed"
+                            aria-label="EZB-Kurse aktualisieren"
+                            title="Jetzt aktualisieren"
                         >
-                            <RefreshCw size={16} className={isSyncing ? "animate-spin" : ""} />
-                            {isSyncing ? 'Lädt...' : 'Jetzt aktualisieren'}
+                            <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
                         </button>
                     </div>
 
                     {/* Chart Area */}
-                    <div className="mb-4">
-                        <div className="flex items-center justify-between mb-4">
-                            <h4 className="text-sm font-medium text-slate-300">Kursverlauf (vs. EUR)</h4>
+                    <div className="mt-6 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <h4 className="text-sm font-medium md3-text-main">Kursverlauf (vs. EUR)</h4>
                             <select
                                 value={selectedCurrency}
                                 onChange={(e) => setSelectedCurrency(e.target.value)}
-                                className="bg-slate-700 border-none text-xs rounded px-2 py-1 text-white focus:ring-1 focus:ring-blue-500"
+                                className="md3-field px-3 py-2 text-xs font-semibold outline-none"
                             >
                                 {availableCurrencies.map(c => (
                                     <option key={c} value={c}>{c}</option>
@@ -208,14 +195,15 @@ export const DataSourcesContent = () => {
                         </div>
 
                         {/* Time Range Selectors */}
-                        <div className="flex bg-slate-900/50 p-1 rounded-lg w-max mb-4">
+                        <div className="md3-segment flex w-max items-center gap-1 p-1">
                             {['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'].map((range) => (
                                 <button
                                     key={range}
+                                    type="button"
                                     onClick={() => setTimeRange(range)}
-                                    className={`px-3 py-1 text-[10px] rounded-md font-medium transition-all ${timeRange === range
-                                        ? 'bg-slate-700 text-white shadow-sm'
-                                        : 'text-slate-500 hover:text-slate-300'
+                                    className={`px-3 py-1 text-[11px] font-semibold transition-all ${timeRange === range
+                                        ? 'md3-chip-tonal'
+                                        : 'md3-text-muted hover:opacity-90'
                                         }`}
                                 >
                                     {range}
@@ -224,40 +212,40 @@ export const DataSourcesContent = () => {
                         </div>
                     </div>
 
-                    <div className="h-48 w-full bg-slate-900/30 rounded-lg p-2 border border-slate-700/30">
+                    <div className="md3-list-item mt-4 h-48 w-full p-2">
                         {chartData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={chartData}>
                                     <defs>
                                         <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                            <stop offset="5%" stopColor="var(--md3-primary)" stopOpacity={0.35} />
+                                            <stop offset="95%" stopColor="var(--md3-primary)" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--md3-outline)" />
                                     <XAxis
                                         dataKey="date"
                                         tickFormatter={formatXAxis}
-                                        tick={{ fontSize: 10, fill: '#64748b' }}
+                                        tick={{ fontSize: 10, fill: 'var(--md3-on-surface-variant)' }}
                                         axisLine={false}
                                         tickLine={false}
                                         minTickGap={30}
                                     />
                                     <YAxis
                                         domain={['auto', 'auto']}
-                                        tick={{ fontSize: 10, fill: '#64748b' }}
+                                        tick={{ fontSize: 10, fill: 'var(--md3-on-surface-variant)' }}
                                         axisLine={false}
                                         tickLine={false}
                                         width={30}
                                     />
                                     <Tooltip
-                                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', fontSize: '12px' }}
-                                        labelStyle={{ color: '#94a3b8' }}
+                                        contentStyle={{ backgroundColor: 'var(--md3-surface-container-high)', border: 'none', fontSize: '12px', borderRadius: '12px' }}
+                                        labelStyle={{ color: 'var(--md3-on-surface-variant)' }}
                                     />
                                     <Area
                                         type="monotone"
                                         dataKey="rate"
-                                        stroke="#3b82f6"
+                                        stroke="var(--md3-primary)"
                                         strokeWidth={2}
                                         fillOpacity={1}
                                         fill="url(#colorRate)"
@@ -265,59 +253,69 @@ export const DataSourcesContent = () => {
                                 </AreaChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="h-full flex items-center justify-center text-slate-500 text-sm">
-                                Keine Daten verfügbar. Bitte synchronisieren.
+                            <div className="h-full flex items-center justify-center md3-text-muted text-sm">
+                                Keine Daten verfuegbar. Bitte synchronisieren.
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* CSV Import (Existing Placeholder) */}
-                <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
-                    <div className="flex justify-between items-start mb-6">
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <FileText size={18} className="text-emerald-400" />
-                                <h3 className="font-semibold text-white">Import</h3>
-                            </div>
-                            <p className="text-sm text-slate-400">Importiere Abrechnungen von Trade Republic, Scalable, und weiteren Brokern.</p>
-                        </div>
-                    </div>
-                    {/* ... (Kept simple for now as per previous mockup) */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="p-4 bg-slate-900/50 rounded-xl border border-slate-700/50 text-center hover:border-emerald-500/50 transition cursor-pointer group">
-                            <div className="w-10 h-10 mx-auto bg-slate-800 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition">
-                                <span className="font-bold text-white text-xs">TR</span>
-                            </div>
-                            <p className="text-xs text-slate-300">Trade Republic</p>
-                        </div>
-                        <div className="p-4 bg-slate-900/50 rounded-xl border border-slate-700/50 text-center hover:border-emerald-500/50 transition cursor-pointer group">
-                            <div className="w-10 h-10 mx-auto bg-slate-800 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition">
-                                <span className="font-bold text-white text-xs">SC</span>
-                            </div>
-                            <p className="text-xs text-slate-300">Scalable</p>
-                        </div>
-                    </div>
-                </div>
                 {/* Yahoo Finance Card */}
-                <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 flex flex-col h-full">
-                    <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <BarChart3 size={18} className="text-purple-400" />
-                                <h3 className="font-semibold text-white">Marktdaten (Yahoo)</h3>
+                <div className="md3-card flex h-full flex-col p-6">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                                <BarChart3 size={18} className="md3-accent" />
+                                <h3 className="font-semibold md3-text-main">Marktdaten (Yahoo)</h3>
                             </div>
-                            <p className="text-sm text-slate-400">Automatische Schlusskurse für Aktien & ETFs.</p>
+                            <p className="text-sm md3-text-muted">Automatische Schlusskurse fuer Aktien & ETFs.</p>
                         </div>
-                        <div className="text-right">
-                            <p className="text-xs text-slate-500 uppercase">Letztes Update</p>
-                            <p className="font-mono text-slate-300">{marketStats.lastSync}</p>
+                        <div className="flex items-center gap-2">
+                            {isQuoteSyncing ? (
+                                <span className="md3-chip-accent inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
+                                    <Loader2 size={12} className="animate-spin" />
+                                    Synchronisiere...
+                                </span>
+                            ) : marketStats.lastSync && marketStats.lastSync !== 'Nie' ? (
+                                <span className="md3-positive-soft inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
+                                    <CheckCircle size={12} />
+                                    Aktuell
+                                </span>
+                            ) : (
+                                <span className="md3-segment inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold md3-text-muted">
+                                    Ausstehend
+                                </span>
+                            )}
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto max-h-[300px] mb-4 space-y-2 pr-2 custom-scrollbar">
+                    <div className="md3-list-item mt-6 flex items-center justify-between gap-4 p-4">
+                        <div>
+                            <p className="md3-text-muted text-xs uppercase font-bold tracking-wider">Letztes Update</p>
+                            <p className="md3-text-main font-mono mt-1">
+                                {marketStats.lastSync}
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={handleQuoteSync}
+                            disabled={isQuoteSyncing}
+                            className="md3-icon-btn h-10 w-10 disabled:opacity-60 disabled:cursor-not-allowed"
+                            aria-label="Marktdaten aktualisieren"
+                            title="Jetzt aktualisieren"
+                        >
+                            {isQuoteSyncing ? (
+                                <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                                <RefreshCw size={16} />
+                            )}
+                        </button>
+                    </div>
+
+                    <div className="custom-scrollbar mt-6 flex-1 max-h-[300px] space-y-2 overflow-y-auto pr-2">
                         {marketStats.securities.length === 0 ? (
-                            <div className="text-center text-slate-500 py-8 text-sm">
+                            <div className="md3-list-item p-6 text-center text-sm md3-text-muted">
                                 Keine Wertpapiere gefunden.
                             </div>
                         ) : (
@@ -325,20 +323,20 @@ export const DataSourcesContent = () => {
                                 <div
                                     key={sec.isin}
                                     onClick={() => setSelectedSecurity(sec)}
-                                    className="flex items-center justify-between p-3 bg-slate-900/30 hover:bg-slate-700/50 rounded-lg cursor-pointer transition group"
+                                    className="md3-list-item flex items-center justify-between gap-3 p-3 cursor-pointer transition"
                                 >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center font-bold text-xs text-slate-400 group-hover:text-white group-hover:bg-purple-500/20 transition-colors">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <div className="md3-chip-tonal flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold">
                                             {sec.name.substring(0, 2).toUpperCase()}
                                         </div>
-                                        <div>
-                                            <div className="text-sm font-medium text-slate-200">{sec.symbol || sec.isin}</div>
-                                            <div className="text-xs text-slate-500 truncate max-w-[150px]">{sec.name}</div>
+                                        <div className="min-w-0">
+                                            <div className="md3-text-main text-sm font-medium">{sec.symbol || sec.isin}</div>
+                                            <div className="md3-text-muted text-xs truncate max-w-[150px]">{sec.name}</div>
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <div className={`text-xs px-2 py-0.5 rounded ${sec.lastSync ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-700 text-slate-500'}`}>
-                                            {sec.lastSync ? new Date(sec.lastSync).toLocaleDateString() : 'Pending'}
+                                        <div className={`px-2 py-0.5 text-xs font-semibold rounded-full ${sec.lastSync ? 'md3-positive-soft' : 'md3-segment md3-text-muted'}`}>
+                                            {sec.lastSync ? new Date(sec.lastSync).toLocaleDateString() : 'Ausstehend'}
                                         </div>
                                     </div>
                                 </div>
@@ -346,53 +344,37 @@ export const DataSourcesContent = () => {
                         )}
                     </div>
 
-                    <button
-                        onClick={handleQuoteSync}
-                        disabled={isQuoteSyncing}
-                        className="w-full py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg flex items-center justify-center font-medium transition mt-auto"
-                    >
-                        {isQuoteSyncing ? (
-                            <>
-                                <Loader2 size={16} className="animate-spin mr-2" />
-                                Lade Kurse...
-                            </>
-                        ) : (
-                            <>
-                                <RefreshCw size={16} className="mr-2" />
-                                Jetzt aktualisieren
-                            </>
-                        )}
-                    </button>
                 </div>
             </div>
 
             {/* Chart Modal Overlay */}
             {selectedSecurity && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedSecurity(null)}>
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-3xl shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-start mb-6">
+                    <div className="md3-card w-full max-w-3xl p-6" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4 mb-6">
                             <div>
-                                <h3 className="text-xl font-bold text-white">{selectedSecurity.name}</h3>
-                                <div className="flex items-center gap-2 text-slate-400 text-sm mt-1">
-                                    <span className="bg-slate-800 px-1.5 rounded text-xs font-mono">{selectedSecurity.isin}</span>
-                                    <span>•</span>
+                                <h3 className="text-xl font-bold md3-text-main">{selectedSecurity.name}</h3>
+                                <div className="flex items-center gap-2 text-sm md3-text-muted mt-1">
+                                    <span className="md3-segment rounded-full px-2 py-0.5 text-xs font-mono">{selectedSecurity.isin}</span>
+                                    <span>&bull;</span>
                                     <span>{selectedSecurity.symbol}</span>
                                 </div>
                             </div>
-                            <button onClick={() => setSelectedSecurity(null)} className="text-slate-400 hover:text-white p-2">
-                                <X size={24} />
+                            <button type="button" onClick={() => setSelectedSecurity(null)} className="md3-icon-btn" aria-label="Schliessen">
+                                <X size={20} />
                             </button>
                         </div>
 
                         {/* Time Range Selector */}
-                        <div className="flex space-x-2 mb-4">
+                        <div className="md3-segment flex w-max items-center gap-1 p-1 mb-4">
                             {['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'].map(range => (
                                 <button
                                     key={range}
+                                    type="button"
                                     onClick={() => setModalTimeRange(range)}
-                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${modalTimeRange === range
-                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                    className={`px-3 py-1 text-xs font-semibold transition-colors ${modalTimeRange === range
+                                        ? 'md3-chip-tonal'
+                                        : 'md3-text-muted hover:opacity-90'
                                         }`}
                                 >
                                     {range}
@@ -400,28 +382,28 @@ export const DataSourcesContent = () => {
                             ))}
                         </div>
 
-                        <div className="h-[350px] w-full bg-slate-950/50 rounded-xl p-4 border border-slate-800">
+                        <div className="md3-list-item h-[350px] w-full p-4">
                             {selectedSecurity.priceHistory && Object.keys(selectedSecurity.priceHistory).length > 0 ? (
                                 <SimpleAreaChart
                                     data={getFilteredHistory(selectedSecurity.priceHistory)}
-                                    color="#a855f7"
+                                    color="var(--md3-primary)"
                                     height={320}
                                     showAxes={true}
                                     timeRange={modalTimeRange}
                                     currency={selectedSecurity.currency}
                                 />
                             ) : (
-                                <div className="h-full flex items-center justify-center flex-col text-slate-500">
+                                <div className="h-full flex items-center justify-center flex-col md3-text-muted">
                                     <BarChart3 size={48} className="mb-2 opacity-50" />
-                                    <p>Keine historischen Daten verfügbar</p>
-                                    <p className="text-xs mt-2">Klicken Sie auf &quot;Jetzt aktualisieren&quot;</p>
+                                    <p>Keine historischen Daten verfuegbar</p>
+                                    <p className="text-xs mt-2">Klicke auf &quot;Jetzt aktualisieren&quot;</p>
                                 </div>
                             )}
                         </div>
 
                         <div className="mt-6 flex justify-end">
-                            <button onClick={() => setSelectedSecurity(null)} className="px-4 py-2 text-slate-300 hover:text-white">
-                                Schließen
+                            <button type="button" onClick={() => setSelectedSecurity(null)} className="md3-text-muted px-4 py-2 font-semibold hover:opacity-80">
+                                Schliessen
                             </button>
                         </div>
                     </div>
@@ -431,3 +413,4 @@ export const DataSourcesContent = () => {
         </div>
     );
 };
+

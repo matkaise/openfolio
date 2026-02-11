@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wallet, Plus, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Wallet, Plus, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 
 interface ImportContentProps {
@@ -41,139 +41,141 @@ export const ImportContent = ({ onContinue }: ImportContentProps) => {
     };
 
     return (
-        <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="text-center space-y-4 mb-12">
-                <div className="w-20 h-20 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto ring-1 ring-emerald-500/20 shadow-xl shadow-emerald-500/5">
-                    <Wallet className="text-emerald-500" size={40} />
-                </div>
-                <div>
-                    <h2 className="text-3xl font-bold text-white tracking-tight">Portfolio auswählen</h2>
-                    <p className="text-slate-400 mt-2 text-lg">Wähle ein bestehendes Depot oder erstelle ein neues.</p>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Existing Portfolios List */}
-                <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-slate-300 px-1">Bestehende Portfolios</h3>
-                    <div className="grid gap-3">
+        <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div className="md3-card p-6">
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                        <h3 className="text-sm font-semibold uppercase tracking-wider md3-text-muted">Bestehende Portfolios</h3>
+                        {project?.portfolios && project.portfolios.length > 0 && (
+                            <span className="md3-chip-tonal rounded-full px-2.5 py-1 text-xs font-semibold">
+                                {project.portfolios.length} Depot{project.portfolios.length === 1 ? '' : 's'}
+                            </span>
+                        )}
+                    </div>
+                    <div className="space-y-3">
                         {project?.portfolios && project.portfolios.length > 0 ? (
-                            project.portfolios.map(portfolio => (
-                                <div
-                                    key={portfolio.id}
-                                    onClick={() => {
-                                        setSelectedPortfolioId(portfolio.id);
-                                        setIsNewPortfolio(false);
-                                        setError(null);
-                                    }}
-                                    className={`relative p-4 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between group
-                                        ${!isNewPortfolio && selectedPortfolioId === portfolio.id
-                                            ? 'border-emerald-500 bg-emerald-500/10'
-                                            : 'border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-800'}
-                                    `}
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className={`p-2.5 rounded-lg ${!isNewPortfolio && selectedPortfolioId === portfolio.id ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                                            <Wallet size={20} />
+                            project.portfolios.map(portfolio => {
+                                const isSelected = !isNewPortfolio && selectedPortfolioId === portfolio.id;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={portfolio.id}
+                                        onClick={() => {
+                                            setSelectedPortfolioId(portfolio.id);
+                                            setIsNewPortfolio(false);
+                                            setError(null);
+                                        }}
+                                        className="md3-list-item w-full flex items-center justify-between gap-4 p-4 text-left transition"
+                                        style={isSelected ? { background: 'var(--md3-secondary-container)', color: 'var(--md3-on-secondary-container)' } : undefined}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div
+                                                className="flex h-10 w-10 items-center justify-center rounded-xl"
+                                                style={isSelected
+                                                    ? { background: 'var(--md3-primary)', color: 'var(--md3-on-primary)' }
+                                                    : { background: 'var(--md3-surface-container-highest)', color: 'var(--md3-on-surface-variant)' }}
+                                            >
+                                                <Wallet size={18} />
+                                            </div>
+                                            <div>
+                                                <h4
+                                                    className="text-sm font-semibold"
+                                                    style={{ color: isSelected ? 'var(--md3-on-secondary-container)' : 'var(--md3-on-surface)' }}
+                                                >
+                                                    {portfolio.name}
+                                                </h4>
+                                                <p
+                                                    className="text-xs"
+                                                    style={{ color: isSelected ? 'var(--md3-on-secondary-container)' : 'var(--md3-on-surface-variant)' }}
+                                                >
+                                                    Lokales Depot
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h4 className={`font-bold ${!isNewPortfolio && selectedPortfolioId === portfolio.id ? 'text-white' : 'text-slate-300'}`}>
-                                                {portfolio.name}
-                                            </h4>
-                                            {/* Could add stats here like value or count */}
-                                        </div>
-                                    </div>
-
-                                    {(!isNewPortfolio && selectedPortfolioId === portfolio.id) && (
-                                        <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center animate-in zoom-in duration-200">
-                                            <CheckCircle2 size={14} className="text-white" />
-                                        </div>
-                                    )}
-                                </div>
-                            ))
+                                        {isSelected && (
+                                            <span className="md3-chip-accent inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
+                                                <CheckCircle2 size={12} />
+                                                Ausgewaehlt
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })
                         ) : (
-                            <div className="text-slate-500 text-sm p-4 text-center border border-dashed border-slate-800 rounded-xl">
+                            <div className="md3-list-item p-6 text-center text-sm md3-text-muted">
                                 Keine bestehenden Portfolios gefunden.
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* New Portfolio Section */}
-                <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-slate-300 px-1">Oder neu erstellen</h3>
-                    <div
-                        onClick={() => setIsNewPortfolio(true)}
-                        className={`relative p-6 rounded-xl border-2 transition-all cursor-pointer h-full
-                            ${isNewPortfolio
-                                ? 'border-emerald-500 bg-emerald-500/10'
-                                : 'border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-800'}
-                        `}
-                    >
-                        <div className="flex items-center justify-between mb-6">
-                            <div className={`p-3 rounded-xl ${isNewPortfolio ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                                <Plus size={24} />
+                <div
+                    onClick={() => setIsNewPortfolio(true)}
+                    className="md3-card p-6 transition"
+                >
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div
+                                className="flex h-10 w-10 items-center justify-center rounded-xl"
+                                style={isNewPortfolio
+                                    ? { background: 'var(--md3-primary)', color: 'var(--md3-on-primary)' }
+                                    : { background: 'var(--md3-surface-container-highest)', color: 'var(--md3-on-surface-variant)' }}
+                            >
+                                <Plus size={18} />
                             </div>
-                            {isNewPortfolio && (
-                                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center animate-in zoom-in duration-200">
-                                    <CheckCircle2 size={14} className="text-white" />
-                                </div>
-                            )}
+                            <div>
+                                <h3 className="text-lg font-semibold md3-text-main">Neues Depot anlegen</h3>
+                                <p className="text-sm md3-text-muted">Strategie separieren? Erstelle ein weiteres Portfolio.</p>
+                            </div>
                         </div>
+                        {isNewPortfolio && (
+                            <span className="md3-chip-accent inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
+                                <CheckCircle2 size={12} />
+                                Ausgewaehlt
+                            </span>
+                        )}
+                    </div>
 
-                        <h3 className={`text-xl font-bold mb-2 ${isNewPortfolio ? 'text-white' : 'text-slate-300'}`}>
-                            Neues Depot anlegen
-                        </h3>
-                        <p className="text-sm text-slate-400 mb-6">
-                            Strategie separieren? Erstelle einfach ein weiteres Portfolio.
-                        </p>
-
-                        <div className="space-y-2">
-                            <input
-                                type="text"
-                                value={newPortfolioName}
-                                onChange={(e) => {
-                                    setNewPortfolioName(e.target.value);
-                                    if (error) setError(null);
-                                    if (!isNewPortfolio) setIsNewPortfolio(true); // Auto-select when typing
-                                }}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setIsNewPortfolio(true);
-                                }}
-                                placeholder="Name, z.B. 'ETF Sparplan'"
-                                className={`w-full rounded-xl px-4 py-3 text-sm font-medium outline-none border transition-colors placeholder-slate-600
-                                    ${isNewPortfolio
-                                        ? 'bg-slate-900 border-emerald-500/50 text-white focus:border-emerald-500'
-                                        : 'bg-slate-950 border-slate-700 text-slate-400 pointer-events-none opacity-50'}
-                                    ${error ? 'border-rose-500 focus:border-rose-500' : ''}
-                                `}
-                            />
-                            {isNewPortfolio && error && (
-                                <div className="flex items-start gap-2 text-rose-400 text-sm animate-in slide-in-from-top-1">
-                                    <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                                    <span>{error}</span>
-                                </div>
-                            )}
-                        </div>
+                    <div className="mt-5 space-y-2">
+                        <label className="md3-text-muted text-xs font-semibold uppercase tracking-wider">Portfolio-Name</label>
+                        <input
+                            type="text"
+                            value={newPortfolioName}
+                            onChange={(e) => {
+                                setNewPortfolioName(e.target.value);
+                                if (error) setError(null);
+                                if (!isNewPortfolio) setIsNewPortfolio(true);
+                            }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsNewPortfolio(true);
+                            }}
+                            placeholder="Name, z.B. 'ETF Sparplan'"
+                            disabled={!isNewPortfolio}
+                            className={`md3-field w-full px-4 py-3 text-sm font-medium outline-none ${!isNewPortfolio ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            aria-invalid={!!error}
+                        />
+                        {isNewPortfolio && error && (
+                            <div className="flex items-start gap-2 text-sm md3-negative">
+                                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                                <span>{error}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
-            <div className="flex justify-center pt-12">
+            <div className="flex justify-end pt-2">
                 <button
+                    type="button"
                     onClick={handleContinue}
                     disabled={isNewPortfolio && !!error}
-                    className={`group relative inline-flex items-center gap-3 px-8 py-4 rounded-xl font-bold text-lg shadow-lg transition-all w-full md:w-auto justify-center
-                        ${isNewPortfolio && error
-                            ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                            : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/25 hover:scale-105 active:scale-95'}
-                    `}
+                    className="md3-filled-btn px-6 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                    <span>Weiter zum Import</span>
-                    <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                    Weiter zum Import
                 </button>
             </div>
         </div>
     );
 };
+
