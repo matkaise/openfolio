@@ -168,7 +168,7 @@ const RiskMetricModal = ({
             />
           ) : (
             <div className="h-full flex items-center justify-center md3-text-muted">
-              Keine Daten fÃ¼r diesen Zeitraum verfÃ¼gbar.
+              Keine Daten für diesen Zeitraum verfügbar.
             </div>
           )}
         </div>

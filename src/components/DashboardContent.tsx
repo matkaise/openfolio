@@ -399,7 +399,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
         'MUTUALFUND': 'Fonds',
         'FUTURE': 'Derivate',
         'INDEX': 'Indizes',
-        'CURRENCY': 'WÃ¤hrungen'
+        'CURRENCY': 'Währungen'
       };
 
       const normalizedType = yahooTypeMap[type.toUpperCase()] || (type === 'Stock' ? 'Einzelaktien' : type);

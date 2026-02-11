@@ -14,7 +14,9 @@ import {
   Save,
   LogOut,
   Moon,
+  RefreshCw,
   Sun,
+  Loader2,
   Sparkles,
   Settings
 } from 'lucide-react';
@@ -316,7 +318,7 @@ const MATERIAL_THEMES = {
 const MOBILE_NAV_ITEMS = NAV_ITEMS.slice(0, 4);
 
 export default function PortfolioApp() {
-  const { isLoaded, closeProject, saveProject, project, isModified, updateProject } = useProject();
+  const { isLoaded, closeProject, saveProject, project, isModified, updateProject, syncAll, isSyncing, isMarketSyncing } = useProject();
   const [activeTab, setActiveTab] = useState<TabKey>('Dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -674,6 +676,17 @@ export default function PortfolioApp() {
                   aria-label="Toggle appearance"
                 >
                   {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => syncAll(true)}
+                  className="md3-icon-btn"
+                  aria-label="Aktualisieren"
+                  disabled={isSyncing || isMarketSyncing}
+                  title="Aktualisieren"
+                >
+                  {(isSyncing || isMarketSyncing) ? <Loader2 size={20} className="animate-spin" /> : <RefreshCw size={20} />}
                 </button>
               </div>
             </div>

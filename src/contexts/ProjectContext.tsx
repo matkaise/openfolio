@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { ProjectData, createEmptyProject } from '@/types/domain';
 import { CurrencyService } from '@/lib/currencyService';
+import { syncProjectQuotes } from '@/lib/marketDataService';
 import { normalizeProjectWealthGoal } from '@/lib/wealthGoalUtils';
 
 interface ProjectContextType {
@@ -23,7 +24,10 @@ interface ProjectContextType {
 
     // Sync
     syncFx: () => Promise<void>;
+    syncMarket: (force?: boolean) => Promise<void>;
+    syncAll: (forceMarket?: boolean) => Promise<void>;
     isSyncing: boolean;
+    isMarketSyncing: boolean;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -42,6 +46,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [fileName, setFileName] = useState<string | null>(null);
     const [isModified, setIsModified] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [isMarketSyncing, setIsMarketSyncing] = useState(false);
 
     // Helper to perform sync on a given project data state
     const performSync = useCallback(async (currentProject: ProjectData) => {
@@ -72,12 +77,38 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
+    const performMarketSync = useCallback(async (currentProject: ProjectData, force: boolean = false) => {
+        setIsMarketSyncing(true);
+        try {
+            console.log("Auto-syncing market data...");
+            const updated = await syncProjectQuotes(currentProject, force);
+            if (updated !== currentProject) {
+                setProject(prev => prev ? ({
+                    ...prev,
+                    securities: updated.securities,
+                    transactions: updated.transactions,
+                    modified: updated.modified
+                }) : null);
+                setIsModified(true);
+                console.log("Market sync completed.");
+            } else {
+                console.log("Market sync completed. No new data.");
+            }
+        } catch (e) {
+            console.error("Market sync failed", e);
+        } finally {
+            setIsMarketSyncing(false);
+        }
+    }, []);
+
     const newProject = useCallback(() => {
-        setProject(createEmptyProject());
+        const created = createEmptyProject();
+        setProject(created);
         setFileHandle(null);
         setFileName('Unbenannt.json');
         setIsModified(true);
-    }, []);
+        performSync(created);
+    }, [performSync]);
 
     const openProject = useCallback(async () => {
         try {
@@ -108,6 +139,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             // Trigger Auto-Sync
             // We pass 'data' directly because 'project' state is not updated yet in this closure
             performSync(data);
+            performMarketSync(data, true);
 
         } catch (err: unknown) {
             if (err && typeof err === 'object' && 'name' in err && (err as { name?: string }).name === 'AbortError') {
@@ -117,7 +149,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             console.error('Failed to open project:', err);
             alert('Fehler beim Öffnen der Datei: ' + message);
         }
-    }, [performSync]);
+    }, [performSync, performMarketSync]);
 
     const saveProjectAs = useCallback(async () => {
         if (!project) return;
@@ -209,6 +241,25 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [project, performSync]);
 
+    const syncMarket = useCallback(async (force: boolean = false) => {
+        if (project) {
+            await performMarketSync(project, force);
+        } else {
+            console.warn("Could not sync market data: No project loaded.");
+        }
+    }, [project, performMarketSync]);
+
+    const syncAll = useCallback(async (forceMarket: boolean = false) => {
+        if (!project) {
+            console.warn("Could not sync: No project loaded.");
+            return;
+        }
+        await Promise.all([
+            performSync(project),
+            performMarketSync(project, forceMarket)
+        ]);
+    }, [project, performSync, performMarketSync]);
+
     return (
         <ProjectContext.Provider value={{
             project,
@@ -222,7 +273,10 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             closeProject,
             updateProject,
             syncFx,
-            isSyncing
+            syncMarket,
+            syncAll,
+            isSyncing,
+            isMarketSyncing
         }}>
             {children}
         </ProjectContext.Provider>
