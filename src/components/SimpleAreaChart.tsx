@@ -35,6 +35,7 @@ export const SimpleAreaChart = ({
     markers?: { date: string, label?: string, color?: string, type?: 'Buy' | 'Sell' }[]
 }) => {
     const gradientId = `colorGradient-${React.useId().replace(/:/g, '')}`;
+    const parseDateOnlyUTC = (dateStr: string) => new Date(`${dateStr}T00:00:00Z`);
 
     if (!data || data.length === 0) {
         return (
@@ -55,11 +56,11 @@ export const SimpleAreaChart = ({
     const axisTickColor = '#8d9199'; // Approximation of --md3-outline or on-surface-variant
 
     const formatDate = (dateStr: string) => {
-        const d = new Date(dateStr);
+        const d = parseDateOnlyUTC(dateStr);
         if (['3J', '5J', 'MAX'].includes(timeRange)) {
-            return d.getFullYear().toString();
+            return d.getUTCFullYear().toString();
         }
-        return `${d.getDate()}.${d.getMonth() + 1}.`;
+        return `${d.getUTCDate()}.${d.getUTCMonth() + 1}.`;
     };
 
     const formatYAxis = (val: number) => {
@@ -138,8 +139,8 @@ export const SimpleAreaChart = ({
                             isPercentage ? (tooltipLabel || 'Performance') : (tooltipLabel || 'Kurs')
                         ]}
                         labelFormatter={(label: string) => {
-                            const d = new Date(label);
-                            return d.toLocaleDateString();
+                            const d = parseDateOnlyUTC(label);
+                            return d.toLocaleDateString('de-DE', { timeZone: 'UTC' });
                         }}
                     />
                     <Area
@@ -149,17 +150,21 @@ export const SimpleAreaChart = ({
                         strokeWidth={2}
                         fill={isPercentage ? "url(#splitFill)" : `url(#${gradientId})`}
                     />
-                    {markers.map((m, i) => (
-                        <ReferenceDot
-                            key={i}
-                            x={m.date}
-                            y={data.find(d => d.date === m.date)?.value}
-                            r={4}
-                            fill={m.color || '#18a957'}
-                            stroke="#fff"
-                            strokeWidth={2}
-                        />
-                    ))}
+                    {markers.map((m, i) => {
+                        const y = data.find(d => d.date === m.date)?.value;
+                        if (y === undefined) return null;
+                        return (
+                            <ReferenceDot
+                                key={i}
+                                x={m.date}
+                                y={y}
+                                r={4}
+                                fill={m.color || '#18a957'}
+                                stroke="#fff"
+                                strokeWidth={2}
+                            />
+                        );
+                    })}
                 </AreaChart>
             </ResponsiveContainer>
         </div>

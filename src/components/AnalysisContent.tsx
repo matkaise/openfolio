@@ -176,10 +176,19 @@ const RiskMetricModal = ({
   );
 };
 
+const parseDateOnlyUTC = (dateStr: string) => new Date(`${dateStr}T00:00:00Z`);
+
 const toDateKey = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toDateKeyUTC = (date: Date) => {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
@@ -359,7 +368,7 @@ export const AnalysisContent = ({
       sumSq += r * r;
 
       while (windowStart < i) {
-        const daysDiff = (new Date(indexSeries[i].date).getTime() - new Date(indexSeries[windowStart].date).getTime()) / msPerDay;
+        const daysDiff = (parseDateOnlyUTC(indexSeries[i].date).getTime() - parseDateOnlyUTC(indexSeries[windowStart].date).getTime()) / msPerDay;
         if (daysDiff <= annualizationDays) break;
         const rDrop = dailyReturns[windowStart];
         sum -= rDrop;
@@ -370,7 +379,7 @@ export const AnalysisContent = ({
       const count = i - windowStart + 1;
       if (count < 2) continue;
 
-      const windowSpanDays = (new Date(indexSeries[i].date).getTime() - new Date(indexSeries[windowStart].date).getTime()) / msPerDay;
+      const windowSpanDays = (parseDateOnlyUTC(indexSeries[i].date).getTime() - parseDateOnlyUTC(indexSeries[windowStart].date).getTime()) / msPerDay;
       if (windowSpanDays < annualizationDays) continue;
 
       const mean = sum / count;
@@ -379,8 +388,8 @@ export const AnalysisContent = ({
       const annualizedVol = dailyVol * Math.sqrt(annualizationDays) * 100;
 
       const startIndexValue = indexSeries[Math.max(windowStart - 1, 0)].index;
-      const startDate = new Date(indexSeries[Math.max(windowStart - 1, 0)].date);
-      const endDate = new Date(indexSeries[i].date);
+      const startDate = parseDateOnlyUTC(indexSeries[Math.max(windowStart - 1, 0)].date);
+      const endDate = parseDateOnlyUTC(indexSeries[i].date);
       const yearsElapsed = (endDate.getTime() - startDate.getTime()) / (msPerDay * annualizationDays);
 
       let annualizedReturn = 0;
@@ -592,18 +601,18 @@ export const AnalysisContent = ({
       return { start: series[0].date, end };
     }
 
-    const endDate = new Date(end);
+    const endDate = parseDateOnlyUTC(end);
     const startDate = new Date(endDate);
 
-    if (performanceRange === '1M') startDate.setMonth(endDate.getMonth() - 1);
-    if (performanceRange === '6M') startDate.setMonth(endDate.getMonth() - 6);
-    if (performanceRange === 'YTD') startDate.setMonth(0, 1);
-    if (performanceRange === '1J') startDate.setFullYear(endDate.getFullYear() - 1);
-    if (performanceRange === '3J') startDate.setFullYear(endDate.getFullYear() - 3);
-    if (performanceRange === '5J') startDate.setFullYear(endDate.getFullYear() - 5);
+    if (performanceRange === '1M') startDate.setUTCMonth(endDate.getUTCMonth() - 1);
+    if (performanceRange === '6M') startDate.setUTCMonth(endDate.getUTCMonth() - 6);
+    if (performanceRange === 'YTD') startDate.setUTCMonth(0, 1);
+    if (performanceRange === '1J') startDate.setUTCFullYear(endDate.getUTCFullYear() - 1);
+    if (performanceRange === '3J') startDate.setUTCFullYear(endDate.getUTCFullYear() - 3);
+    if (performanceRange === '5J') startDate.setUTCFullYear(endDate.getUTCFullYear() - 5);
 
     const earliest = series[0].date;
-    const start = startDate < new Date(earliest) ? earliest : toDateKey(startDate);
+    const start = startDate < parseDateOnlyUTC(earliest) ? earliest : toDateKeyUTC(startDate);
     return { start, end };
   }, [analysisMetrics?.twrSeries, performanceRange]);
 
@@ -693,6 +702,7 @@ export const AnalysisContent = ({
     let priceIndex = 0;
     let shares = 0;
     let invested = 0;
+    let pendingCash = 0;
     const synthetic: { date: string; value: number; invested: number }[] = [];
 
     for (let i = 0; i < cashflowData.length; i++) {
@@ -704,19 +714,37 @@ export const AnalysisContent = ({
 
       const priceDate = priceDates[priceIndex];
       if (!priceDate || priceDate > date) {
+        const cashFlow = i === 0 ? cashflowData[i].invested : (cashflowData[i].invested - cashflowData[i - 1].invested);
+        if (cashFlow !== 0) {
+          pendingCash += cashFlow;
+        }
         continue;
       }
 
       const rawPrice = history[priceDate];
-      if (!rawPrice) continue;
+      if (!rawPrice) {
+        const cashFlow = i === 0 ? cashflowData[i].invested : (cashflowData[i].invested - cashflowData[i - 1].invested);
+        if (cashFlow !== 0) {
+          pendingCash += cashFlow;
+        }
+        continue;
+      }
 
       const price = convertFxCurrency(project?.fxData, rawPrice, currency, baseCurrency, priceDate);
-      if (!price || price <= 0) continue;
+      if (!price || price <= 0) {
+        const cashFlow = i === 0 ? cashflowData[i].invested : (cashflowData[i].invested - cashflowData[i - 1].invested);
+        if (cashFlow !== 0) {
+          pendingCash += cashFlow;
+        }
+        continue;
+      }
 
       const cashFlow = i === 0 ? cashflowData[i].invested : (cashflowData[i].invested - cashflowData[i - 1].invested);
-      if (cashFlow !== 0) {
-        shares += cashFlow / price;
-        invested += cashFlow;
+      const effectiveCashFlow = cashFlow + pendingCash;
+      if (effectiveCashFlow !== 0) {
+        shares += effectiveCashFlow / price;
+        invested += effectiveCashFlow;
+        pendingCash = 0;
       }
 
       const value = shares * price;
@@ -988,7 +1016,7 @@ export const AnalysisContent = ({
                 <p className="text-xs md3-text-muted uppercase tracking-wider mb-1">Max Drawdown</p>
                 <span className="text-xl font-bold md3-negative">{analysisMetrics.maxDrawdown.toFixed(1)}%</span>
                 <span className="text-xs md3-text-muted mt-1">
-                  {analysisMetrics.maxDrawdownDate ? new Date(analysisMetrics.maxDrawdownDate).toLocaleDateString('de-DE', { month: 'short', year: 'numeric' }) : 'N/A'}
+                  {analysisMetrics.maxDrawdownDate ? parseDateOnlyUTC(analysisMetrics.maxDrawdownDate).toLocaleDateString('de-DE', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'N/A'}
                 </span>
               </Card>
             </div>
@@ -1090,9 +1118,9 @@ export const AnalysisContent = ({
                     <XAxis
                       dataKey="date"
                       tickFormatter={(dateStr: string) => {
-                        const d = new Date(dateStr);
-                        if (['3J', '5J', 'MAX'].includes(performanceRange)) return d.getFullYear().toString();
-                        return `${d.getDate()}.${d.getMonth() + 1}.`;
+                        const d = parseDateOnlyUTC(dateStr);
+                        if (['3J', '5J', 'MAX'].includes(performanceRange)) return d.getUTCFullYear().toString();
+                        return `${d.getUTCDate()}.${d.getUTCMonth() + 1}.`;
                       }}
                       tick={{ fontSize: 11, fill: 'var(--md3-on-surface-variant)' }}
                       minTickGap={80}
@@ -1112,7 +1140,7 @@ export const AnalysisContent = ({
                       formatter={(value: number | string | undefined, name: string | undefined) => [`${Number(value ?? 0).toFixed(2)}%`, name ?? 'Wert']}
                       labelFormatter={(label: React.ReactNode) => {
                         if (typeof label !== 'string' && typeof label !== 'number') return '';
-                        return new Date(String(label)).toLocaleDateString('de-DE');
+                        return parseDateOnlyUTC(String(label)).toLocaleDateString('de-DE', { timeZone: 'UTC' });
                       }}
                     />
                     <Legend
