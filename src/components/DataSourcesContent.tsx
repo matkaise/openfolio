@@ -12,7 +12,7 @@ import {
     Tooltip,
     ResponsiveContainer
 } from 'recharts';
-import { syncProjectQuotes } from '@/lib/marketDataService';
+import { buildManualPriceHistory, syncProjectQuotes } from '@/lib/marketDataService';
 import { BarChart3, X } from 'lucide-react';
 import { SimpleAreaChart } from './SimpleAreaChart';
 import { Security } from '@/types/domain';
@@ -73,6 +73,7 @@ export const DataSourcesContent = () => {
     const [isQuoteSyncing, setIsQuoteSyncing] = useState(false);
     const [selectedSecurity, setSelectedSecurity] = useState<Security | null>(null);
     const [modalTimeRange, setModalTimeRange] = useState('1M');
+    const [tickerOverrides, setTickerOverrides] = useState<Record<string, string>>({});
 
     // Filter Security Data based on Time Range
     const getFilteredHistory = (history: Record<string, number> | undefined) => {
@@ -112,6 +113,58 @@ export const DataSourcesContent = () => {
             securities: secs.sort((a, b) => a.name.localeCompare(b.name))
         };
     }, [project?.securities]);
+
+    const unresolvedSecurities = useMemo(() => {
+        return marketStats.securities.filter(sec => sec.symbolStatus === 'unresolved');
+    }, [marketStats.securities]);
+
+    const handleTickerOverride = (sec: Security) => {
+        const next = (tickerOverrides[sec.isin] || '').trim().toUpperCase();
+        if (!next) return;
+        updateProject(prev => {
+            const current = prev.securities[sec.isin];
+            if (!current) return prev;
+            return {
+                ...prev,
+                securities: {
+                    ...prev.securities,
+                    [sec.isin]: {
+                        ...current,
+                        symbol: next,
+                        symbolStatus: 'resolved',
+                        symbolSource: 'manual',
+                        ignoreMarketData: false
+                    }
+                },
+                modified: new Date().toISOString()
+            };
+        });
+        setTickerOverrides(prev => ({ ...prev, [sec.isin]: '' }));
+    };
+
+    const handleIgnoreSecurity = (sec: Security) => {
+        updateProject(prev => {
+            const current = prev.securities[sec.isin];
+            if (!current) return prev;
+            const manualHistory = buildManualPriceHistory(prev.transactions, sec.isin);
+            return {
+                ...prev,
+                securities: {
+                    ...prev.securities,
+                    [sec.isin]: {
+                        ...current,
+                        ignoreMarketData: true,
+                        symbolStatus: 'ignored',
+                        priceHistory: { ...(current.priceHistory || {}), ...manualHistory },
+                        dividendHistory: current.dividendHistory || [],
+                        upcomingDividends: current.upcomingDividends || [],
+                        dividendHistorySynced: true
+                    }
+                },
+                modified: new Date().toISOString()
+            };
+        });
+    };
 
     const handleQuoteSync = async () => {
         if (!project) return;
@@ -342,9 +395,60 @@ export const DataSourcesContent = () => {
                                 </div>
                             ))
                         )}
-                    </div>
-
                 </div>
+
+                {unresolvedSecurities.length > 0 && (
+                    <div className="md3-card p-6">
+                        <div className="space-y-1">
+                            <h3 className="font-semibold md3-text-main">Fehlende Ticker</h3>
+                            <p className="text-sm md3-text-muted">
+                                Wir konnten fuer diese Titel keinen gueltigen Yahoo-Ticker finden. Du kannst ihn manuell setzen oder die Marktdaten ignorieren.
+                            </p>
+                        </div>
+
+                        <div className="mt-6 space-y-3">
+                            {unresolvedSecurities.map(sec => (
+                                <div key={sec.isin} className="md3-list-item p-4 flex flex-col gap-3">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="min-w-0">
+                                            <div className="md3-text-main text-sm font-medium truncate">{sec.name}</div>
+                                            <div className="md3-text-muted text-xs mt-1">{sec.isin}</div>
+                                        </div>
+                                        <div className="md3-chip-tonal text-xs px-2 py-0.5 rounded-full">Kein Treffer</div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                        <input
+                                            type="text"
+                                            value={tickerOverrides[sec.isin] || ''}
+                                            onChange={(e) => setTickerOverrides(prev => ({ ...prev, [sec.isin]: e.target.value }))}
+                                            placeholder="Ticker eingeben (z.B. AAPL)"
+                                            className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleTickerOverride(sec)}
+                                                className="md3-filled-btn px-4 py-2 text-sm font-semibold"
+                                            >
+                                                Ticker speichern
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleIgnoreSecurity(sec)}
+                                                className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80"
+                                            >
+                                                Ignorieren
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+            </div>
             </div>
 
             {/* Chart Modal Overlay */}

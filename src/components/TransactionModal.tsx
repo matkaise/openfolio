@@ -7,6 +7,7 @@ import { Transaction, type CashAccount, type Portfolio } from '@/types/domain';
 import { parseFlatexCashBalancesCsv, parseFlatexCsv, type CashBalanceImportPoint } from '@/lib/csvParser';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
 import { getCurrencyOptions } from '@/lib/fxUtils';
+import { buildManualPriceHistory } from '@/lib/marketDataService';
 
 interface TransactionModalProps {
     isOpen: boolean;
@@ -18,6 +19,21 @@ type Tab = 'import' | 'manual';
 type TransactionType = 'Buy' | 'Sell';
 type ManualHoldingType = 'security' | 'cash';
 type ManualCashType = 'Deposit' | 'Withdrawal' | 'Dividend' | 'Tax' | 'Fee';
+type ResolveTickerResult = {
+    status: 'resolved' | 'unresolved' | 'error';
+    symbol?: string;
+    isin?: string;
+    name?: string;
+    currency?: string;
+    source?: 'kursliste' | 'openfigi' | 'yahoo';
+};
+type CompanyMatch = {
+    symbol: string;
+    name?: string;
+    exchange?: string;
+    currency?: string;
+    quoteType?: string;
+};
 
 export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: TransactionModalProps) => {
     const { project, updateProject } = useProject();
@@ -35,6 +51,14 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     const [price, setPrice] = useState('');
     const [cashAmount, setCashAmount] = useState('');
     const [currency, setCurrency] = useState('EUR');
+    const [isResolving, setIsResolving] = useState(false);
+    const [resolveStatus, setResolveStatus] = useState<'idle' | 'unresolved' | 'error'>('idle');
+    const [resolveResult, setResolveResult] = useState<ResolveTickerResult | null>(null);
+    const [companyQuery, setCompanyQuery] = useState('');
+    const [companySearchMessage, setCompanySearchMessage] = useState<string | null>(null);
+    const [companyMatches, setCompanyMatches] = useState<CompanyMatch[]>([]);
+    const [isCompanySearching, setIsCompanySearching] = useState(false);
+    const [isCompanySearchOpen, setIsCompanySearchOpen] = useState(false);
 
     // Import Form State
     const [selectedBroker, setSelectedBroker] = useState('');
@@ -198,31 +222,168 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
     if (!isOpen) return null;
 
-    const handleSaveManual = () => {
+    const normalizeIdentifier = (value: string) => value.trim().toUpperCase();
+    const isIsin = (value: string) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value);
+
+    const buildManualSecurityTransaction = (): Transaction | null => {
+        if (!identifier || !shares || !price) return null;
+        const parsedShares = Math.abs(parseFloat(shares));
+        const parsedPrice = parseFloat(price);
+        if (!Number.isFinite(parsedShares) || !Number.isFinite(parsedPrice) || parsedShares <= 0 || parsedPrice <= 0) {
+            return null;
+        }
+
+        const normalizedIdentifier = normalizeIdentifier(identifier);
+        return {
+            id: crypto.randomUUID(),
+            date,
+            type,
+            isin: normalizedIdentifier,
+            name: normalizedIdentifier,
+            shares: type === 'Sell' ? -parsedShares : parsedShares,
+            amount: type === 'Sell'
+                ? parsedShares * parsedPrice
+                : -(parsedShares * parsedPrice),
+            currency,
+            broker: 'Manual',
+            originalData: { manualEntry: true, pricePerShare: parsedPrice }
+        };
+    };
+
+    const resolveTicker = async (value: string, currencyHint: string): Promise<ResolveTickerResult | null> => {
+        try {
+            const res = await fetch('/api/resolve-ticker', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    input: value,
+                    currency: currencyHint,
+                    isin: isIsin(value) ? value : undefined
+                })
+            });
+            if (!res.ok) return null;
+            return res.json();
+        } catch (e) {
+            console.error(e);
+            return null;
+        }
+    };
+
+    const saveManualSecurity = (newTransaction: Transaction, options: {
+        resolvedSymbol?: string;
+        resolvedIsin?: string;
+        resolvedName?: string;
+        resolvedCurrency?: string;
+        resolvedSource?: ResolveTickerResult['source'];
+        ignoreMarketData?: boolean;
+    }) => {
+        updateProject(prev => {
+            // Handle Portfolio Creation
+            const portfolios = prev.portfolios || [];
+            const target = getTargetPortfolioId(portfolios);
+
+            let updatedPortfolios = portfolios;
+            if (target.isNew && !updatedPortfolios.find(p => p.id === target.id)) {
+                updatedPortfolios = [...portfolios, { id: target.id, name: target.name }];
+            }
+
+            const securityKey = options.resolvedIsin || newTransaction.isin || normalizeIdentifier(identifier);
+            const symbolValue = options.resolvedSymbol || normalizeIdentifier(identifier);
+            const existing = prev.securities[securityKey];
+
+            const transactions = [...prev.transactions, { ...newTransaction, isin: securityKey, portfolioId: target.id }];
+
+            const manualHistory = options.ignoreMarketData
+                ? buildManualPriceHistory(transactions, securityKey)
+                : undefined;
+
+            const updatedSecurities = {
+                ...prev.securities,
+                [securityKey]: {
+                    isin: securityKey,
+                    symbol: symbolValue,
+                    name: options.resolvedName || existing?.name || newTransaction.name || securityKey,
+                    currency: options.resolvedCurrency || existing?.currency || newTransaction.currency,
+                    quoteType: existing?.quoteType || 'Stock',
+                    priceHistory: manualHistory ? { ...(existing?.priceHistory || {}), ...manualHistory } : (existing?.priceHistory || {}),
+                    symbolStatus: options.ignoreMarketData
+                        ? 'ignored'
+                        : options.resolvedSymbol
+                            ? 'resolved'
+                            : 'unresolved',
+                    symbolSource: options.ignoreMarketData ? 'manual' : (options.resolvedSource || existing?.symbolSource),
+                    symbolLastTried: new Date().toISOString(),
+                    ignoreMarketData: Boolean(options.ignoreMarketData),
+                    dividendHistory: existing?.dividendHistory || [],
+                    upcomingDividends: existing?.upcomingDividends || [],
+                    dividendHistorySynced: existing?.dividendHistorySynced
+                }
+            };
+
+            return {
+                ...prev,
+                portfolios: updatedPortfolios,
+                transactions,
+                securities: updatedSecurities,
+                cashAccounts: prev.cashAccounts,
+                modified: new Date().toISOString()
+            };
+        });
+
+        onClose();
+    };
+
+    const searchCompanyMatches = async (query: string): Promise<CompanyMatch[]> => {
+        const res = await fetch('/api/ticker-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query })
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return Array.isArray(data?.matches) ? data.matches : [];
+    };
+
+    const handleCompanySearch = async () => {
+        if (!companyQuery.trim()) return;
+        setIsCompanySearching(true);
+        setCompanySearchMessage(null);
+        setCompanyMatches([]);
+
+        const matches = await searchCompanyMatches(companyQuery.trim());
+        setIsCompanySearching(false);
+
+        if (!matches.length) {
+            setCompanySearchMessage('Kein Treffer gefunden.');
+            return;
+        }
+
+        setCompanyMatches(matches);
+    };
+
+    const handleSelectCompanyMatch = (match: CompanyMatch) => {
+        const newTransaction = buildManualSecurityTransaction();
+        if (!newTransaction) return;
+
+        const updatedTransaction = {
+            ...newTransaction,
+            name: match.name || newTransaction.name
+        };
+
+        saveManualSecurity(updatedTransaction, {
+            resolvedSymbol: match.symbol,
+            resolvedName: match.name,
+            resolvedCurrency: match.currency || currency,
+            resolvedSource: 'yahoo'
+        });
+    };
+
+    const handleSaveManual = async () => {
         let newTransaction: Transaction | null = null;
 
         if (manualHoldingType === 'security') {
-            if (!identifier || !shares || !price) return;
-            const parsedShares = Math.abs(parseFloat(shares));
-            const parsedPrice = parseFloat(price);
-            if (!Number.isFinite(parsedShares) || !Number.isFinite(parsedPrice) || parsedShares <= 0 || parsedPrice <= 0) {
-                return;
-            }
-
-            newTransaction = {
-                id: crypto.randomUUID(),
-                date,
-                type,
-                isin: identifier.toUpperCase(),
-                name: identifier.toUpperCase(),
-                shares: type === 'Sell' ? -parsedShares : parsedShares,
-                amount: type === 'Sell'
-                    ? parsedShares * parsedPrice
-                    : -(parsedShares * parsedPrice),
-                currency,
-                broker: 'Manual',
-                originalData: { manualEntry: true, pricePerShare: parsedPrice }
-            };
+            newTransaction = buildManualSecurityTransaction();
+            if (!newTransaction) return;
         } else {
             if (!cashAmount) return;
             const parsedAmount = Math.abs(parseFloat(cashAmount));
@@ -256,6 +417,38 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
         if (!newTransaction) return;
 
+        if (manualHoldingType === 'security') {
+            setIsResolving(true);
+            const normalizedIdentifier = normalizeIdentifier(identifier);
+            const result = await resolveTicker(normalizedIdentifier, currency);
+            setIsResolving(false);
+
+            if (result?.status === 'resolved' && result.symbol) {
+                setResolveStatus('idle');
+                setResolveResult(null);
+                const resolvedIsin = result.isin && isIsin(normalizeIdentifier(result.isin)) ? normalizeIdentifier(result.isin) : undefined;
+                const updatedTransaction = {
+                    ...newTransaction,
+                    isin: resolvedIsin || newTransaction.isin,
+                    name: result.name || newTransaction.name
+                };
+                saveManualSecurity(updatedTransaction, {
+                    resolvedSymbol: result.symbol,
+                    resolvedIsin,
+                    resolvedName: result.name,
+                    resolvedCurrency: result.currency || currency,
+                    resolvedSource: result.source
+                });
+                return;
+            }
+
+            setResolveStatus('unresolved');
+            setResolveResult(result || { status: 'unresolved' });
+            setCompanySearchMessage(null);
+            setCompanyMatches([]);
+            return;
+        }
+
         updateProject(prev => {
             // Handle Portfolio Creation
             const portfolios = prev.portfolios || [];
@@ -266,26 +459,10 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 updatedPortfolios = [...portfolios, { id: target.id, name: target.name }];
             }
 
-            const updatedSecurities = { ...prev.securities };
-            const isin = newTransaction.isin;
-
-            // Ensure security exists
-            if (manualHoldingType === 'security' && isin && !updatedSecurities[isin]) {
-                updatedSecurities[isin] = {
-                    isin,
-                    symbol: isin, // Default to ISIN/Ticker
-                    name: isin,   // Default name
-                    currency: newTransaction.currency,
-                    quoteType: 'Stock', // Default
-                    priceHistory: {}
-                };
-            }
-
             return {
                 ...prev,
                 portfolios: updatedPortfolios,
                 transactions: [...prev.transactions, { ...newTransaction, portfolioId: target.id }],
-                securities: updatedSecurities,
                 cashAccounts: manualHoldingType === 'cash'
                     ? applyManualCashEntryToExplicitHistory(prev.cashAccounts, target.id, newTransaction, {
                         portfolioName: target.name
@@ -443,11 +620,29 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                             <input
                                                 type="text"
                                                 value={identifier}
-                                                onChange={(e) => setIdentifier(e.target.value)}
+                                                onChange={(e) => {
+                                                    setIdentifier(e.target.value);
+                                                    setResolveStatus('idle');
+                                                    setResolveResult(null);
+                                                    setCompanySearchMessage(null);
+                                                    setCompanyMatches([]);
+                                                }}
                                                 placeholder="z.B. US0378331005"
                                                 className="md3-field w-full pl-10 pr-4 py-3 text-sm outline-none"
                                             />
                                         </div>
+                                        {resolveStatus === 'unresolved' && manualHoldingType === 'security' && (
+                                            <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+                                                <span>Kein Ticker gefunden. Ticker anpassen, Firmensuche oder Ignorieren.</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsCompanySearchOpen(true)}
+                                                    className="md3-filled-btn px-3 py-1.5 text-xs font-semibold"
+                                                >
+                                                    Firmensuche
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="space-y-2">
@@ -582,13 +777,50 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                         {importStatus === 'success' ? 'Erfolgreich!' : 'Import starten'}
                     </button>
                 ) : (
-                    <button
-                        type="button"
-                        onClick={handleSaveManual}
-                        className="md3-filled-btn px-6 text-sm font-semibold"
-                    >
-                        Transaktion speichern
-                    </button>
+                    <>
+                        {resolveStatus === 'unresolved' && manualHoldingType === 'security' ? (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setResolveStatus('idle');
+                                        setResolveResult(null);
+                                    }}
+                                    className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80"
+                                >
+                                    Ticker anpassen
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const ignoredTx = buildManualSecurityTransaction();
+                                        if (!ignoredTx) return;
+                                        const resolvedIsin = resolveResult?.isin && isIsin(normalizeIdentifier(resolveResult.isin))
+                                            ? normalizeIdentifier(resolveResult.isin)
+                                            : undefined;
+                                        saveManualSecurity(ignoredTx, {
+                                            resolvedIsin,
+                                            resolvedName: resolveResult?.name,
+                                            resolvedCurrency: resolveResult?.currency || currency,
+                                            ignoreMarketData: true
+                                        });
+                                    }}
+                                    className="md3-filled-btn px-6 text-sm font-semibold"
+                                >
+                                    Ignorieren &amp; speichern
+                                </button>
+                            </>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleSaveManual}
+                                disabled={isResolving}
+                                className="md3-filled-btn px-6 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {isResolving ? 'Pruefe Ticker...' : 'Transaktion speichern'}
+                            </button>
+                        )}
+                    </>
                 )}
             </div>
         </div>
@@ -599,6 +831,83 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             <div className="md3-card w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] md:max-h-none rounded-[28px]">
                 {renderContent()}
             </div>
+            {isCompanySearchOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setIsCompanySearchOpen(false)}>
+                    <div className="md3-card w-full max-w-lg rounded-[24px] p-5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-base font-semibold md3-text-main">Firmennamen suchen</h3>
+                                <p className="text-xs md3-text-muted">Waehle den passenden Treffer aus.</p>
+                            </div>
+                            <button type="button" onClick={() => setIsCompanySearchOpen(false)} className="md3-icon-btn" aria-label="Schliessen">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
+                            <input
+                                type="text"
+                                value={companyQuery}
+                                onChange={(e) => {
+                                    setCompanyQuery(e.target.value);
+                                    setCompanySearchMessage(null);
+                                    setCompanyMatches([]);
+                                }}
+                                placeholder="Firmennamen eingeben (z.B. Apple)"
+                                className="md3-field w-full px-3 py-2 text-sm outline-none"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleCompanySearch}
+                                disabled={isCompanySearching || !companyQuery.trim()}
+                                className="md3-filled-btn px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {isCompanySearching ? 'Suche...' : 'Suchen'}
+                            </button>
+                        </div>
+
+                        {companySearchMessage && (
+                            <div className="mt-3 text-xs md3-text-muted">{companySearchMessage}</div>
+                        )}
+
+                        {companyMatches.length > 0 && (
+                            <div className="mt-4 rounded-xl border border-white/10 bg-black/5 p-2">
+                                <div className="mb-2 flex items-center justify-between text-[11px] uppercase tracking-wider md3-text-muted">
+                                    <span>Treffer ({companyMatches.length})</span>
+                                    <span>Scrollen fuer mehr</span>
+                                </div>
+                                <div className="max-h-64 space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                                    {companyMatches.map(match => (
+                                        <div key={match.symbol} className="md3-list-item flex items-center justify-between gap-3 px-3 py-2">
+                                            <div className="min-w-0">
+                                                <div className="text-sm md3-text-main font-medium truncate">{match.name || match.symbol}</div>
+                                                <div className="text-xs md3-text-muted">
+                                                    <span>{match.symbol}</span>
+                                                    {match.exchange && <span> - {match.exchange}</span>}
+                                                    {match.currency && <span> - {match.currency}</span>}
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSelectCompanyMatch(match)}
+                                                className="md3-filled-btn px-3 py-1.5 text-xs font-semibold"
+                                            >
+                                                Uebernehmen
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="mt-4 flex justify-end">
+                            <button type="button" onClick={() => setIsCompanySearchOpen(false)} className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80">
+                                Schliessen
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

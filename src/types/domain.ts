@@ -20,6 +20,10 @@ export interface Security {
     isin: ISIN;
     name: string;
     symbol?: string; // Ticker
+    symbolStatus?: 'resolved' | 'unresolved' | 'ignored';
+    symbolSource?: 'kursliste' | 'openfigi' | 'yahoo' | 'manual' | 'unknown';
+    symbolLastTried?: string; // ISO Date of last resolve attempt
+    ignoreMarketData?: boolean;
     currency: Currency; // Trading currency
     sector?: string;
     region?: string;

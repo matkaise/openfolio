@@ -352,6 +352,7 @@ export default function PortfolioApp() {
 
     const now = new Date();
     const needsSync = Object.values(repaired.securities || {}).some((sec) => {
+      if (sec.ignoreMarketData || sec.symbolStatus === 'ignored') return false;
       const symbol = sec.symbol || sec.isin;
       if (!symbol) return false;
       if (!sec.lastSync) return true;

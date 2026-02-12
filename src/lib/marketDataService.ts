@@ -1,4 +1,61 @@
-import { ProjectData, ISIN } from '@/types/domain';
+import { ProjectData, type Transaction } from '@/types/domain';
+
+type ResolveTickerResult = {
+    status: 'resolved' | 'unresolved' | 'error';
+    symbol?: string;
+    isin?: string;
+    name?: string;
+    currency?: string;
+    source?: 'kursliste' | 'openfigi' | 'yahoo';
+    matchBy?: 'isin' | 'valor' | 'wkn' | 'symbol' | 'input';
+};
+
+const isBuyType = (type: Transaction['type']) => type === 'Buy' || type === 'Sparplan_Buy';
+
+export const buildManualPriceHistory = (transactions: Transaction[], isin: string): Record<string, number> => {
+    const history: Record<string, number> = {};
+    transactions
+        .filter(tx => tx.isin === isin && isBuyType(tx.type))
+        .forEach(tx => {
+            const shares = Math.abs(tx.shares || 0);
+            if (!shares) return;
+
+            let price = 0;
+            if (tx.originalData && typeof tx.originalData === 'object') {
+                const maybePrice = (tx.originalData as { pricePerShare?: number }).pricePerShare;
+                if (typeof maybePrice === 'number' && Number.isFinite(maybePrice) && maybePrice > 0) {
+                    price = maybePrice;
+                }
+            }
+
+            if (!price) {
+                const amount = Math.abs(tx.amount || 0);
+                price = amount / shares;
+            }
+
+            if (Number.isFinite(price) && price > 0) {
+                history[tx.date] = price;
+            }
+        });
+
+    return history;
+};
+
+const resolveSecuritySymbol = async (input: string, currency?: string, isin?: string, name?: string): Promise<ResolveTickerResult | null> => {
+    if (!input) return null;
+    try {
+        const res = await fetch('/api/resolve-ticker', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ input, currency, isin, name })
+        });
+        if (!res.ok) return null;
+        return res.json();
+    } catch (e) {
+        console.warn('[MarketData] Resolve ticker failed', e);
+        return null;
+    }
+};
 
 export const syncProjectQuotes = async (project: ProjectData, force: boolean = false): Promise<ProjectData> => {
     const now = new Date();
@@ -14,20 +71,27 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
         hasChanges = true;
     }
 
-    const toUpdate: ISIN[] = [];
+    let syncedCount = 0;
 
-    // Identify securities to update
-    for (const isin in securities) {
+    for (const isin of Object.keys(securities)) {
         const sec = securities[isin];
-        // Allow mapped Ticker. If no symbol, try ISIN (Yahoo usually needs Ticker though)
-        // We probably need a ISIN->Ticker mapping service later. 
-        // For now, rely on what we have or user input.
-        // Flatex Import uses ISIN. 
-        // Yahoo often accepts ISIN directly or we need to find the ticker.
-        // Try ISIN directly first.
-        const symbol = sec.symbol || sec.isin;
 
-        if (!symbol) continue;
+        if (sec.ignoreMarketData || sec.symbolStatus === 'ignored') {
+            const manualHistory = buildManualPriceHistory(transactions, isin);
+            if (Object.keys(manualHistory).length > 0) {
+                securities[isin] = {
+                    ...sec,
+                    ignoreMarketData: true,
+                    priceHistory: { ...(sec.priceHistory || {}), ...manualHistory },
+                    dividendHistory: sec.dividendHistory || [],
+                    upcomingDividends: sec.upcomingDividends || [],
+                    dividendHistorySynced: true,
+                    symbolStatus: 'ignored'
+                };
+                hasChanges = true;
+            }
+            continue;
+        }
 
         const lastSync = sec.lastSync ? new Date(sec.lastSync) : new Date(0);
         const diffHours = (now.getTime() - lastSync.getTime()) / (1000 * 60 * 60);
@@ -35,17 +99,44 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
         const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
         const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
 
-        if (force || diffHours > 24 || missingHistory || missingDividends) {
-            toUpdate.push(isin);
+        const shouldSync = force || diffHours > 24 || missingHistory || missingDividends;
+        if (!shouldSync) continue;
+
+        let symbolToFetch = sec.symbol || sec.isin;
+
+        const shouldResolve = !sec.symbol || sec.symbol === sec.isin || sec.symbolStatus === 'unresolved';
+        const canRetryResolve = force || sec.symbolStatus !== 'unresolved';
+
+        if (shouldResolve && canRetryResolve) {
+            const resolveResult = await resolveSecuritySymbol(symbolToFetch || '', sec.currency, sec.isin, sec.name);
+            if (resolveResult?.status === 'resolved' && resolveResult.symbol) {
+                symbolToFetch = resolveResult.symbol;
+                securities[isin] = {
+                    ...sec,
+                    symbol: resolveResult.symbol,
+                    name: resolveResult.name || sec.name,
+                    currency: resolveResult.currency || sec.currency,
+                    symbolStatus: 'resolved',
+                    symbolSource: resolveResult.source || 'unknown',
+                    symbolLastTried: now.toISOString()
+                };
+                hasChanges = true;
+            } else if (resolveResult?.status === 'unresolved') {
+                securities[isin] = {
+                    ...sec,
+                    symbolStatus: 'unresolved',
+                    symbolSource: resolveResult.source || 'unknown',
+                    symbolLastTried: now.toISOString()
+                };
+                hasChanges = true;
+                if (!sec.symbol || sec.symbol === sec.isin) {
+                    continue;
+                }
+            }
         }
-    }
 
-    console.log(`[MarketData] Syncing ${toUpdate.length} securities...`);
-
-    // Process in parallel (batches of 5 to be nice?)
-    for (const isin of toUpdate) {
-        const sec = securities[isin];
-        const symbol = sec.symbol || sec.isin;
+        if (!symbolToFetch) continue;
+        const secForFetch = securities[isin];
 
         try {
             // Determine start date: lastSync or default full history
@@ -60,19 +151,22 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
             const res = await fetch('/api/yahoo', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ symbol, from })
+                body: JSON.stringify({ symbol: symbolToFetch, from })
             });
 
             if (res.ok) {
                 const data = await res.json();
                 if (data.history) {
                     securities[isin] = {
-                        ...sec,
+                        ...secForFetch,
                         priceHistory: { ...(sec.priceHistory || {}), ...data.history },
                         splits: { ...(sec.splits || {}), ...data.splits }, // Store splits in security
                         currency: data.currency || sec.currency,
-                        symbol: data.symbol || sec.symbol,
+                        symbol: data.symbol || symbolToFetch || sec.symbol,
                         name: data.longName || sec.name, // Update Name if available (e.g. Amazon.com, Inc.)
+                        symbolStatus: 'resolved',
+                        symbolSource: secForFetch.symbolSource || 'yahoo',
+                        symbolLastTried: secForFetch.symbolLastTried || now.toISOString(),
                         quoteType: mapYahooQuoteType(data.quoteType) || sec.quoteType, // Update Type
                         // Metrics
                         marketCap: data.marketCap,
@@ -98,14 +192,25 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
                         lastSync: now.toISOString()
                     };
                     hasChanges = true;
-                    console.log(`[MarketData] Updated ${symbol}`);
+                    syncedCount += 1;
+                    console.log(`[MarketData] Updated ${symbolToFetch}`);
                 }
             } else {
-                console.warn(`[MarketData] Failed to fetch ${symbol}:`, res.statusText);
+                securities[isin] = {
+                    ...secForFetch,
+                    symbolStatus: 'unresolved',
+                    symbolLastTried: now.toISOString()
+                };
+                hasChanges = true;
+                console.warn(`[MarketData] Failed to fetch ${symbolToFetch}:`, res.statusText);
             }
         } catch (e) {
-            console.error(`[MarketData] Error syncing ${symbol}`, e);
+            console.error(`[MarketData] Error syncing ${symbolToFetch}`, e);
         }
+    }
+
+    if (syncedCount > 0) {
+        console.log(`[MarketData] Synced ${syncedCount} securities.`);
     }
 
     if (hasChanges) {

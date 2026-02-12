@@ -83,6 +83,20 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
           <div className="md3-list-item p-8 text-center text-sm text-slate-400">Keine Positionen vorhanden. Importiere deine Trades.</div>
         ) : (
           holdings.map((stock) => (
+            (() => {
+              const meta = project?.securities?.[stock.security.isin];
+              let statusLabel = 'Ticker ok';
+              let statusClass = 'md3-positive-soft text-xs px-2 py-0.5 rounded-full';
+
+              if (meta?.ignoreMarketData || meta?.symbolStatus === 'ignored') {
+                statusLabel = 'Ignoriert';
+                statusClass = 'md3-chip-tonal text-xs px-2 py-0.5 rounded-full';
+              } else if (meta?.symbolStatus === 'unresolved') {
+                statusLabel = 'Ticker fehlt';
+                statusClass = 'md3-negative-soft text-xs px-2 py-0.5 rounded-full';
+              }
+
+              return (
             <div key={stock.security.isin} onClick={() => onSelectSecurity(stock.security.isin)} className="md3-list-item flex cursor-pointer items-center justify-between p-4">
               <div className="flex items-center space-x-4">
                 <div className="md3-chip-tonal flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold">
@@ -92,6 +106,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
                   <h4 className="md3-text-main font-medium">{stock.security.name}</h4>
                   <div className="mt-0.5 flex items-center space-x-2 text-xs text-slate-400">
                     <span className="md3-chip-tonal rounded px-1.5">{stock.security.quoteType || 'Aktie'}</span>
+                    <span className={statusClass}>{statusLabel}</span>
                     <span>{stock.quantity} Stk.</span>
                     <span className="text-slate-500">|</span>
                     <span>Avg {stock.averageBuyPriceInOriginalCurrency.toLocaleString('de-DE', { style: 'currency', currency: stock.currency })}</span>
@@ -113,6 +128,8 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
                 </div>
               </div>
             </div>
+              );
+            })()
           ))
         )}
       </div>
