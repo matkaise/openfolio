@@ -123,7 +123,32 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
   const currentMaketValue = latestKpiHistoryPoint
     ? latestKpiHistoryPoint.value
     : holdings.reduce((sum, h) => sum + h.value, 0);
-  const cashBalance = latestKpiHistoryPoint ? (currentMaketValue - holdingsMarketValue) : 0;
+
+  const cashBalance = useMemo(() => {
+    if (!project) return 0;
+
+    const cashAccountsWithHistory = filteredCashAccounts.filter(
+      (account) => account.balanceHistory && Object.keys(account.balanceHistory).length > 0
+    );
+
+    if (cashAccountsWithHistory.length > 0) {
+      return cashAccountsWithHistory.reduce((sum, account) => {
+        const dates = Object.keys(account.balanceHistory || {}).sort();
+        if (dates.length === 0) return sum;
+        const latestDate = dates[dates.length - 1];
+        const balance = account.balanceHistory?.[latestDate] || 0;
+        return sum + convertCurrency(project.fxData, balance, account.currency, baseCurrency, latestDate);
+      }, 0);
+    }
+
+    const cashTypes = new Set(['Deposit', 'Withdrawal', 'Dividend', 'Tax', 'Fee']);
+    const cashTransactions = filteredTransactions.filter((tx) => cashTypes.has(tx.type));
+    if (cashTransactions.length === 0) return 0;
+
+    return cashTransactions.reduce((sum, tx) => {
+      return sum + convertCurrency(project.fxData, tx.amount, tx.currency, baseCurrency, tx.date);
+    }, 0);
+  }, [project, filteredCashAccounts, filteredTransactions, baseCurrency]);
   const totalReturn = currentMaketValue - investedCapital;
   const wealthGoalStep = 25000;
   const goalSource = resolveWealthGoalSource(project?.settings);

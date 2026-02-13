@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { ProjectData, createEmptyProject } from '@/types/domain';
 import { CurrencyService } from '@/lib/currencyService';
-import { syncProjectQuotes } from '@/lib/marketDataService';
+import { syncProjectQuotes, type MarketSyncProgress } from '@/lib/marketDataService';
 import { normalizeProjectWealthGoal } from '@/lib/wealthGoalUtils';
 
 interface ProjectContextType {
@@ -11,6 +11,7 @@ interface ProjectContextType {
     isLoaded: boolean;
     isModified: boolean;
     fileName: string | null;
+    marketSyncProgress: MarketSyncProgress | null;
 
     // Actions
     newProject: () => void;
@@ -24,7 +25,7 @@ interface ProjectContextType {
 
     // Sync
     syncFx: () => Promise<void>;
-    syncMarket: (force?: boolean) => Promise<void>;
+    syncMarket: (force?: boolean, options?: { full?: boolean; projectOverride?: ProjectData }) => Promise<void>;
     syncAll: (forceMarket?: boolean) => Promise<void>;
     isSyncing: boolean;
     isMarketSyncing: boolean;
@@ -47,6 +48,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [isModified, setIsModified] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isMarketSyncing, setIsMarketSyncing] = useState(false);
+    const [marketSyncProgress, setMarketSyncProgress] = useState<MarketSyncProgress | null>(null);
 
     // Helper to perform sync on a given project data state
     const performSync = useCallback(async (currentProject: ProjectData) => {
@@ -77,11 +79,14 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
-    const performMarketSync = useCallback(async (currentProject: ProjectData, force: boolean = false) => {
+    const performMarketSync = useCallback(async (currentProject: ProjectData, force: boolean = false, full: boolean = false) => {
         setIsMarketSyncing(true);
+        setMarketSyncProgress({ current: 0, total: 0, stage: 'start' });
         try {
             console.log("Auto-syncing market data...");
-            const updated = await syncProjectQuotes(currentProject, force);
+            const updated = await syncProjectQuotes(currentProject, force, (progress) => {
+                setMarketSyncProgress(progress);
+            }, full ? { maxPerRun: 0, maxTimeMs: 0 } : undefined);
             if (updated !== currentProject) {
                 setProject(prev => prev ? ({
                     ...prev,
@@ -98,6 +103,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             console.error("Market sync failed", e);
         } finally {
             setIsMarketSyncing(false);
+            setMarketSyncProgress(null);
         }
     }, []);
 
@@ -241,9 +247,10 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [project, performSync]);
 
-    const syncMarket = useCallback(async (force: boolean = false) => {
-        if (project) {
-            await performMarketSync(project, force);
+    const syncMarket = useCallback(async (force: boolean = false, options?: { full?: boolean; projectOverride?: ProjectData }) => {
+        const target = options?.projectOverride || project;
+        if (target) {
+            await performMarketSync(target, force, Boolean(options?.full));
         } else {
             console.warn("Could not sync market data: No project loaded.");
         }
@@ -266,6 +273,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             isLoaded: !!project,
             isModified,
             fileName,
+            marketSyncProgress,
             newProject,
             openProject,
             saveProject,

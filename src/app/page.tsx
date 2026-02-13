@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LayoutDashboard,
   PieChart,
@@ -27,7 +27,7 @@ import { ImportContent } from '@/components/ImportContent';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { TransactionModal } from '@/components/TransactionModal';
 import { SecurityDetailModal } from '@/components/SecurityDetailModal';
-import { syncProjectQuotes, repairProjectSecurities } from '@/lib/marketDataService';
+import { repairProjectSecurities } from '@/lib/marketDataService';
 import { normalizeWealthGoalSettings } from '@/lib/wealthGoalUtils';
 import { type AnalysisCache } from '@/types/portfolioView';
 import { SidebarItem } from '@/components/ui/SidebarItem';
@@ -318,7 +318,7 @@ const MATERIAL_THEMES = {
 const MOBILE_NAV_ITEMS = NAV_ITEMS.slice(0, 4);
 
 export default function PortfolioApp() {
-  const { isLoaded, closeProject, saveProject, project, isModified, updateProject, syncAll, isSyncing, isMarketSyncing } = useProject();
+  const { isLoaded, closeProject, saveProject, project, isModified, updateProject, syncAll, syncMarket, isSyncing, isMarketSyncing, marketSyncProgress } = useProject();
   const [activeTab, setActiveTab] = useState<TabKey>('Dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -329,6 +329,7 @@ export default function PortfolioApp() {
   const [includeDividendsInPerformance, setIncludeDividendsInPerformance] = useState(false);
   const [activeThemeId, setActiveThemeId] = useState<keyof typeof MATERIAL_THEMES>('baseline');
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const lastMarketAutoSyncRef = useRef(0);
 
   const [importTargetPortfolio, setImportTargetPortfolio] = useState<{ id: string; name: string; isNew: boolean } | null>(null);
 
@@ -362,19 +363,23 @@ export default function PortfolioApp() {
       return diffHours > 24 || missingHistory || missingDividends;
     });
 
-    if (!needsSync) {
-      if (needsRepairUpdate) {
-        updateProject(() => repaired);
-      }
+    if (needsRepairUpdate) {
+      updateProject(() => repaired);
       return;
     }
 
-    syncProjectQuotes(repaired).then((updated) => {
-      if (updated !== repaired || needsRepairUpdate) {
-        updateProject(() => updated);
-      }
-    });
-  }, [isLoaded, project, updateProject]);
+    if (!needsSync) {
+      return;
+    }
+
+    const cooldownMs = 10 * 60 * 1000;
+    if (Date.now() - lastMarketAutoSyncRef.current < cooldownMs) {
+      return;
+    }
+
+    lastMarketAutoSyncRef.current = Date.now();
+    void syncMarket(false);
+  }, [isLoaded, project, syncMarket, updateProject]);
 
   const handleCacheUpdate = useCallback((data: AnalysisCache) => {
     setAnalysisCache(data);
@@ -720,6 +725,24 @@ export default function PortfolioApp() {
                 >
                   {(isSyncing || isMarketSyncing) ? <Loader2 size={20} className="animate-spin" /> : <RefreshCw size={20} />}
                 </button>
+
+                {isMarketSyncing && marketSyncProgress && marketSyncProgress.total > 0 && (
+                  <div className="hidden items-center gap-2 text-[11px] font-semibold md:flex" style={{ color: 'var(--md3-on-surface-variant)' }}>
+                    <span>Markt {marketSyncProgress.current}/{marketSyncProgress.total}</span>
+                    <div className="h-1.5 w-24 rounded-full" style={{ background: 'var(--md3-surface-container-highest)' }}>
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.min(100, Math.round((marketSyncProgress.current / marketSyncProgress.total) * 100))}%`,
+                          background: 'var(--md3-primary)'
+                        }}
+                      />
+                    </div>
+                    {marketSyncProgress.symbol && (
+                      <span className="max-w-[140px] truncate">{marketSyncProgress.symbol}</span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </header>

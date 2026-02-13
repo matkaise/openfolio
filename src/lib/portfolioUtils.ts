@@ -31,15 +31,77 @@ const getAbsoluteAmount = (amount: number | undefined) => {
 const getCashDeltaForTransaction = (tx: Transaction): number => {
     const amount = getAbsoluteAmount(tx.amount);
 
-    if (isBuyType(tx.type) || tx.type === 'Fee' || tx.type === 'Tax' || tx.type === 'Withdrawal') {
+    // Only explicit cash-related transactions should affect cash balance.
+    if (tx.type === 'Fee' || tx.type === 'Tax' || tx.type === 'Withdrawal') {
         return -amount;
     }
 
-    if (tx.type === 'Sell' || tx.type === 'Dividend' || tx.type === 'Deposit') {
+    if (tx.type === 'Dividend' || tx.type === 'Deposit') {
         return amount;
     }
 
     return 0;
+};
+
+const buildSplitIgnoreDates = (
+    txByIsin: Record<string, Transaction[]>,
+    splitsByIsin: Record<string, Record<string, number>>
+) => {
+    const ignoreMap: Record<string, Set<string>> = {};
+
+    Object.entries(splitsByIsin).forEach(([isin, splits]) => {
+        const txs = txByIsin[isin] || [];
+        if (txs.length === 0) return;
+
+        const byDate = new Map<string, Transaction[]>();
+        txs.forEach(tx => {
+            if (!tx.date) return;
+            const list = byDate.get(tx.date) || [];
+            list.push(tx);
+            byDate.set(tx.date, list);
+        });
+
+        Object.entries(splits).forEach(([date, ratio]) => {
+            const list = byDate.get(date) || [];
+            if (list.length === 0) return;
+
+            const buys = list.filter(tx => isBuyType(tx.type));
+            const sells = list.filter(tx => tx.type === 'Sell');
+            if (buys.length === 0 || sells.length === 0) return;
+
+            let hasSplitLike = false;
+
+            for (const buy of buys) {
+                const buyShares = Math.abs(buy.shares || 0);
+                const buyAmount = Math.abs(buy.amount || 0);
+                if (!buyShares) continue;
+                for (const sell of sells) {
+                    const sellShares = Math.abs(sell.shares || 0);
+                    const sellAmount = Math.abs(sell.amount || 0);
+                    if (!sellShares) continue;
+
+                    const shareRatio = buyShares > sellShares ? (buyShares / sellShares) : (sellShares / buyShares);
+                    const ratioTolerance = Math.max(0.05, ratio * 0.05);
+                    if (Math.abs(shareRatio - ratio) > ratioTolerance) continue;
+
+                    const amountDiff = Math.abs(buyAmount - sellAmount);
+                    const amountTolerance = Math.max(1, Math.max(buyAmount, sellAmount) * 0.02);
+                    if (amountDiff <= amountTolerance) {
+                        hasSplitLike = true;
+                        break;
+                    }
+                }
+                if (hasSplitLike) break;
+            }
+
+            if (hasSplitLike) {
+                if (!ignoreMap[isin]) ignoreMap[isin] = new Set<string>();
+                ignoreMap[isin].add(date);
+            }
+        });
+    });
+
+    return ignoreMap;
 };
 
 // ... inside calculateHoldings function ...
@@ -126,6 +188,14 @@ export function calculateHoldings(
         txByIsin[tx.isin].push(tx);
     });
 
+    const splitsByIsin: Record<string, Record<string, number>> = {};
+    securities.forEach(sec => {
+        if (sec.splits) {
+            splitsByIsin[sec.isin] = sec.splits;
+        }
+    });
+    const splitIgnoreDates = buildSplitIgnoreDates(txByIsin, splitsByIsin);
+
     // Process each security
     const allIsins = new Set([...Object.keys(txByIsin), ...Object.keys(holdingsMap)]);
 
@@ -155,22 +225,29 @@ export function calculateHoldings(
             txByIsin[isin].forEach(tx => events.push({ date: tx.date, type: 'Tx', data: tx }));
         }
 
-        // Add Splits from Security
+        // Add Splits from Security (skip split days already represented in transactions)
         if (sec && sec.splits) {
+            const ignoredDates = splitIgnoreDates[isin];
             Object.entries(sec.splits).forEach(([date, ratio]) => {
+                if (ignoredDates && ignoredDates.has(date)) return;
                 events.push({ date, type: 'Split', ratio });
             });
         }
 
-        // Sort Events
+        // Sort Events (same-day order: Split -> Buy -> Sell)
+        const txOrder = (event: { type: 'Tx' | 'Split'; data?: Transaction }) => {
+            if (event.type === 'Split') return 0;
+            const tx = event.data;
+            if (tx && isBuyType(tx.type)) return 1;
+            if (tx && tx.type === 'Sell') return 2;
+            return 3;
+        };
+
         events.sort((a, b) => {
             const timeA = new Date(a.date).getTime();
             const timeB = new Date(b.date).getTime();
             if (timeA !== timeB) return timeA - timeB;
-            // Split before Tx on same day
-            if (a.type === 'Split' && b.type !== 'Split') return -1;
-            if (a.type !== 'Split' && b.type === 'Split') return 1;
-            return 0;
+            return txOrder(a) - txOrder(b);
         });
 
         // Process Timeline
@@ -299,13 +376,16 @@ export function calculatePortfolioHistory(
     }
 
     // Pre-calculate splits per ISIN for price adjustment
-    const splitsMap: Record<string, { time: number; ratio: number }[]> = {};
-    // Use splits from Securities now
+    const splitsMap: Record<string, { time: number; ratio: number; date: string }[]> = {};
+    const splitsByIsin: Record<string, Record<string, number>> = {};
+    // Use splits from Securities now (filtered later once we know split-like days)
     securities.forEach(sec => {
         if (sec.splits) {
+            splitsByIsin[sec.isin] = sec.splits;
             splitsMap[sec.isin] = Object.entries(sec.splits).map(([d, r]) => ({
                 time: dateKeyToUtcMs(d),
-                ratio: r
+                ratio: r,
+                date: d
             }));
         }
     });
@@ -503,6 +583,13 @@ export function calculatePortfolioHistory(
         list.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     });
 
+    const splitIgnoreDates = buildSplitIgnoreDates(txByIsin, splitsByIsin);
+    Object.keys(splitsMap).forEach((isin) => {
+        const ignoredDates = splitIgnoreDates[isin];
+        if (!ignoredDates) return;
+        splitsMap[isin] = splitsMap[isin].filter(split => !ignoredDates.has(split.date));
+    });
+
     const eventsByIsin: Record<string, { time: number; date: string; type: 'Tx' | 'Split'; data?: Transaction; ratio?: number }[]> = {};
     const allIsins = new Set<string>([
         ...Object.keys(txByIsin),
@@ -525,11 +612,17 @@ export function calculatePortfolioHistory(
             });
         }
 
+        const txOrder = (event: { type: 'Tx' | 'Split'; data?: Transaction }) => {
+            if (event.type === 'Split') return 0;
+            const tx = event.data;
+            if (tx && isBuyType(tx.type)) return 1;
+            if (tx && tx.type === 'Sell') return 2;
+            return 3;
+        };
+
         events.sort((a, b) => {
             if (a.time !== b.time) return a.time - b.time;
-            if (a.type === 'Split' && b.type !== 'Split') return -1;
-            if (a.type !== 'Split' && b.type === 'Split') return 1;
-            return 0;
+            return txOrder(a) - txOrder(b);
         });
 
         eventsByIsin[isin] = events;

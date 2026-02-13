@@ -10,7 +10,26 @@ type ResolveTickerResult = {
     matchBy?: 'isin' | 'valor' | 'wkn' | 'symbol' | 'input';
 };
 
+export type MarketSyncProgress = {
+    current: number;
+    total: number;
+    symbol?: string;
+    stage?: 'start' | 'resolve' | 'fetch' | 'skip' | 'done' | 'limit';
+};
+
+const parsePositiveNumber = (raw: string | number | undefined, fallback: number) => {
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value <= 0) return fallback;
+    return value;
+};
+
+const MAX_SYNC_PER_RUN = Math.floor(parsePositiveNumber(process.env.NEXT_PUBLIC_MARKET_SYNC_LIMIT, 5));
+const SYNC_DELAY_MS = Math.floor(parsePositiveNumber(process.env.NEXT_PUBLIC_MARKET_SYNC_DELAY_MS, 350));
+const MAX_SYNC_TIME_MS = Math.floor(parsePositiveNumber(process.env.NEXT_PUBLIC_MARKET_SYNC_MAX_MS, 15000));
+
 const isBuyType = (type: Transaction['type']) => type === 'Buy' || type === 'Sparplan_Buy';
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const buildManualPriceHistory = (transactions: Transaction[], isin: string): Record<string, number> => {
     const history: Record<string, number> = {};
@@ -57,10 +76,26 @@ const resolveSecuritySymbol = async (input: string, currency?: string, isin?: st
     }
 };
 
-export const syncProjectQuotes = async (project: ProjectData, force: boolean = false): Promise<ProjectData> => {
+export const syncProjectQuotes = async (
+    project: ProjectData,
+    force: boolean = false,
+    onProgress?: (progress: MarketSyncProgress) => void,
+    options?: {
+        maxPerRun?: number;
+        maxTimeMs?: number;
+        delayMs?: number;
+    }
+): Promise<ProjectData> => {
     const now = new Date();
     const securities = { ...project.securities };
     let hasChanges = false;
+    const syncStartedAt = Date.now();
+    const maxPerRunRaw = options?.maxPerRun;
+    const maxPerRun = Number.isFinite(maxPerRunRaw) ? Math.floor(maxPerRunRaw as number) : MAX_SYNC_PER_RUN;
+    const maxTimeMsRaw = options?.maxTimeMs;
+    const maxTimeMs = Number.isFinite(maxTimeMsRaw) ? Math.floor(maxTimeMsRaw as number) : MAX_SYNC_TIME_MS;
+    const delayMsRaw = options?.delayMs;
+    const delayMs = Number.isFinite(delayMsRaw) ? Math.floor(delayMsRaw as number) : SYNC_DELAY_MS;
 
     // Filter out old "System" split transactions as we now store them in Security
     // This is a one-time migration/cleanup
@@ -72,9 +107,39 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
     }
 
     let syncedCount = 0;
+    let attemptedCount = 0;
+    let processedCount = 0;
 
-    for (const isin of Object.keys(securities)) {
+    const shouldSyncIsins = Object.keys(securities).filter((isin) => {
         const sec = securities[isin];
+        if (!sec) return false;
+        if (sec.ignoreMarketData || sec.symbolStatus === 'ignored') return false;
+        const symbol = sec.symbol || sec.isin;
+        if (!symbol) return false;
+        if (!sec.lastSync) return true;
+        const diffHours = (now.getTime() - new Date(sec.lastSync).getTime()) / (1000 * 60 * 60);
+        const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
+        const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
+        return force || diffHours > 24 || missingHistory || missingDividends;
+    });
+
+    const effectiveMaxPerRun = Number.isFinite(maxPerRun) && maxPerRun > 0 ? maxPerRun : Number.POSITIVE_INFINITY;
+    const maxTargets = Number.isFinite(effectiveMaxPerRun)
+        ? Math.min(effectiveMaxPerRun, shouldSyncIsins.length)
+        : shouldSyncIsins.length;
+    const targetIsins = shouldSyncIsins.slice(0, maxTargets);
+
+    onProgress?.({ current: 0, total: targetIsins.length, stage: 'start' });
+
+    for (const isin of targetIsins) {
+        if (Number.isFinite(maxTimeMs) && maxTimeMs > 0 && Date.now() - syncStartedAt >= maxTimeMs) {
+            console.log(`[MarketData] Sync time budget reached (${maxTimeMs}ms). Stopping early.`);
+            onProgress?.({ current: processedCount, total: targetIsins.length, stage: 'limit' });
+            break;
+        }
+        const sec = securities[isin];
+        const fallbackSymbol = sec.symbol || sec.isin || isin;
+        onProgress?.({ current: processedCount, total: targetIsins.length, symbol: fallbackSymbol, stage: 'start' });
 
         if (sec.ignoreMarketData || sec.symbolStatus === 'ignored') {
             const manualHistory = buildManualPriceHistory(transactions, isin);
@@ -90,6 +155,8 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
                 };
                 hasChanges = true;
             }
+            processedCount += 1;
+            onProgress?.({ current: processedCount, total: targetIsins.length, symbol: fallbackSymbol, stage: 'skip' });
             continue;
         }
 
@@ -100,7 +167,11 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
         const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
 
         const shouldSync = force || diffHours > 24 || missingHistory || missingDividends;
-        if (!shouldSync) continue;
+        if (!shouldSync) {
+            processedCount += 1;
+            onProgress?.({ current: processedCount, total: targetIsins.length, symbol: fallbackSymbol, stage: 'skip' });
+            continue;
+        }
 
         let symbolToFetch = sec.symbol || sec.isin;
 
@@ -108,6 +179,7 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
         const canRetryResolve = force || sec.symbolStatus !== 'unresolved';
 
         if (shouldResolve && canRetryResolve) {
+            onProgress?.({ current: processedCount, total: targetIsins.length, symbol: symbolToFetch || fallbackSymbol, stage: 'resolve' });
             const resolveResult = await resolveSecuritySymbol(symbolToFetch || '', sec.currency, sec.isin, sec.name);
             if (resolveResult?.status === 'resolved' && resolveResult.symbol) {
                 symbolToFetch = resolveResult.symbol;
@@ -130,13 +202,27 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
                 };
                 hasChanges = true;
                 if (!sec.symbol || sec.symbol === sec.isin) {
+                    processedCount += 1;
+                    onProgress?.({ current: processedCount, total: targetIsins.length, symbol: symbolToFetch || fallbackSymbol, stage: 'skip' });
                     continue;
                 }
             }
         }
 
-        if (!symbolToFetch) continue;
+        if (!symbolToFetch) {
+            processedCount += 1;
+            onProgress?.({ current: processedCount, total: targetIsins.length, symbol: fallbackSymbol, stage: 'skip' });
+            continue;
+        }
         const secForFetch = securities[isin];
+
+        if (Number.isFinite(effectiveMaxPerRun) && attemptedCount >= effectiveMaxPerRun) {
+            console.log(`[MarketData] Sync limit reached (${effectiveMaxPerRun}). Stopping early.`);
+            onProgress?.({ current: processedCount, total: targetIsins.length, symbol: symbolToFetch, stage: 'limit' });
+            break;
+        }
+        attemptedCount += 1;
+        onProgress?.({ current: processedCount, total: targetIsins.length, symbol: symbolToFetch, stage: 'fetch' });
 
         try {
             // Determine start date: lastSync or default full history
@@ -206,11 +292,18 @@ export const syncProjectQuotes = async (project: ProjectData, force: boolean = f
             }
         } catch (e) {
             console.error(`[MarketData] Error syncing ${symbolToFetch}`, e);
+        } finally {
+            if (Number.isFinite(delayMs) && delayMs > 0) {
+                await delay(delayMs);
+            }
         }
+
+        processedCount += 1;
+        onProgress?.({ current: processedCount, total: targetIsins.length, symbol: symbolToFetch, stage: 'done' });
     }
 
-    if (syncedCount > 0) {
-        console.log(`[MarketData] Synced ${syncedCount} securities.`);
+    if (syncedCount > 0 || attemptedCount > 0) {
+        console.log(`[MarketData] Synced ${syncedCount} securities (attempted ${attemptedCount}).`);
     }
 
     if (hasChanges) {

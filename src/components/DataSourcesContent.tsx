@@ -12,13 +12,13 @@ import {
     Tooltip,
     ResponsiveContainer
 } from 'recharts';
-import { buildManualPriceHistory, syncProjectQuotes } from '@/lib/marketDataService';
+import { buildManualPriceHistory } from '@/lib/marketDataService';
 import { BarChart3, X } from 'lucide-react';
 import { SimpleAreaChart } from './SimpleAreaChart';
 import { Security } from '@/types/domain';
 
 export const DataSourcesContent = () => {
-    const { project, syncFx, isSyncing, updateProject } = useProject();
+    const { project, syncFx, syncMarket, isSyncing, isMarketSyncing, marketSyncProgress, updateProject } = useProject();
     const [selectedCurrency, setSelectedCurrency] = useState('USD');
     const [timeRange, setTimeRange] = useState('1J');
 
@@ -70,7 +70,6 @@ export const DataSourcesContent = () => {
     }, [project]);
 
     // Market Data Info
-    const [isQuoteSyncing, setIsQuoteSyncing] = useState(false);
     const [selectedSecurity, setSelectedSecurity] = useState<Security | null>(null);
     const [modalTimeRange, setModalTimeRange] = useState('1M');
     const [tickerOverrides, setTickerOverrides] = useState<Record<string, string>>({});
@@ -166,22 +165,22 @@ export const DataSourcesContent = () => {
         });
     };
 
+    const isSecurityPending = (sec: Security) => {
+        if (sec.ignoreMarketData || sec.symbolStatus === 'ignored') return false;
+        if (!sec.lastSync) return true;
+        const diffHours = (Date.now() - new Date(sec.lastSync).getTime()) / (1000 * 60 * 60);
+        const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
+        const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
+        return diffHours > 24 || missingHistory || missingDividends;
+    };
+
+    const pendingSecurities = useMemo(() => {
+        return marketStats.securities.filter(isSecurityPending);
+    }, [marketStats.securities]);
+
     const handleQuoteSync = async () => {
         if (!project) return;
-        setIsQuoteSyncing(true);
-        try {
-            const updated = await syncProjectQuotes(project, true); // Force update on manual click
-            if (updated !== project) {
-                updateProject(() => updated);
-            } else {
-                alert("Daten sind bereits aktuell.");
-            }
-        } catch (e) {
-            console.error(e);
-            alert("Fehler beim Sync.");
-        } finally {
-            setIsQuoteSyncing(false);
-        }
+        await syncMarket(true, { full: true });
     };
 
     return (
@@ -324,10 +323,14 @@ export const DataSourcesContent = () => {
                             <p className="text-sm md3-text-muted">Automatische Schlusskurse fuer Aktien & ETFs.</p>
                         </div>
                         <div className="flex items-center gap-2">
-                            {isQuoteSyncing ? (
+                            {isMarketSyncing ? (
                                 <span className="md3-chip-accent inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
                                     <Loader2 size={12} className="animate-spin" />
                                     Synchronisiere...
+                                </span>
+                            ) : pendingSecurities.length > 0 ? (
+                                <span className="md3-segment inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold md3-text-muted">
+                                    Teilweise
                                 </span>
                             ) : marketStats.lastSync && marketStats.lastSync !== 'Nie' ? (
                                 <span className="md3-positive-soft inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
@@ -353,18 +356,39 @@ export const DataSourcesContent = () => {
                         <button
                             type="button"
                             onClick={handleQuoteSync}
-                            disabled={isQuoteSyncing}
+                            disabled={isMarketSyncing}
                             className="md3-icon-btn h-10 w-10 disabled:opacity-60 disabled:cursor-not-allowed"
                             aria-label="Marktdaten aktualisieren"
                             title="Jetzt aktualisieren"
                         >
-                            {isQuoteSyncing ? (
+                            {isMarketSyncing ? (
                                 <Loader2 size={16} className="animate-spin" />
                             ) : (
                                 <RefreshCw size={16} />
                             )}
                         </button>
                     </div>
+
+                    {isMarketSyncing && marketSyncProgress && marketSyncProgress.total > 0 && (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-black/5 px-3 py-2 text-xs md3-text-muted">
+                            <div className="flex items-center justify-between">
+                                <span>Fortschritt</span>
+                                <span>{marketSyncProgress.current}/{marketSyncProgress.total}</span>
+                            </div>
+                            <div className="mt-2 h-1.5 w-full rounded-full" style={{ background: 'var(--md3-surface-container-highest)' }}>
+                                <div
+                                    className="h-full rounded-full"
+                                    style={{
+                                        width: `${Math.min(100, Math.round((marketSyncProgress.current / marketSyncProgress.total) * 100))}%`,
+                                        background: 'var(--md3-primary)'
+                                    }}
+                                />
+                            </div>
+                            {marketSyncProgress.symbol && (
+                                <div className="mt-1 text-[11px] md3-text-muted">Aktuell: {marketSyncProgress.symbol}</div>
+                            )}
+                        </div>
+                    )}
 
                     <div className="custom-scrollbar mt-6 flex-1 max-h-[300px] space-y-2 overflow-y-auto pr-2">
                         {marketStats.securities.length === 0 ? (
@@ -388,12 +412,12 @@ export const DataSourcesContent = () => {
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <div className={`px-2 py-0.5 text-xs font-semibold rounded-full ${sec.lastSync ? 'md3-positive-soft' : 'md3-segment md3-text-muted'}`}>
-                                            {sec.lastSync ? new Date(sec.lastSync).toLocaleDateString() : 'Ausstehend'}
+                                            <div className={`px-2 py-0.5 text-xs font-semibold rounded-full ${isSecurityPending(sec) ? 'md3-segment md3-text-muted' : 'md3-positive-soft'}`}>
+                                                {isSecurityPending(sec) ? 'Ausstehend' : new Date(sec.lastSync!).toLocaleDateString()}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))
+                                ))
                         )}
                 </div>
 
