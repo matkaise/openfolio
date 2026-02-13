@@ -28,7 +28,7 @@ const getAbsoluteAmount = (amount: number | undefined) => {
     return Math.abs(amount || 0);
 };
 
-const getCashDeltaForTransaction = (tx: Transaction): number => {
+const getCashDeltaForTransaction = (tx: Transaction, includeTrades: boolean): number => {
     const amount = getAbsoluteAmount(tx.amount);
 
     // Only explicit cash-related transactions should affect cash balance.
@@ -38,6 +38,11 @@ const getCashDeltaForTransaction = (tx: Transaction): number => {
 
     if (tx.type === 'Dividend' || tx.type === 'Deposit') {
         return amount;
+    }
+
+    if (includeTrades) {
+        if (isBuyType(tx.type)) return -amount;
+        if (tx.type === 'Sell') return amount;
     }
 
     return 0;
@@ -188,6 +193,31 @@ export function calculateHoldings(
         txByIsin[tx.isin].push(tx);
     });
 
+    const latestTxPriceByIsin: Record<string, { price: number; currency: string; date: string }> = {};
+    Object.entries(txByIsin).forEach(([isin, txs]) => {
+        txs.forEach(tx => {
+            const shares = Math.abs(tx.shares || 0);
+            if (!shares) return;
+            let price = 0;
+            if (tx.originalData && typeof tx.originalData === 'object') {
+                const maybePrice = (tx.originalData as { pricePerShare?: number }).pricePerShare;
+                if (typeof maybePrice === 'number' && Number.isFinite(maybePrice) && maybePrice > 0) {
+                    price = maybePrice;
+                }
+            }
+            if (!price) {
+                const amount = Math.abs(tx.amount || 0);
+                price = amount / shares;
+            }
+            if (!Number.isFinite(price) || price <= 0) return;
+            latestTxPriceByIsin[isin] = {
+                price,
+                currency: tx.currency || baseCurrency,
+                date: tx.date
+            };
+        });
+    });
+
     const splitsByIsin: Record<string, Record<string, number>> = {};
     securities.forEach(sec => {
         if (sec.splits) {
@@ -295,11 +325,20 @@ export function calculateHoldings(
 
         // Fallback Price if no quote available
         if (!currentPriceInSecurityCurrency) {
-            // Estimate from average buy price in transaction currency
-            const avgPriceInTransactionCurrency = (h.quantity > 0) ? h.investedOriginal / h.quantity : 0;
-            // Convert to security currency if they differ
+            const fallback = latestTxPriceByIsin[isin];
             const securityCurrency = sec.currency || h.currency;
-            currentPriceInSecurityCurrency = convert(avgPriceInTransactionCurrency, h.currency, securityCurrency);
+            if (fallback) {
+                currentPriceInSecurityCurrency = convert(
+                    fallback.price,
+                    fallback.currency,
+                    securityCurrency,
+                    fallback.date
+                );
+            } else {
+                // Estimate from average buy price in transaction currency
+                const avgPriceInTransactionCurrency = (h.quantity > 0) ? h.investedOriginal / h.quantity : 0;
+                currentPriceInSecurityCurrency = convert(avgPriceInTransactionCurrency, h.currency, securityCurrency);
+            }
         }
 
         // Convert current price to transaction currency for display
@@ -467,6 +506,7 @@ export function calculatePortfolioHistory(
     datePoints.sort((a, b) => a.getTime() - b.getTime());
 
     const priceTimelineCache: Record<string, { dates: string[]; times: number[]; idx: number }> = {};
+    const txPriceTimelineCache: Record<string, { dates: string[]; times: number[]; prices: number[]; idx: number }> = {};
     const fxTimelineCache: Record<string, { dates: string[]; times: number[]; idx: number }> = {};
     const cashTimelineCache: Record<string, { dates: string[]; times: number[]; idx: number }> = {};
 
@@ -485,11 +525,85 @@ export function calculatePortfolioHistory(
 
         // Find closest earlier or equal date
         if (timeline.dates.length === 0) return 0;
+        if (targetTime < timeline.times[0]) return 0;
         while (timeline.idx + 1 < timeline.times.length && timeline.times[timeline.idx + 1] <= targetTime) {
             timeline.idx++;
         }
 
         return sec.priceHistory[timeline.dates[timeline.idx]] || 0;
+    };
+
+    const getTxPriceAtTime = (
+        isin: string,
+        targetTime: number
+    ): { price: number; currency: string; date: string; time: number } | null => {
+        let timeline = txPriceTimelineCache[isin];
+        if (!timeline) {
+            const txs = txByIsin[isin] || [];
+            const dates: string[] = [];
+            const times: number[] = [];
+            const prices: number[] = [];
+            const securityCurrency = securityByIsin[isin]?.currency || baseCurrency;
+
+            txs.forEach(tx => {
+                const shares = Math.abs(tx.shares || 0);
+                if (!shares) return;
+                const priceFromOriginal = (tx.originalData as { pricePerShare?: number } | undefined)?.pricePerShare;
+                let price = priceFromOriginal && priceFromOriginal > 0 ? priceFromOriginal : 0;
+                if (!price) {
+                    const amountAbs = Math.abs(tx.amount || 0);
+                    if (amountAbs > 0) {
+                        price = amountAbs / shares;
+                    }
+                }
+                if (!price) return;
+                const txTime = dateKeyToUtcMs(tx.date);
+                const priceInSecurityCurrency = convert(
+                    price,
+                    tx.currency || baseCurrency,
+                    securityCurrency,
+                    txTime
+                );
+                if (!Number.isFinite(priceInSecurityCurrency) || priceInSecurityCurrency <= 0) return;
+                dates.push(tx.date);
+                times.push(txTime);
+                prices.push(priceInSecurityCurrency);
+            });
+
+            timeline = { dates, times, prices, idx: 0 };
+            txPriceTimelineCache[isin] = timeline;
+        }
+
+        if (timeline.dates.length === 0) return null;
+        if (targetTime < timeline.times[0]) return null;
+        while (timeline.idx + 1 < timeline.times.length && timeline.times[timeline.idx + 1] <= targetTime) {
+            timeline.idx++;
+        }
+
+        let price = timeline.prices[timeline.idx];
+        let date = timeline.dates[timeline.idx];
+        let time = timeline.times[timeline.idx];
+
+        if (timeline.idx + 1 < timeline.times.length) {
+            const nextTime = timeline.times[timeline.idx + 1];
+            const nextPrice = timeline.prices[timeline.idx + 1];
+            if (nextTime > time) {
+                const ratio = (targetTime - time) / (nextTime - time);
+                price = price + (nextPrice - price) * ratio;
+                if (!Number.isFinite(price) || price <= 0) {
+                    price = timeline.prices[timeline.idx];
+                }
+                date = timeline.dates[timeline.idx];
+                time = timeline.times[timeline.idx];
+            }
+        }
+
+        return {
+            price,
+            currency: securityByIsin[isin]?.currency || baseCurrency,
+            date,
+            time
+        };
     };
 
     // Helper to get Split-Adjusted Price for chart consistency
@@ -499,9 +613,31 @@ export function calculatePortfolioHistory(
     // We must "Un-adjust" the price by multiplying by all FUTURE split ratios.
     const getAdjustedPriceAtTime = (isin: string, targetTime: number): number => {
         const rawPrice = getPriceAtTime(isin, targetTime);
-        if (rawPrice === 0) return 0;
-
         const splits = splitsMap[isin];
+
+        if (rawPrice === 0) {
+            const fallback = getTxPriceAtTime(isin, targetTime);
+            if (!fallback || !fallback.price) return 0;
+
+            const securityCurrency = securityByIsin[isin]?.currency || fallback.currency;
+            let fallbackPrice = convert(fallback.price, fallback.currency, securityCurrency, fallback.time);
+
+            if (splits && splits.length > 0) {
+                const fallbackDate = fallback.date;
+                let adjustment = 1;
+                for (const split of splits) {
+                    if (split.date > fallbackDate && split.time <= targetTime) {
+                        adjustment *= split.ratio;
+                    }
+                }
+                if (adjustment > 0) {
+                    fallbackPrice = fallbackPrice / adjustment;
+                }
+            }
+
+            return fallbackPrice;
+        }
+
         if (!splits) return rawPrice;
 
         // Multiply by all splits that happen AFTER targetDate
@@ -630,10 +766,22 @@ export function calculatePortfolioHistory(
 
     const stateByIsin: Record<string, { quantity: number; invested: number; currency: string }> = {};
     const eventIndexByIsin: Record<string, number> = {};
-    const sortedTransactions = [...transactions].sort((a, b) => dateKeyToUtcMs(a.date) - dateKeyToUtcMs(b.date));
+    const cashFlowOrder = (tx: Transaction): number => {
+        if (tx.type === 'Deposit' || tx.type === 'Dividend' || tx.type === 'Sell') return 0;
+        if (tx.type === 'Buy' || tx.type === 'Sparplan_Buy') return 2;
+        if (tx.type === 'Withdrawal' || tx.type === 'Fee' || tx.type === 'Tax') return 3;
+        return 1;
+    };
+    const sortedTransactions = [...transactions].sort((a, b) => {
+        const dateDiff = dateKeyToUtcMs(a.date) - dateKeyToUtcMs(b.date);
+        if (dateDiff !== 0) return dateDiff;
+        return cashFlowOrder(a) - cashFlowOrder(b);
+    });
     const hasExplicitCashBalances = cashAccounts.some(a => !!a.balanceHistory && Object.keys(a.balanceHistory).length > 0);
+    const cashFlowTypes = new Set(['Deposit', 'Withdrawal', 'Dividend', 'Tax', 'Fee']);
+    const hasExplicitCashFlows = transactions.some((tx) => cashFlowTypes.has(tx.type));
     const hasCashFundingTransactions = transactions.some((tx) => tx.type === 'Deposit' || tx.type === 'Withdrawal');
-    const useImplicitFunding = !hasExplicitCashBalances;
+    const useImplicitFunding = false;
     const useTradeFlowsForInvested = !hasExplicitCashBalances && !hasCashFundingTransactions;
 
     allIsins.forEach(isin => {
@@ -704,18 +852,17 @@ export function calculatePortfolioHistory(
             const amountAbs = getAbsoluteAmount(tx.amount);
 
             if (!hasExplicitCashBalances) {
-                const cashDelta = getCashDeltaForTransaction(tx);
+                // Keep cash separate from trades unless explicit cash balances exist.
+                const cashDelta = getCashDeltaForTransaction(tx, false);
                 const currentCash = cashByCurrency[txCurrency] || 0;
 
-                // Backward-compatibility: infer required funding when transaction replay would drive
-                // cash negative and no explicit cash balance history is available.
                 if (useImplicitFunding && cashDelta < 0 && currentCash + cashDelta < 0) {
                     const requiredFunding = -(currentCash + cashDelta);
                     cashByCurrency[txCurrency] = currentCash + requiredFunding;
                     totalExternalInvested += convert(requiredFunding, txCurrency, baseCurrency, txTime);
                 }
 
-                cashByCurrency[txCurrency] = (cashByCurrency[txCurrency] || 0) + cashDelta;
+                cashByCurrency[txCurrency] = currentCash + cashDelta;
             }
 
             if (useTradeFlowsForInvested) {
@@ -763,11 +910,13 @@ export function calculatePortfolioHistory(
                 if (Math.abs(balance) < 0.0000001) return sum;
                 return sum + convert(balance, account.currency, baseCurrency, dateTime);
             }, 0);
-        } else {
+        } else if (hasExplicitCashFlows) {
             totalCashValue = Object.entries(cashByCurrency).reduce((sum, [currency, amount]) => {
                 if (Math.abs(amount) < 0.0000001) return sum;
                 return sum + convert(amount, currency, baseCurrency, dateTime);
             }, 0);
+        } else {
+            totalCashValue = 0;
         }
 
         const investedValue = useTradeFlowsForInvested ? totalTradeInvested : totalExternalInvested;

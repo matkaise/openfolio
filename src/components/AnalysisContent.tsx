@@ -3,7 +3,7 @@ import { Activity, AlertCircle, Banknote, BarChart3, Check, ChevronLeft, Chevron
 import { AreaChart, Area, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import { calculatePortfolioHistory, type Holding, type AnalysisMetrics } from '@/lib/portfolioUtils';
 import { calculateAnalysisMetrics } from '@/lib/analysisService';
-import { buildMwrSeries, normalizeInvestedForExplicitCash } from '@/lib/performanceUtils';
+import { buildMwrSeries } from '@/lib/performanceUtils';
 import { filterTransactionsByPortfolio, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency as convertFxCurrency } from '@/lib/fxUtils';
 import { parseDateOnlyUTC, toDateKeyUTC } from '@/lib/dateUtils';
@@ -391,12 +391,43 @@ export const AnalysisContent = ({
     return { volatility, sharpe };
   }, [analysisMetrics?.twrSeries, riskFreeRate]);
 
+  const buildExternalInvestedHistory = useCallback((data: HistoryPoint[]) => {
+    if (!data.length) return data;
+
+    const externalTx = filteredTransactions.filter(
+      (tx) => tx.type === 'Deposit' || tx.type === 'Withdrawal'
+    ).sort((a, b) => a.date.localeCompare(b.date));
+
+    if (externalTx.length === 0) {
+      return data.map(point => ({ ...point, invested: 0 }));
+    }
+
+    let idx = 0;
+    let cumulative = 0;
+    return data.map(point => {
+      while (idx < externalTx.length && externalTx[idx].date <= point.date) {
+        const tx = externalTx[idx];
+        const amountAbs = Math.abs(tx.amount || 0);
+        const amountBase = convertFxCurrency(
+          project?.fxData || null,
+          amountAbs,
+          tx.currency,
+          baseCurrency,
+          tx.date
+        );
+        cumulative += tx.type === 'Deposit' ? amountBase : -amountBase;
+        idx += 1;
+      }
+      return { ...point, invested: cumulative };
+    });
+  }, [filteredTransactions, project?.fxData, baseCurrency]);
+
   useEffect(() => {
     if (!project) return;
 
     // Check Cache
     // Added version suffix to force invalidation after TWR refactor
-    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v9`;
+    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v15`;
     if (cachedData && cachedData.key === cacheKey) {
       setHistoryData(cachedData.historyData);
       setAnalysisMetrics(cachedData.analysisMetrics);
@@ -419,22 +450,15 @@ export const AnalysisContent = ({
         'daily' // High precision for TWR/Drawdown
       );
 
-      const normalizedHistory = normalizeInvestedForExplicitCash(
-        data,
-        filteredTransactions,
-        filteredCashAccounts,
-        project.fxData,
-        baseCurrency
-      );
+      const externalInvestedHistory = buildExternalInvestedHistory(data);
+      const metrics = calculateAnalysisMetrics(externalInvestedHistory, riskFreeRate, { includeDividends });
 
-      const metrics = calculateAnalysisMetrics(normalizedHistory, riskFreeRate, { includeDividends });
-
-      setHistoryData(normalizedHistory);
+      setHistoryData(externalInvestedHistory);
       setAnalysisMetrics(metrics);
 
       // Update Cache
       if (onCacheUpdate) {
-        onCacheUpdate({ key: cacheKey, historyData: normalizedHistory, analysisMetrics: metrics });
+        onCacheUpdate({ key: cacheKey, historyData: externalInvestedHistory, analysisMetrics: metrics });
       }
 
       setIsCalculating(false);
