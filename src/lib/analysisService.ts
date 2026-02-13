@@ -30,8 +30,28 @@ export function calculateAnalysisMetrics(
 
     // Helper to find TWR value at a specific date
     const twrByDate = new Map<string, number>();
-    twrSeries.forEach(point => twrByDate.set(point.date, point.value));
-    const getTwrValue = (d: string) => twrByDate.get(d) ?? 0;
+    const indexSeries = twrSeries.map(point => {
+        const value = Number.isFinite(point.value) ? point.value : 0;
+        const index = 1 + (value / 100);
+        twrByDate.set(point.date, value);
+        return { date: point.date, index };
+    });
+    const getTwrValue = (d: string) => twrByDate.get(d);
+    const getIndexValue = (d: string): number | null => {
+        const v = getTwrValue(d);
+        if (!Number.isFinite(v)) return null;
+        const idx = 1 + (v / 100);
+        return Number.isFinite(idx) ? idx : null;
+    };
+
+    const findFirstPositiveIndexInRange = (start: string, end: string): number | null => {
+        for (const point of indexSeries) {
+            if (point.date < start) continue;
+            if (point.date > end) break;
+            if (Number.isFinite(point.index) && point.index > 0) return point.index;
+        }
+        return null;
+    };
 
     const monthlyReturnsMap: Record<string, number> = {};
     const months: string[] = [];
@@ -54,18 +74,22 @@ export function calculateAnalysisMetrics(
         const range = monthRanges.get(monthKey);
         if (!range) continue;
 
-        const endTwr = getTwrValue(range.end);
+        const endIndex = getIndexValue(range.end);
+        if (!endIndex || endIndex <= 0) continue;
+
         const prevRange = i > 0 ? monthRanges.get(months[i - 1]) : undefined;
-        const startTwr = prevRange ? getTwrValue(prevRange.end) : 0;
+        let startIndex = prevRange ? getIndexValue(prevRange.end) : null;
+        if (!startIndex || startIndex <= 0) {
+            startIndex = getIndexValue(range.start);
+        }
+        if (!startIndex || startIndex <= 0) {
+            startIndex = findFirstPositiveIndexInRange(range.start, range.end);
+        }
+        if (!startIndex || startIndex <= 0) continue;
 
-        const indexEnd = 1 + (endTwr / 100);
-        const indexStart = 1 + (startTwr / 100);
-
-        if (Number.isFinite(indexEnd) && Number.isFinite(indexStart) && indexStart > 0) {
-            const monthReturn = ((indexEnd / indexStart) - 1) * 100;
-            if (Number.isFinite(monthReturn)) {
-                monthlyReturnsMap[monthKey] = monthReturn;
-            }
+        const monthReturn = ((endIndex / startIndex) - 1) * 100;
+        if (Number.isFinite(monthReturn)) {
+            monthlyReturnsMap[monthKey] = monthReturn;
         }
     }
 

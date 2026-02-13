@@ -460,14 +460,16 @@ export const AnalysisContent = ({
     if (!analysisMetrics?.monthlyReturnsMap) return analysisMetrics.monthlyReturns || [];
 
     const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
-    const result = [];
+    const result: { month: string; return: number | null; hasData: boolean }[] = [];
 
     for (let month = 0; month < 12; month++) {
       const monthKey = `${selectedYear}-${String(month + 1).padStart(2, '0')}`;
-      const returnValue = analysisMetrics.monthlyReturnsMap[monthKey] || 0;
+      const rawReturn = analysisMetrics.monthlyReturnsMap[monthKey];
+      const hasData = Number.isFinite(rawReturn);
       result.push({
         month: monthNames[month],
-        return: Math.round(returnValue * 10) / 10
+        return: hasData ? Math.round((rawReturn as number) * 10) / 10 : null,
+        hasData
       });
     }
     return result;
@@ -500,7 +502,7 @@ export const AnalysisContent = ({
 
       quarterly.push({
         label: quarterNames[q],
-        return: hasData ? Math.round((growingReturn - 1) * 100 * 10) / 10 : 0,
+        return: hasData ? Math.round((growingReturn - 1) * 100 * 10) / 10 : null,
         hasData,
         startDate: `${selectedYear}-${String(q * 3 + 1).padStart(2, '0')}-01`,
         endDate: toDateKeyUTC(new Date(Date.UTC(selectedYear, (q + 1) * 3, 0))) // Last day of quarter
@@ -524,7 +526,7 @@ export const AnalysisContent = ({
 
       return {
         year,
-        return: hasData ? Math.round((growingReturn - 1) * 100 * 10) / 10 : 0,
+        return: hasData ? Math.round((growingReturn - 1) * 100 * 10) / 10 : null,
         startDate: `${year}-01-01`,
         endDate: `${year}-12-31`
       };
@@ -1213,51 +1215,58 @@ export const AnalysisContent = ({
               </div>
 
               <div className={`grid gap-3 ${returnViewMode === 'monthly' ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6' : returnViewMode === 'quarterly' ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'}`}>
-                {returnViewMode === 'monthly' && displayedMonthlyReturns.map((m: { month: string; return: number }, index: number) => {
+                {returnViewMode === 'monthly' && displayedMonthlyReturns.map((m: { month: string; return: number | null; hasData: boolean }, index: number) => {
                   // Calculate mock dates for click
                   const monthIndex = index + 1;
                   const startDate = `${selectedYear}-${String(monthIndex).padStart(2, '0')}-01`;
                   const endDate = toDateKeyUTC(new Date(Date.UTC(selectedYear, monthIndex, 0)));
+                  const hasData = m.hasData && Number.isFinite(m.return);
 
                   return (
                     <div
                       key={m.month}
-                      onClick={() => handleTileClick(startDate, endDate, `${m.month} ${selectedYear}`)}
-                      className="md3-list-item rounded-lg p-3 flex flex-col items-center justify-center transition cursor-pointer group relative"
+                      onClick={() => hasData && handleTileClick(startDate, endDate, `${m.month} ${selectedYear}`)}
+                      className={`md3-list-item rounded-lg p-3 flex flex-col items-center justify-center transition group relative ${hasData ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
                     >
                       <span className="text-xs md3-text-muted mb-1">{m.month}</span>
-                      <span className={`font-bold ${m.return >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                        {m.return > 0 ? '+' : ''}{m.return}%
+                      <span className={`font-bold ${hasData ? ((m.return as number) >= 0 ? 'md3-positive' : 'md3-negative') : 'md3-text-muted'}`}>
+                        {hasData ? `${(m.return as number) > 0 ? '+' : ''}${m.return}%` : '—'}
                       </span>
                     </div>
                   );
                 })}
 
-                {returnViewMode === 'quarterly' && aggregatedReturns.quarterly.map((q) => (
-                  <div
-                    key={q.label}
-                    onClick={() => handleTileClick(q.startDate, q.endDate, `${q.label} ${selectedYear}`)}
-                    className="md3-list-item rounded-lg p-4 flex flex-col items-center justify-center transition cursor-pointer group relative"
-                  >
-                    <span className="text-xs md3-text-muted mb-1 uppercase tracking-wider">{q.label}</span>
-                    <span className={`text-lg font-bold ${q.return >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                      {q.return > 0 ? '+' : ''}{q.return}%
-                    </span>
-                  </div>
-                ))}
+                {returnViewMode === 'quarterly' && aggregatedReturns.quarterly.map((q) => {
+                  const hasData = Number.isFinite(q.return);
+                  return (
+                    <div
+                      key={q.label}
+                      onClick={() => hasData && handleTileClick(q.startDate, q.endDate, `${q.label} ${selectedYear}`)}
+                      className={`md3-list-item rounded-lg p-4 flex flex-col items-center justify-center transition group relative ${hasData ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
+                    >
+                      <span className="text-xs md3-text-muted mb-1 uppercase tracking-wider">{q.label}</span>
+                      <span className={`text-lg font-bold ${hasData ? ((q.return as number) >= 0 ? 'md3-positive' : 'md3-negative') : 'md3-text-muted'}`}>
+                        {hasData ? `${(q.return as number) > 0 ? '+' : ''}${q.return}%` : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
 
-                {returnViewMode === 'yearly' && aggregatedReturns.yearly.map((y) => (
-                  <div
-                    key={y.year}
-                    onClick={() => handleTileClick(y.startDate, y.endDate, `Jahr ${y.year}`)}
-                    className="md3-list-item rounded-lg p-4 flex flex-col items-center justify-center transition cursor-pointer group relative"
-                  >
-                    <span className="text-xs md3-text-muted mb-1">{y.year}</span>
-                    <span className={`text-lg font-bold ${y.return >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                      {y.return > 0 ? '+' : ''}{y.return}%
-                    </span>
-                  </div>
-                ))}
+                {returnViewMode === 'yearly' && aggregatedReturns.yearly.map((y) => {
+                  const hasData = Number.isFinite(y.return);
+                  return (
+                    <div
+                      key={y.year}
+                      onClick={() => hasData && handleTileClick(y.startDate, y.endDate, `Jahr ${y.year}`)}
+                      className={`md3-list-item rounded-lg p-4 flex flex-col items-center justify-center transition group relative ${hasData ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
+                    >
+                      <span className="text-xs md3-text-muted mb-1">{y.year}</span>
+                      <span className={`text-lg font-bold ${hasData ? ((y.return as number) >= 0 ? 'md3-positive' : 'md3-negative') : 'md3-text-muted'}`}>
+                        {hasData ? `${(y.return as number) > 0 ? '+' : ''}${y.return}%` : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
 
