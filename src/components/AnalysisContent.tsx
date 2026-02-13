@@ -491,8 +491,9 @@ export const AnalysisContent = ({
       for (let m = 0; m < 3; m++) {
         const monthIndex = q * 3 + m + 1;
         const monthKey = `${selectedYear}-${String(monthIndex).padStart(2, '0')}`;
-        if (monthlyReturnsMap[monthKey] !== undefined) {
-          growingReturn *= (1 + (monthlyReturnsMap[monthKey] / 100));
+        const monthReturn = monthlyReturnsMap[monthKey];
+        if (Number.isFinite(monthReturn)) {
+          growingReturn *= (1 + (monthReturn / 100));
           hasData = true;
         }
       }
@@ -514,8 +515,9 @@ export const AnalysisContent = ({
       // Aggregate all 12 months for that year
       for (let m = 1; m <= 12; m++) {
         const monthKey = `${year}-${String(m).padStart(2, '0')}`;
-        if (monthlyReturnsMap[monthKey] !== undefined) {
-          growingReturn *= (1 + (monthlyReturnsMap[monthKey] / 100));
+        const monthReturn = monthlyReturnsMap[monthKey];
+        if (Number.isFinite(monthReturn)) {
+          growingReturn *= (1 + (monthReturn / 100));
           hasData = true;
         }
       }

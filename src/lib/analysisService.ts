@@ -61,8 +61,12 @@ export function calculateAnalysisMetrics(
         const indexEnd = 1 + (endTwr / 100);
         const indexStart = 1 + (startTwr / 100);
 
-        const monthReturn = ((indexEnd / indexStart) - 1) * 100;
-        monthlyReturnsMap[monthKey] = monthReturn;
+        if (Number.isFinite(indexEnd) && Number.isFinite(indexStart) && indexStart > 0) {
+            const monthReturn = ((indexEnd / indexStart) - 1) * 100;
+            if (Number.isFinite(monthReturn)) {
+                monthlyReturnsMap[monthKey] = monthReturn;
+            }
+        }
     }
 
     // 2. Calculate Volatility (annualized, trailing 1Y using TWR)

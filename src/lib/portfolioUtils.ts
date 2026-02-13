@@ -632,7 +632,9 @@ export function calculatePortfolioHistory(
     const eventIndexByIsin: Record<string, number> = {};
     const sortedTransactions = [...transactions].sort((a, b) => dateKeyToUtcMs(a.date) - dateKeyToUtcMs(b.date));
     const hasExplicitCashBalances = cashAccounts.some(a => !!a.balanceHistory && Object.keys(a.balanceHistory).length > 0);
+    const hasCashFundingTransactions = transactions.some((tx) => tx.type === 'Deposit' || tx.type === 'Withdrawal');
     const useImplicitFunding = !hasExplicitCashBalances;
+    const useTradeFlowsForInvested = !hasExplicitCashBalances && !hasCashFundingTransactions;
 
     allIsins.forEach(isin => {
         const firstTx = txByIsin[isin]?.[0];
@@ -648,6 +650,7 @@ export function calculatePortfolioHistory(
     const cashByCurrency: Record<string, number> = {};
     let transactionIndex = 0;
     let totalExternalInvested = 0;
+    let totalTradeInvested = 0;
     let totalDividend = 0;
 
     // Calculate portfolio value at each date point (incremental replay)
@@ -715,6 +718,14 @@ export function calculatePortfolioHistory(
                 cashByCurrency[txCurrency] = (cashByCurrency[txCurrency] || 0) + cashDelta;
             }
 
+            if (useTradeFlowsForInvested) {
+                if (isBuyType(tx.type)) {
+                    totalTradeInvested += convert(amountAbs, txCurrency, baseCurrency, txTime);
+                } else if (tx.type === 'Sell') {
+                    totalTradeInvested -= convert(amountAbs, txCurrency, baseCurrency, txTime);
+                }
+            }
+
             if (tx.type === 'Deposit') {
                 totalExternalInvested += convert(amountAbs, txCurrency, baseCurrency, txTime);
             } else if (tx.type === 'Withdrawal') {
@@ -759,10 +770,12 @@ export function calculatePortfolioHistory(
             }, 0);
         }
 
+        const investedValue = useTradeFlowsForInvested ? totalTradeInvested : totalExternalInvested;
+
         result.push({
             date: dateStr,
             value: totalValue + totalCashValue,
-            invested: totalExternalInvested,
+            invested: investedValue,
             dividend: totalDividend
         });
     }
