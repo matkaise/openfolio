@@ -27,7 +27,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     filterCashAccountsByPortfolio(project, selectedPortfolioIds)
   ), [project, selectedPortfolioIds]);
 
-  const { holdings } = useMemo(() => {
+  const { holdings, realizedPnL } = useMemo(() => {
     return calculateProjectHoldings(project, filteredTransactions);
   }, [project, filteredTransactions]);
 
@@ -117,9 +117,12 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     ? kpiHistoryForPerformance[kpiHistoryForPerformance.length - 1]
     : null;
   const holdingsMarketValue = holdings.reduce((sum, h) => sum + h.value, 0);
-  const investedCapital = latestKpiPerformancePoint
-    ? latestKpiPerformancePoint.invested
-    : holdings.reduce((sum, h) => sum + (h.quantity * (h.averageBuyPrice || 0)), 0);
+  const holdingsCostBasis = holdings.reduce((sum, h) => sum + (h.quantity * (h.averageBuyPrice || 0)), 0);
+  const investedCapital = holdingsCostBasis > 0
+    ? holdingsCostBasis
+    : (latestKpiPerformancePoint
+      ? latestKpiPerformancePoint.invested
+      : holdingsCostBasis);
   const currentMaketValue = latestKpiHistoryPoint
     ? latestKpiHistoryPoint.value
     : holdings.reduce((sum, h) => sum + h.value, 0);
@@ -149,7 +152,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       return sum + convertCurrency(project.fxData, tx.amount, tx.currency, baseCurrency, tx.date);
     }, 0);
   }, [project, filteredCashAccounts, filteredTransactions, baseCurrency]);
-  const totalReturn = currentMaketValue - investedCapital;
+  const totalReturn = (currentMaketValue - holdingsCostBasis) + (realizedPnL || 0);
   const wealthGoalStep = 25000;
   const goalSource = resolveWealthGoalSource(project?.settings);
   const storedGoal = goalSource.amount;
