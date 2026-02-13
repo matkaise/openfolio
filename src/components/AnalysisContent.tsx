@@ -396,7 +396,7 @@ export const AnalysisContent = ({
 
     // Check Cache
     // Added version suffix to force invalidation after TWR refactor
-    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v7`;
+    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v9`;
     if (cachedData && cachedData.key === cacheKey) {
       setHistoryData(cachedData.historyData);
       setAnalysisMetrics(cachedData.analysisMetrics);
@@ -445,26 +445,100 @@ export const AnalysisContent = ({
 
   // Removed old synchronous useMemos and redundant loading effects
 
-  // Ensure selectedYear is valid when data changes
-  useEffect(() => {
-    if (analysisMetrics?.availableYears && analysisMetrics.availableYears.length > 0) {
-      if (!analysisMetrics.availableYears.includes(selectedYear)) {
-        // Default to most recent year if selected is invalid
-        setSelectedYear(analysisMetrics.availableYears[0]);
+  const mwrMonthlyReturnsMap = useMemo(() => {
+    if (!historyData.length) return {};
+    const start = historyData[0].date;
+    const end = historyData[historyData.length - 1].date;
+    const series = buildMwrSeries(historyData, start, end, {
+      includeDividends,
+      isFullRange: true,
+      transactions: filteredTransactions
+    });
+    if (!series.length) return {};
+
+    const map: Record<string, number> = {};
+    let currentMonth = '';
+    let startIndex: number | null = null;
+    let endIndex: number | null = null;
+
+    const flushMonth = () => {
+      if (!currentMonth || !startIndex || !endIndex) return;
+      if (!Number.isFinite(startIndex) || !Number.isFinite(endIndex)) return;
+      if (startIndex <= 0 || endIndex <= 0) return;
+      map[currentMonth] = ((endIndex / startIndex) - 1) * 100;
+    };
+
+    for (const point of series) {
+      const monthKey = point.date.slice(0, 7);
+      const index = 1 + (point.value / 100);
+      if (!Number.isFinite(index)) continue;
+
+      if (monthKey !== currentMonth) {
+        flushMonth();
+        currentMonth = monthKey;
+        startIndex = index;
+        endIndex = index;
+      } else {
+        endIndex = index;
       }
     }
-  }, [analysisMetrics?.availableYears, selectedYear]);
+
+    flushMonth();
+    return map;
+  }, [historyData, includeDividends, filteredTransactions]);
+
+  const monthlyReturnsMap = useMemo(() => {
+    const primary = analysisMetrics?.monthlyReturnsMap || {};
+    const fallback = mwrMonthlyReturnsMap;
+    const merged: Record<string, number> = {};
+    const keys = new Set([...Object.keys(fallback), ...Object.keys(primary)]);
+
+    keys.forEach((key) => {
+      const primaryValue = primary[key];
+      if (Number.isFinite(primaryValue)) {
+        merged[key] = primaryValue as number;
+        return;
+      }
+      const fallbackValue = fallback[key];
+      if (Number.isFinite(fallbackValue)) {
+        merged[key] = fallbackValue as number;
+      }
+    });
+
+    return merged;
+  }, [analysisMetrics?.monthlyReturnsMap, mwrMonthlyReturnsMap]);
+
+  const yearsWithReturns = useMemo(() => {
+    const yearSet = new Set<number>();
+    Object.entries(monthlyReturnsMap).forEach(([key, value]) => {
+      if (!Number.isFinite(value)) return;
+      const year = Number(key.slice(0, 4));
+      if (Number.isFinite(year)) yearSet.add(year);
+    });
+    return Array.from(yearSet).sort((a, b) => b - a);
+  }, [monthlyReturnsMap]);
+
+  // Ensure selectedYear is valid when data changes
+  useEffect(() => {
+    const preferredYears = yearsWithReturns.length > 0
+      ? yearsWithReturns
+      : (analysisMetrics?.availableYears || []);
+    if (preferredYears.length > 0 && !preferredYears.includes(selectedYear)) {
+      // Default to most recent year with data
+      setSelectedYear(preferredYears[0]);
+    }
+  }, [analysisMetrics?.availableYears, selectedYear, yearsWithReturns]);
 
   // Get monthly returns for selected year
   const displayedMonthlyReturns = useMemo(() => {
-    if (!analysisMetrics?.monthlyReturnsMap) return analysisMetrics.monthlyReturns || [];
+    if (!Object.keys(monthlyReturnsMap).length) return analysisMetrics.monthlyReturns || [];
 
     const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
     const result: { month: string; return: number | null; hasData: boolean }[] = [];
 
     for (let month = 0; month < 12; month++) {
       const monthKey = `${selectedYear}-${String(month + 1).padStart(2, '0')}`;
-      const rawReturn = analysisMetrics.monthlyReturnsMap[monthKey];
+      const rawReturn = monthlyReturnsMap[monthKey];
       const hasData = Number.isFinite(rawReturn);
       result.push({
         month: monthNames[month],
@@ -473,12 +547,11 @@ export const AnalysisContent = ({
       });
     }
     return result;
-  }, [analysisMetrics, selectedYear]);
+  }, [analysisMetrics, monthlyReturnsMap, selectedYear]);
 
   // Calculate Aggregated Returns (Quarterly / Yearly)
   const aggregatedReturns = useMemo(() => {
-    if (!analysisMetrics?.monthlyReturnsMap) return { quarterly: [], yearly: [] };
-    const monthlyReturnsMap = analysisMetrics.monthlyReturnsMap;
+    if (!Object.keys(monthlyReturnsMap).length) return { quarterly: [], yearly: [] };
 
     const quarterNames = ['Q1', 'Q2', 'Q3', 'Q4'];
     const quarterly = [];
@@ -510,7 +583,10 @@ export const AnalysisContent = ({
     }
 
     // Yearly (All Years)
-    const yearly = (analysisMetrics.availableYears || []).map((year: number) => {
+    const yearlyYears = yearsWithReturns.length > 0
+      ? yearsWithReturns
+      : (analysisMetrics.availableYears || []);
+    const yearly = yearlyYears.map((year: number) => {
       let growingReturn = 1.0;
       let hasData = false;
 
@@ -533,7 +609,7 @@ export const AnalysisContent = ({
     });
 
     return { quarterly, yearly };
-  }, [analysisMetrics, selectedYear]);
+  }, [analysisMetrics, monthlyReturnsMap, selectedYear, yearsWithReturns]);
 
   const openGroupOverlay = (title: string, group: { holdings: Holding[]; totalValue: number }) => {
     if (!group?.holdings?.length) return;
@@ -907,7 +983,9 @@ export const AnalysisContent = ({
   const volLabel = getVolatilityLabel(currentVolatility);
   const sharpeLabel = getSharpeLabel(currentSharpe);
 
-  const availableYears = analysisMetrics.availableYears || [];
+  const availableYears = yearsWithReturns.length > 0
+    ? yearsWithReturns
+    : (analysisMetrics.availableYears || []);
   const hasPrevYear = availableYears.indexOf(selectedYear) < availableYears.length - 1;
   const hasNextYear = availableYears.indexOf(selectedYear) > 0;
 

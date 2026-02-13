@@ -37,12 +37,6 @@ export function calculateAnalysisMetrics(
         return { date: point.date, index };
     });
     const getTwrValue = (d: string) => twrByDate.get(d);
-    const getIndexValue = (d: string): number | null => {
-        const v = getTwrValue(d);
-        if (!Number.isFinite(v)) return null;
-        const idx = 1 + (v / 100);
-        return Number.isFinite(idx) ? idx : null;
-    };
 
     const findFirstPositiveIndexInRange = (start: string, end: string): number | null => {
         for (const point of indexSeries) {
@@ -51,6 +45,18 @@ export function calculateAnalysisMetrics(
             if (Number.isFinite(point.index) && point.index > 0) return point.index;
         }
         return null;
+    };
+
+    const findLastPositiveIndexInRange = (start: string, end: string): number | null => {
+        let last: number | null = null;
+        for (const point of indexSeries) {
+            if (point.date < start) continue;
+            if (point.date > end) break;
+            if (Number.isFinite(point.index) && point.index > 0) {
+                last = point.index;
+            }
+        }
+        return last;
     };
 
     const monthlyReturnsMap: Record<string, number> = {};
@@ -74,18 +80,9 @@ export function calculateAnalysisMetrics(
         const range = monthRanges.get(monthKey);
         if (!range) continue;
 
-        const endIndex = getIndexValue(range.end);
-        if (!endIndex || endIndex <= 0) continue;
-
-        const prevRange = i > 0 ? monthRanges.get(months[i - 1]) : undefined;
-        let startIndex = prevRange ? getIndexValue(prevRange.end) : null;
-        if (!startIndex || startIndex <= 0) {
-            startIndex = getIndexValue(range.start);
-        }
-        if (!startIndex || startIndex <= 0) {
-            startIndex = findFirstPositiveIndexInRange(range.start, range.end);
-        }
-        if (!startIndex || startIndex <= 0) continue;
+        const startIndex = findFirstPositiveIndexInRange(range.start, range.end);
+        const endIndex = findLastPositiveIndexInRange(range.start, range.end);
+        if (!startIndex || !endIndex || startIndex <= 0 || endIndex <= 0) continue;
 
         const monthReturn = ((endIndex / startIndex) - 1) * 100;
         if (Number.isFinite(monthReturn)) {
