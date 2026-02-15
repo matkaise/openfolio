@@ -41,7 +41,8 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       project.fxData.rates,
       filteredCashAccounts,
       project.settings.baseCurrency,
-      timeRange
+      timeRange,
+      'daily'
     );
   }, [project, filteredTransactions, filteredCashAccounts, timeRange]);
 
@@ -54,7 +55,8 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       project.fxData.rates,
       filteredCashAccounts,
       project.settings.baseCurrency,
-      'MAX'
+      'MAX',
+      'daily'
     );
   }, [project, filteredTransactions, filteredCashAccounts]);
 

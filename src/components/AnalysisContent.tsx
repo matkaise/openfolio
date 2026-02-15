@@ -656,38 +656,45 @@ export const AnalysisContent = ({
     });
   };
 
+  const performanceHistoryData = useMemo(() => {
+    if (!project) return [];
+    if (performanceRange === 'MAX') return historyData;
+
+    const raw = calculatePortfolioHistory(
+      filteredTransactions,
+      Object.values(project.securities || {}),
+      project.fxData.rates,
+      filteredCashAccounts,
+      project.settings.baseCurrency,
+      performanceRange,
+      'daily'
+    );
+
+    return normalizeInvestedForExplicitCash(
+      raw,
+      filteredTransactions,
+      filteredCashAccounts,
+      project.fxData,
+      baseCurrency
+    );
+  }, [project, filteredTransactions, filteredCashAccounts, baseCurrency, performanceRange, historyData]);
+
   const performanceRangeDates = useMemo(() => {
-    const series = analysisMetrics?.twrSeries || [];
-    if (!series.length) return { start: '', end: '' };
-
-    const end = series[series.length - 1].date;
-    if (performanceRange === 'MAX') {
-      return { start: series[0].date, end };
-    }
-
-    const endDate = parseDateOnlyUTC(end);
-    const startDate = new Date(endDate);
-
-    if (performanceRange === '1M') startDate.setUTCMonth(endDate.getUTCMonth() - 1);
-    if (performanceRange === '6M') startDate.setUTCMonth(endDate.getUTCMonth() - 6);
-    if (performanceRange === 'YTD') startDate.setUTCMonth(0, 1);
-    if (performanceRange === '1J') startDate.setUTCFullYear(endDate.getUTCFullYear() - 1);
-    if (performanceRange === '3J') startDate.setUTCFullYear(endDate.getUTCFullYear() - 3);
-    if (performanceRange === '5J') startDate.setUTCFullYear(endDate.getUTCFullYear() - 5);
-
-    const earliest = series[0].date;
-    const start = startDate < parseDateOnlyUTC(earliest) ? earliest : toDateKeyUTC(startDate);
-    return { start, end };
-  }, [analysisMetrics?.twrSeries, performanceRange]);
+    if (!performanceHistoryData.length) return { start: '', end: '' };
+    return {
+      start: performanceHistoryData[0].date,
+      end: performanceHistoryData[performanceHistoryData.length - 1].date
+    };
+  }, [performanceHistoryData]);
 
   const portfolioPerformanceSeries = useMemo(() => {
     if (!performanceRangeDates.start || !performanceRangeDates.end) return [];
-    return buildMwrSeries(historyData, performanceRangeDates.start, performanceRangeDates.end, {
+    return buildMwrSeries(performanceHistoryData, performanceRangeDates.start, performanceRangeDates.end, {
       includeDividends,
       isFullRange: performanceRange === 'MAX',
       transactions: filteredTransactions
     });
-  }, [historyData, performanceRangeDates.start, performanceRangeDates.end, includeDividends, performanceRange, filteredTransactions]);
+  }, [performanceHistoryData, performanceRangeDates.start, performanceRangeDates.end, includeDividends, performanceRange, filteredTransactions]);
 
   const alignSeriesToDates = useCallback((series: { date: string; value: number }[], dates: string[]) => {
     if (!series.length || !dates.length) return [];
