@@ -53,7 +53,7 @@ export const SimpleAreaChart = ({
     const padding = priceRange > 0 ? priceRange * 0.05 : Math.max(Math.abs(maxPrice) * 0.02, 1);
 
     // Use CSS variable for axis tick color if possible, strictly referencing globals.css tokens
-    const axisTickColor = '#8d9199'; // Approximation of --md3-outline or on-surface-variant
+    const axisTickColor = 'var(--md3-on-surface-variant, #8d9199)';
 
     const formatDate = (dateStr: string) => {
         const d = parseDateOnlyUTC(dateStr);

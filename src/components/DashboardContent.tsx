@@ -841,7 +841,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
             <div className="md3-list-item p-5 text-center text-sm text-slate-400">Keine Positionen vorhanden.</div>
           ) : (
             holdings.slice(0, 5).map((stock) => (
-              <div key={stock.security.isin} onClick={() => onSelectSecurity(stock.security.isin)} className="md3-list-item flex cursor-pointer items-center justify-between p-4">
+              <div key={`${stock.security.isin}-${stock.currency}`} onClick={() => onSelectSecurity(stock.security.isin)} className="md3-list-item flex cursor-pointer items-center justify-between p-4">
                 <div className="flex items-center space-x-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-white">
                     {stock.security.name.slice(0, 2).toUpperCase()}

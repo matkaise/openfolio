@@ -24,21 +24,28 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
 
     const baseCurrency = project.settings.baseCurrency || 'EUR';
 
-    const txByIsin: Record<string, TransactionLike[]> = {};
+    const normalizeCurrency = (value: string | undefined) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : baseCurrency;
+    };
+
+    const txByKey: Record<string, { isin: string; currency: string; txs: TransactionLike[] }> = {};
     filteredTransactions.forEach((t) => {
       if (!t.isin) return;
       if (!['Buy', 'Sell', 'Sparplan_Buy'].includes(t.type)) return;
-      if (!txByIsin[t.isin]) txByIsin[t.isin] = [];
-      txByIsin[t.isin].push(t);
+      const currency = normalizeCurrency(t.currency);
+      const key = `${t.isin}__${currency}`;
+      if (!txByKey[key]) txByKey[key] = { isin: t.isin, currency, txs: [] };
+      txByKey[key].txs.push(t);
     });
 
-    const results = Object.keys(txByIsin).map((isin) => {
-      const txs = txByIsin[isin].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const results = Object.values(txByKey).map(({ isin, currency, txs }) => {
+      const sortedTxs = txs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       let qty = 0;
       let realized = 0;
       let lastDate = '';
 
-      txs.forEach((t) => {
+      sortedTxs.forEach((t) => {
         const shares = Math.abs(t.shares || t.quantity || 0);
         if (t.type === 'Buy' || t.type === 'Sparplan_Buy') qty += shares;
         if (t.type === 'Sell') qty -= shares;
@@ -48,7 +55,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
         if (!lastDate || new Date(t.date) > new Date(lastDate)) lastDate = t.date;
       });
 
-      return { isin, qty, realized, lastDate };
+      return { isin, currency, qty, realized, lastDate };
     });
 
     return results
@@ -57,6 +64,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
         const sec = project.securities?.[r.isin];
         return {
           isin: r.isin,
+          currency: r.currency,
           name: sec?.name || r.isin,
           quoteType: sec?.quoteType || 'Aktie',
           realized: r.realized,
@@ -97,7 +105,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
               }
 
               return (
-            <div key={stock.security.isin} onClick={() => onSelectSecurity(stock.security.isin)} className="md3-list-item flex cursor-pointer items-center justify-between p-4">
+            <div key={`${stock.security.isin}-${stock.currency}`} onClick={() => onSelectSecurity(stock.security.isin)} className="md3-list-item flex cursor-pointer items-center justify-between p-4">
               <div className="flex items-center space-x-4">
                 <div className="md3-chip-tonal flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold">
                   {stock.security.name.slice(0, 2).toUpperCase()}
@@ -105,9 +113,10 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
                 <div>
                   <h4 className="md3-text-main font-medium">{stock.security.name}</h4>
                   <div className="mt-0.5 flex items-center space-x-2 text-xs text-slate-400">
-                    <span className="md3-chip-tonal rounded px-1.5">{stock.security.quoteType || 'Aktie'}</span>
-                    <span className={statusClass}>{statusLabel}</span>
-                    <span>{stock.quantity} Stk.</span>
+                      <span className="md3-chip-tonal rounded px-1.5">{stock.security.quoteType || 'Aktie'}</span>
+                      <span className="md3-chip-tonal rounded px-1.5">{stock.currency}</span>
+                      <span className={statusClass}>{statusLabel}</span>
+                      <span>{stock.quantity} Stk.</span>
                     <span className="text-slate-500">|</span>
                     <span>Avg {stock.averageBuyPriceInOriginalCurrency.toLocaleString('de-DE', { style: 'currency', currency: stock.currency })}</span>
                     <span className="text-slate-500">|</span>
@@ -148,11 +157,16 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
               <div className="md3-list-item py-6 text-center text-sm text-slate-500">Keine geschlossenen Positionen.</div>
             ) : (
               closedPositions.map((pos) => (
-                <div key={pos.isin} className="md3-list-item flex items-center justify-between p-4">
+                <div
+                  key={`${pos.isin}-${pos.currency}`}
+                  onClick={() => onSelectSecurity(pos.isin)}
+                  className="md3-list-item flex cursor-pointer items-center justify-between p-4"
+                >
                   <div>
                     <div className="md3-text-main text-sm font-medium">{pos.name}</div>
                     <div className="mt-0.5 text-xs text-slate-400">
                       <span className="md3-chip-tonal rounded px-1.5">{pos.quoteType}</span>
+                      <span className="md3-chip-tonal rounded px-1.5 ml-1">{pos.currency}</span>
                       <span className="text-slate-500"> | </span>
                       <span>Letzter Trade: {new Date(pos.lastDate).toLocaleDateString('de-DE')}</span>
                     </div>

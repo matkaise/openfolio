@@ -123,6 +123,22 @@ export function calculateHoldings(
     baseCurrency: string = 'EUR'
 ): { holdings: Holding[], realizedPnL: number } {
 
+    const normalizeCurrency = (value: string | undefined): string | undefined => {
+        if (!value) return undefined;
+        const trimmed = value.trim();
+        return trimmed ? trimmed : undefined;
+    };
+
+    const getTradeCurrency = (txs: Transaction[] | undefined): string | undefined => {
+        if (!txs || txs.length === 0) return undefined;
+        for (const tx of txs) {
+            if (!isBuyType(tx.type) && tx.type !== 'Sell') continue;
+            const normalized = normalizeCurrency(tx.currency);
+            if (normalized) return normalized;
+        }
+        return undefined;
+    };
+
     const holdingsMap: Record<string, {
         quantity: number;
         invested: number; // Total amount spent (in base currency)
@@ -193,8 +209,24 @@ export function calculateHoldings(
         txByIsin[tx.isin].push(tx);
     });
 
-    const latestTxPriceByIsin: Record<string, { price: number; currency: string; date: string }> = {};
-    Object.entries(txByIsin).forEach(([isin, txs]) => {
+    const buildHoldingKey = (isin: string, currency: string) => `${isin}__${currency}`;
+    const parseHoldingKey = (key: string) => {
+        const idx = key.lastIndexOf('__');
+        if (idx === -1) return { isin: key, currency: baseCurrency };
+        return { isin: key.slice(0, idx), currency: key.slice(idx + 2) };
+    };
+
+    const txByHoldingKey: Record<string, Transaction[]> = {};
+    sortedTx.forEach(tx => {
+        if (!tx.isin) return;
+        const txCurrency = normalizeCurrency(tx.currency) || baseCurrency;
+        const key = buildHoldingKey(tx.isin, txCurrency);
+        if (!txByHoldingKey[key]) txByHoldingKey[key] = [];
+        txByHoldingKey[key].push(tx);
+    });
+
+    const latestTxPriceByKey: Record<string, { price: number; currency: string; date: string }> = {};
+    Object.entries(txByHoldingKey).forEach(([key, txs]) => {
         txs.forEach(tx => {
             const shares = Math.abs(tx.shares || 0);
             if (!shares) return;
@@ -210,9 +242,9 @@ export function calculateHoldings(
                 price = amount / shares;
             }
             if (!Number.isFinite(price) || price <= 0) return;
-            latestTxPriceByIsin[isin] = {
+            latestTxPriceByKey[key] = {
                 price,
-                currency: tx.currency || baseCurrency,
+                currency: normalizeCurrency(tx.currency) || baseCurrency,
                 date: tx.date
             };
         });
@@ -227,32 +259,34 @@ export function calculateHoldings(
     const splitIgnoreDates = buildSplitIgnoreDates(txByIsin, splitsByIsin);
 
     // Process each security
-    const allIsins = new Set([...Object.keys(txByIsin), ...Object.keys(holdingsMap)]);
+    const allKeys = new Set([...Object.keys(txByHoldingKey), ...Object.keys(holdingsMap)]);
 
-    allIsins.forEach(isin => {
+    allKeys.forEach(key => {
+        const { isin, currency } = parseHoldingKey(key);
         // Initialize if needed
-        if (!holdingsMap[isin]) {
-            // Find currency from first tx or security
-            const firstTx = txByIsin[isin]?.[0];
+        if (!holdingsMap[key]) {
+            const firstTx = txByHoldingKey[key]?.[0];
             const sec = securities.find(s => s.isin === isin);
-            holdingsMap[isin] = {
+            const tradeCurrency = getTradeCurrency(txByHoldingKey[key]);
+            const fallbackCurrency = normalizeCurrency(firstTx?.currency) || normalizeCurrency(sec?.currency) || baseCurrency;
+            holdingsMap[key] = {
                 quantity: 0,
                 invested: 0,
                 investedOriginal: 0,
                 realizedPnL: 0,
                 isin,
-                currency: firstTx?.currency || sec?.currency || 'EUR'
+                currency: tradeCurrency || currency || fallbackCurrency
             };
         }
-        const h = holdingsMap[isin];
+        const h = holdingsMap[key];
         const sec = securities.find(s => s.isin === isin);
 
         // Build Timeline: Transactions + Splits
         const events: { date: string, type: 'Tx' | 'Split', data?: Transaction, ratio?: number }[] = [];
 
         // Add Transactions
-        if (txByIsin[isin]) {
-            txByIsin[isin].forEach(tx => events.push({ date: tx.date, type: 'Tx', data: tx }));
+        if (txByHoldingKey[key]) {
+            txByHoldingKey[key].forEach(tx => events.push({ date: tx.date, type: 'Tx', data: tx }));
         }
 
         // Add Splits from Security (skip split days already represented in transactions)
@@ -291,9 +325,13 @@ export function calculateHoldings(
                 const tx = event.data;
                 const shares = Math.abs(tx.shares || 0);
                 const amountOriginal = Math.abs(tx.amount);
-                const amountBase = convert(amountOriginal, tx.currency, baseCurrency, tx.date);
+                const txCurrency = normalizeCurrency(tx.currency) || h.currency || baseCurrency;
+                const amountBase = convert(amountOriginal, txCurrency, baseCurrency, tx.date);
 
                 if (isBuyType(tx.type)) {
+                    if (h.quantity <= 0.000001) {
+                        h.currency = txCurrency;
+                    }
                     h.quantity += shares;
                     h.invested += amountBase;
                     h.investedOriginal += amountOriginal;
@@ -313,19 +351,19 @@ export function calculateHoldings(
 
     const result: Holding[] = [];
 
-    for (const isin in holdingsMap) {
-        const h = holdingsMap[isin];
+    for (const key in holdingsMap) {
+        const h = holdingsMap[key];
         if (h.quantity <= 0.000001) continue;
 
         // Resolve Security
-        const sec = securities.find(s => s.isin === isin) || { isin, name: isin, currency: h.currency };
+        const sec = securities.find(s => s.isin === h.isin) || { isin: h.isin, name: h.isin, currency: h.currency };
 
         // Current Price in Security Currency (e.g., USD from Yahoo)
-        let currentPriceInSecurityCurrency = quotes ? quotes[isin] : 0;
+        let currentPriceInSecurityCurrency = quotes ? quotes[h.isin] : 0;
 
         // Fallback Price if no quote available
         if (!currentPriceInSecurityCurrency) {
-            const fallback = latestTxPriceByIsin[isin];
+            const fallback = latestTxPriceByKey[key];
             const securityCurrency = sec.currency || h.currency;
             if (fallback) {
                 currentPriceInSecurityCurrency = convert(

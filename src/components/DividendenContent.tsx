@@ -121,8 +121,8 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     const dividends = filteredTransactions.filter(t => t.type === 'Dividend');
     const currentYear = new Date().getFullYear();
     const lastYear = currentYear - 1;
-    let sumCurrent = 0;
-    let sumLast = 0;
+    let sumCurrentActual = 0;
+    let sumLastActual = 0;
 
     // Config for 5 Year Monthly Comparison
     const comparisonYears = Array.from({ length: 5 }, (_, i) => currentYear - i).reverse(); // [2021, 2022, 2023, 2024, 2025]
@@ -144,9 +144,9 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       const amount = convertDividendToBase(d.amount, d.currency, d.date);
 
       if (year === currentYear) {
-        sumCurrent += amount;
+        sumCurrentActual += amount;
       } else if (year === lastYear) {
-        sumLast += amount;
+        sumLastActual += amount;
       }
 
       // Populate Full Map
@@ -435,7 +435,12 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     // User wants "Personal Dividend Yield". Usually: (Projected Annual Income) / Invested Capital.
     // Let's use (Sum(Last 12 Month Actuals) if available OR Projected Annual)
     // Given we built `projectedAnnual` quite carefully:
-    const totalProjected = (sumCurrent + estimatedRest); // Mix of YTD actuals + Future Forecast
+    const sumCurrentTheoretical = annualTheoreticalAllMap[currentYear] || 0;
+    const sumLastTheoretical = annualTheoreticalAllMap[lastYear] || 0;
+    const receivedCurrentYear = sumCurrentActual > 0 ? sumCurrentActual : sumCurrentTheoretical;
+    const receivedLastYear = sumLastActual > 0 ? sumLastActual : sumLastTheoretical;
+
+    const totalProjected = (receivedCurrentYear + estimatedRest); // Mix of YTD actuals + Future Forecast
     // Or we can construct strict "Forward Annual Dividend" sum.
 
     const pYield = totalValue > 0 ? (totalProjected / totalValue) * 100 : 0;
@@ -495,8 +500,8 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     });
 
     return {
-      receivedCurrentYear: sumCurrent,
-      receivedLastYear: sumLast,
+      receivedCurrentYear,
+      receivedLastYear,
       monthlyData: chartData,
       recentDividends: recent,
       upcomingDividends: upcomingList,
@@ -605,6 +610,8 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     return series;
   }, [combinedMonthlyMap, cumulativeRange]);
 
+  const currentYear = new Date().getFullYear();
+  const pastBarColor = 'color-mix(in srgb, var(--md3-outline) 55%, transparent 45%)';
 
   return (
     <div className="space-y-6">
@@ -615,7 +622,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
             <PiggyBank size={28} className="text-emerald-500" />
           </div>
           <div>
-            <p className="text-sm text-slate-500">Erhalten {new Date().getFullYear()}</p>
+            <p className="text-sm text-slate-500">Erhalten {currentYear}</p>
             <p className="text-2xl font-bold text-white">{receivedCurrentYear.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}</p>
             <p className={`text-xs flex items-center mt-0.5 ${receivedCurrentYear >= receivedLastYear ? 'text-emerald-400' : 'text-rose-400'}`}>
               <TrendingUp size={12} className="mr-1" /> {receivedLastYear > 0 ? ((receivedCurrentYear - receivedLastYear) / receivedLastYear * 100).toFixed(1) : 0}% vs. Vorjahr
@@ -700,16 +707,19 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
               return (
                 <div key={i} className="flex-1 flex flex-col justify-end items-center h-full group relative">
                   <div className="w-full flex justify-center items-end gap-px sm:gap-1 h-full px-0.5">
-                    {m.years.map((yData) => (
+                    {m.years.map((yData) => {
+                      const isCurrent = yData.year === currentYear;
+                      const barColor = isCurrent
+                        ? 'var(--md3-primary)'
+                        : pastBarColor;
+                      return (
                       <div
                         key={yData.year}
-                        className={`flex-1 rounded-t-sm transition-all relative
-                                ${yData.year === new Date().getFullYear() ? 'bg-emerald-500' : 'bg-slate-700 hover:bg-slate-600'}
-                            `}
-                        style={{ height: `${(yData.amount / max) * 100}%` }}
+                        className="flex-1 rounded-t-sm transition-all relative group-hover:brightness-110"
+                        style={{ backgroundColor: barColor, height: `${(yData.amount / max) * 100}%` }}
                       >
                       </div>
-                    ))}
+                    )})}
                   </div>
                   <span className="text-[10px] sm:text-xs text-slate-500 mt-3 truncate w-full text-center">{m.month}</span>
 
@@ -718,7 +728,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
                     <div className="text-xs text-slate-400 mb-2 font-bold border-b border-slate-700 pb-1">{m.month} Historie</div>
                     {m.years.slice().reverse().map(yData => (
                       <div key={yData.year} className="flex justify-between text-xs mb-0.5">
-                        <span className={yData.year === new Date().getFullYear() ? "text-emerald-400 font-bold" : "text-slate-400"}>{yData.year}</span>
+                        <span className={yData.year === currentYear ? "text-emerald-400 font-bold" : "text-slate-400"}>{yData.year}</span>
                         <span className="text-white font-medium">{formatCurrency(yData.amount)}</span>
                       </div>
                     ))}
@@ -732,11 +742,15 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
               const maxVal = Math.max(...yearlyDisplayData.map(d => d.amount));
               const max = maxVal > 0 ? maxVal * 1.1 : 100;
 
-              return yearlyDisplayData.map((d) => (
+              return yearlyDisplayData.map((d) => {
+                const barColor = d.isCurrent
+                  ? 'var(--md3-primary)'
+                  : pastBarColor;
+                return (
                 <div key={d.year} className="flex-1 flex flex-col justify-end items-center h-full group relative">
                   <div
-                    className={`w-4 sm:w-8 rounded-t-lg transition-all ${d.isCurrent ? 'bg-emerald-500' : 'bg-slate-600 hover:bg-slate-500'}`}
-                    style={{ height: `${(d.amount / max) * 100}%` }}
+                    className="w-4 sm:w-8 rounded-t-lg transition-all group-hover:brightness-110"
+                    style={{ backgroundColor: barColor, height: `${(d.amount / max) * 100}%` }}
                   ></div>
                   <span className="text-xs text-slate-500 mt-3">{d.year}</span>
 
@@ -745,7 +759,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
                     <div className="text-sm font-bold text-white">{formatCurrency(d.amount)}</div>
                   </div>
                 </div>
-              ));
+              )});
             })()
           )}
         </div>
@@ -754,16 +768,16 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       {/* Cumulative Dividend Chart */}
       <Card className="h-80 flex flex-col">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-          <h3 className="font-semibold text-white flex items-center gap-2">
-            <Coins size={18} className="text-blue-400" />
+          <h3 className="font-semibold md3-text-main flex items-center gap-2">
+            <Coins size={18} className="md3-accent" />
             Kumulierte Dividenden
           </h3>
-          <div className="flex flex-wrap gap-1 bg-slate-900/50 p-1 rounded-lg">
+          <div className="md3-segment flex flex-wrap gap-1 p-1 rounded-lg">
             {(['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map(range => (
               <button
                 key={range}
                 onClick={() => setCumulativeRange(range)}
-                className={`px-2 py-1 text-xs rounded-md font-medium transition-all ${cumulativeRange === range ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`px-2 py-1 text-xs rounded-md font-medium transition-all ${cumulativeRange === range ? 'md3-chip-tonal' : 'md3-text-muted hover:opacity-90'}`}
               >
                 {range}
               </button>
@@ -773,7 +787,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
         <div className="flex-1 w-full">
           <SimpleAreaChart
             data={cumulativeDividendData}
-            color="#38bdf8"
+            color="var(--md3-primary)"
             height={240}
             showAxes={true}
             timeRange={cumulativeRange}

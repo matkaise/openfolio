@@ -99,7 +99,7 @@ const HoldingsGroupModal = ({
           {sortedHoldings.map(h => {
             const percentOfGroup = safeGroupValue > 0 ? (h.value / safeGroupValue) * 100 : 0;
             return (
-              <div key={h.security.isin} className="py-3 flex items-center justify-between gap-4">
+              <div key={`${h.security.isin}-${h.currency}`} className="py-3 flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-sm md3-text-main font-medium truncate">{h.security.name}</p>
                   <p className="text-xs md3-text-muted truncate">
