@@ -324,7 +324,7 @@ export default function PortfolioApp() {
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [timeRange, setTimeRange] = useState('1M');
   const [selectedPortfolioIds, setSelectedPortfolioIds] = useState<string[]>([]);
-  const [selectedSecurityIsin, setSelectedSecurityIsin] = useState<string | null>(null);
+  const [selectedSecurity, setSelectedSecurity] = useState<{ isin: string; currency?: string } | null>(null);
   const [analysisCache, setAnalysisCache] = useState<AnalysisCache | null>(null);
   const [includeDividendsInPerformance, setIncludeDividendsInPerformance] = useState(false);
   const [activeThemeId, setActiveThemeId] = useState<keyof typeof MATERIAL_THEMES>('baseline');
@@ -438,14 +438,14 @@ export default function PortfolioApp() {
             timeRange={timeRange}
             setTimeRange={setTimeRange}
             selectedPortfolioIds={selectedPortfolioIds}
-            onSelectSecurity={setSelectedSecurityIsin}
+            onSelectSecurity={(isin, currency) => setSelectedSecurity({ isin, currency })}
             onShowPortfolio={() => setActiveTab('Portfolio')}
             includeDividends={includeDividendsInPerformance}
             onToggleDividends={() => setIncludeDividendsInPerformance((v) => !v)}
           />
         );
       case 'Portfolio':
-        return <PortfolioList selectedPortfolioIds={selectedPortfolioIds} onSelectSecurity={setSelectedSecurityIsin} />;
+        return <PortfolioList selectedPortfolioIds={selectedPortfolioIds} onSelectSecurity={(isin, currency) => setSelectedSecurity({ isin, currency })} />;
       case 'Analyse':
         return (
           <AnalysisContent
@@ -753,12 +753,13 @@ export default function PortfolioApp() {
             </div>
           </div>
 
-          {selectedSecurityIsin && project?.securities?.[selectedSecurityIsin] && (
+          {selectedSecurity && project?.securities?.[selectedSecurity.isin] && (
             <SecurityDetailModal
-              isOpen={!!selectedSecurityIsin}
-              onClose={() => setSelectedSecurityIsin(null)}
-              security={project.securities[selectedSecurityIsin]}
+              isOpen={!!selectedSecurity}
+              onClose={() => setSelectedSecurity(null)}
+              security={project.securities[selectedSecurity.isin]}
               transactions={project.transactions}
+              currencyFilter={selectedSecurity.currency}
             />
           )}
         </main>

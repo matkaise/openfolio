@@ -11,7 +11,7 @@ import { AllocationChart } from '@/components/AllocationChart';
 import { Card } from '@/components/ui/Card';
 import { type DividendHistoryEntry, type EventEntry, type TransactionLike, type UpcomingDividendEntry } from '@/types/portfolioView';
 
-export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectSecurity, onShowPortfolio, includeDividends, onToggleDividends }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioIds: string[], onSelectSecurity: (isin: string) => void, onShowPortfolio: () => void, includeDividends: boolean, onToggleDividends: () => void }) => {
+export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectSecurity, onShowPortfolio, includeDividends, onToggleDividends }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioIds: string[], onSelectSecurity: (isin: string, currency?: string) => void, onShowPortfolio: () => void, includeDividends: boolean, onToggleDividends: () => void }) => {
   const { project, updateProject } = useProject();
   const [chartMode, setChartMode] = useState<'value' | 'performance'>('value');
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
@@ -841,7 +841,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
             <div className="md3-list-item p-5 text-center text-sm text-slate-400">Keine Positionen vorhanden.</div>
           ) : (
             holdings.slice(0, 5).map((stock) => (
-              <div key={`${stock.security.isin}-${stock.currency}`} onClick={() => onSelectSecurity(stock.security.isin)} className="md3-list-item flex cursor-pointer items-center justify-between p-4">
+              <div key={`${stock.security.isin}-${stock.currency}`} onClick={() => onSelectSecurity(stock.security.isin, stock.currency)} className="md3-list-item flex cursor-pointer items-center justify-between p-4">
                 <div className="flex items-center space-x-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-white">
                     {stock.security.name.slice(0, 2).toUpperCase()}

@@ -8,9 +8,10 @@ interface SecurityDetailModalProps {
   onClose: () => void;
   security: Security;
   transactions: Transaction[];
+  currencyFilter?: string;
 }
 
-export const SecurityDetailModal = ({ isOpen, onClose, security, transactions }: SecurityDetailModalProps) => {
+export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, currencyFilter }: SecurityDetailModalProps) => {
     const [timeRange, setTimeRange] = useState('1J');
 
     // Close on escape
@@ -49,13 +50,14 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions }:
     const markers = useMemo(() => {
         return transactions
             .filter(t => t.isin === security.isin && (t.type === 'Buy' || t.type === 'Sell'))
+            .filter(t => (currencyFilter ? (t.currency || '').trim() === currencyFilter : true))
             .map(t => ({
                 date: t.date.split('T')[0],
                 label: t.type === 'Buy' ? 'Kauf' : 'Verkauf',
                 color: t.type === 'Buy' ? '#10b981' : '#f43f5e',
                 type: t.type as 'Buy' | 'Sell'
             }));
-    }, [transactions, security.isin]);
+    }, [transactions, security.isin, currencyFilter]);
 
     const latestPrice = chartData.length > 0 ? chartData[chartData.length - 1].value : 0;
     const startPrice = chartData.length > 0 ? chartData[0].value : 0;

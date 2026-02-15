@@ -6,7 +6,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { type TransactionLike } from '@/types/portfolioView';
 import { Card } from '@/components/ui/Card';
 
-export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPortfolioIds: string[], onSelectSecurity: (isin: string) => void }) => {
+export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPortfolioIds: string[], onSelectSecurity: (isin: string, currency?: string) => void }) => {
   const { project } = useProject();
   const [showClosedPositions, setShowClosedPositions] = useState(false);
 
@@ -105,7 +105,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
               }
 
               return (
-            <div key={`${stock.security.isin}-${stock.currency}`} onClick={() => onSelectSecurity(stock.security.isin)} className="md3-list-item flex cursor-pointer items-center justify-between p-4">
+            <div key={`${stock.security.isin}-${stock.currency}`} onClick={() => onSelectSecurity(stock.security.isin, stock.currency)} className="md3-list-item flex cursor-pointer items-center justify-between p-4">
               <div className="flex items-center space-x-4">
                 <div className="md3-chip-tonal flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold">
                   {stock.security.name.slice(0, 2).toUpperCase()}
@@ -159,7 +159,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
               closedPositions.map((pos) => (
                 <div
                   key={`${pos.isin}-${pos.currency}`}
-                  onClick={() => onSelectSecurity(pos.isin)}
+                  onClick={() => onSelectSecurity(pos.isin, pos.currency)}
                   className="md3-list-item flex cursor-pointer items-center justify-between p-4"
                 >
                   <div>
