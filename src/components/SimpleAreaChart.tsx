@@ -151,13 +151,30 @@ export const SimpleAreaChart = ({
                         fill={isPercentage ? "url(#splitFill)" : `url(#${gradientId})`}
                     />
                     {markers.map((m, i) => {
-                        const y = data.find(d => d.date === m.date)?.value;
-                        if (y === undefined) return null;
+                        const direct = data.find(d => d.date === m.date);
+                        let point = direct;
+
+                        if (!point && data.length > 0) {
+                            const targetTime = parseDateOnlyUTC(m.date).getTime();
+                            let closest = data[0];
+                            let closestDiff = Math.abs(parseDateOnlyUTC(closest.date).getTime() - targetTime);
+                            for (let idx = 1; idx < data.length; idx++) {
+                                const candidate = data[idx];
+                                const diff = Math.abs(parseDateOnlyUTC(candidate.date).getTime() - targetTime);
+                                if (diff < closestDiff) {
+                                    closest = candidate;
+                                    closestDiff = diff;
+                                }
+                            }
+                            point = closest;
+                        }
+
+                        if (!point) return null;
                         return (
                             <ReferenceDot
                                 key={i}
-                                x={m.date}
-                                y={y}
+                                x={point.date}
+                                y={point.value}
                                 r={4}
                                 fill={m.color || '#18a957'}
                                 stroke="#fff"

@@ -13,6 +13,7 @@ interface SecurityDetailModalProps {
 
 export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, currencyFilter }: SecurityDetailModalProps) => {
     const [timeRange, setTimeRange] = useState('1J');
+    const normalizedCurrencyFilter = currencyFilter?.trim().toUpperCase();
 
     // Close on escape
     React.useEffect(() => {
@@ -50,14 +51,14 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
     const markers = useMemo(() => {
         return transactions
             .filter(t => t.isin === security.isin && (t.type === 'Buy' || t.type === 'Sell'))
-            .filter(t => (currencyFilter ? (t.currency || '').trim() === currencyFilter : true))
+            .filter(t => (normalizedCurrencyFilter ? (t.currency || '').trim().toUpperCase() === normalizedCurrencyFilter : true))
             .map(t => ({
                 date: t.date.split('T')[0],
                 label: t.type === 'Buy' ? 'Kauf' : 'Verkauf',
                 color: t.type === 'Buy' ? '#10b981' : '#f43f5e',
                 type: t.type as 'Buy' | 'Sell'
             }));
-    }, [transactions, security.isin, currencyFilter]);
+    }, [transactions, security.isin, normalizedCurrencyFilter]);
 
     const latestPrice = chartData.length > 0 ? chartData[chartData.length - 1].value : 0;
     const startPrice = chartData.length > 0 ? chartData[0].value : 0;
@@ -85,6 +86,11 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
                                 <span className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700/50">{security.quoteType || 'Aktie'}</span>
                                 <span>{security.symbol}</span>
                                 {security.isin && <span className="text-slate-500 font-mono text-xs">{security.isin}</span>}
+                                {normalizedCurrencyFilter && (
+                                  <span className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700/50 text-xs">
+                                    Trades: {normalizedCurrencyFilter}
+                                  </span>
+                                )}
                             </div>
                         </div>
                     </div>
