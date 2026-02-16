@@ -30,10 +30,16 @@ export const normalizeInvestedForExplicitCash = (
     return sourceHistory;
   }
 
-  const toTime = (dateStr: string) => toUtcTime(dateStr);
+  // If history already contains invested signal (as produced by calculatePortfolioHistory),
+  // keep it unchanged. Reconstructing invested from Buy/Sell flows creates false cashflow spikes.
+  const hasInvestedSignal = sourceHistory.some((point) => Math.abs(point.invested || 0) > 0.0000001);
+  if (hasInvestedSignal) {
+    return sourceHistory;
+  }
 
-  const tradeFlows = transactions
-    .filter(tx => tx.type === 'Buy' || tx.type === 'Sparplan_Buy' || tx.type === 'Sell')
+  const toTime = (dateStr: string) => toUtcTime(dateStr);
+  const explicitExternalFlows = transactions
+    .filter(tx => tx.type === 'Deposit' || tx.type === 'Withdrawal')
     .map(tx => {
       const amountBase = convertCurrency(
         fxData,
@@ -42,31 +48,128 @@ export const normalizeInvestedForExplicitCash = (
         baseCurrency,
         tx.date
       );
-
       return {
         time: toTime(tx.date),
-        flow: (tx.type === 'Sell' ? -1 : 1) * amountBase
+        flow: tx.type === 'Deposit' ? amountBase : -amountBase
       };
     })
-    .sort((a, b) => a.time - b.time);
+    .filter((entry) => Number.isFinite(entry.flow) && Math.abs(entry.flow) > 0.0000001);
 
-  if (tradeFlows.length === 0) {
-    return sourceHistory;
+  const sortedHistory = [...sourceHistory].sort((a, b) => a.date.localeCompare(b.date));
+
+  const inferredExternalMap = new Map<number, number>();
+  if (explicitExternalFlows.length === 0 && sortedHistory.length > 0) {
+    const accountTimelines = cashAccounts
+      .filter((account) => account.balanceHistory && Object.keys(account.balanceHistory).length > 0)
+      .map((account) => {
+        const history = account.balanceHistory || {};
+        const dates = Object.keys(history).sort();
+        const times = dates.map((date) => toTime(date));
+        return {
+          account,
+          history,
+          dates,
+          times,
+          idx: -1
+        };
+      });
+
+    const internalCashByTime = new Map<number, number>();
+    transactions
+      .filter((tx) =>
+        tx.type === 'Buy'
+        || tx.type === 'Sell'
+        || tx.type === 'Sparplan_Buy'
+        || tx.type === 'Dividend'
+        || tx.type === 'Fee'
+        || tx.type === 'Tax'
+      )
+      .forEach((tx) => {
+        const amountBase = convertCurrency(
+          fxData,
+          tx.amount || 0,
+          tx.currency,
+          baseCurrency,
+          tx.date
+        );
+        if (!Number.isFinite(amountBase) || Math.abs(amountBase) < 0.0000001) return;
+        const time = toTime(tx.date);
+        internalCashByTime.set(time, (internalCashByTime.get(time) || 0) + amountBase);
+      });
+
+    let previousTotalCashBase: number | null = null;
+
+    sortedHistory.forEach((point) => {
+      const pointTime = toTime(point.date);
+      let totalCashBase = 0;
+      let hasCashSnapshotUpdate = false;
+
+      accountTimelines.forEach((timeline) => {
+        while (timeline.idx + 1 < timeline.times.length && timeline.times[timeline.idx + 1] <= pointTime) {
+          timeline.idx += 1;
+        }
+
+        if (timeline.idx < 0) return;
+        const date = timeline.dates[timeline.idx];
+        const balance = timeline.history[date] || 0;
+        if (Math.abs(balance) < 0.0000001) return;
+        if (Object.prototype.hasOwnProperty.call(timeline.history, point.date)) {
+          hasCashSnapshotUpdate = true;
+        }
+
+        totalCashBase += convertCurrency(
+          fxData,
+          balance,
+          timeline.account.currency,
+          baseCurrency,
+          point.date
+        );
+      });
+
+      if (previousTotalCashBase === null) {
+        previousTotalCashBase = totalCashBase;
+        return;
+      }
+
+      const deltaCash = totalCashBase - previousTotalCashBase;
+      previousTotalCashBase = totalCashBase;
+      if (!hasCashSnapshotUpdate) return;
+
+      const internalCashImpact = internalCashByTime.get(pointTime) || 0;
+      const inferredExternalFlow = deltaCash - internalCashImpact;
+
+      if (Number.isFinite(inferredExternalFlow) && Math.abs(inferredExternalFlow) > 0.5) {
+        inferredExternalMap.set(pointTime, inferredExternalFlow);
+      }
+    });
   }
 
+  const externalFlowMap = new Map<number, number>();
+  explicitExternalFlows.forEach((entry) => {
+    externalFlowMap.set(entry.time, (externalFlowMap.get(entry.time) || 0) + entry.flow);
+  });
+  inferredExternalMap.forEach((flow, time) => {
+    externalFlowMap.set(time, (externalFlowMap.get(time) || 0) + flow);
+  });
+
+  if (externalFlowMap.size === 0) return sourceHistory;
+  const externalFlows = Array.from(externalFlowMap.entries())
+    .map(([time, flow]) => ({ time, flow }))
+    .sort((a, b) => a.time - b.time);
+
   let flowIndex = 0;
-  let cumulativeTradeFlow = 0;
+  let cumulativeExternalFlow = 0;
 
   return sourceHistory.map(point => {
     const pointTime = toTime(point.date);
-    while (flowIndex < tradeFlows.length && tradeFlows[flowIndex].time <= pointTime) {
-      cumulativeTradeFlow += tradeFlows[flowIndex].flow;
+    while (flowIndex < externalFlows.length && externalFlows[flowIndex].time <= pointTime) {
+      cumulativeExternalFlow += externalFlows[flowIndex].flow;
       flowIndex += 1;
     }
 
     return {
       ...point,
-      invested: point.invested + cumulativeTradeFlow
+      invested: (point.invested || 0) + cumulativeExternalFlow
     };
   });
 };

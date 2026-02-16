@@ -398,7 +398,7 @@ export const AnalysisContent = ({
 
     // Check Cache
     // Added version suffix to force invalidation after TWR refactor
-    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v16`;
+    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v17`;
     if (cachedData && cachedData.key === cacheKey) {
       setHistoryData(cachedData.historyData);
       setAnalysisMetrics(cachedData.analysisMetrics);

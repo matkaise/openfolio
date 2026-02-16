@@ -15,7 +15,7 @@ describe('normalizeInvestedForExplicitCash', () => {
     expect(result).toBe(history);
   });
 
-  it('adds cumulative trade flow to invested when explicit cash balances exist', () => {
+  it('does not treat Buy/Sell as external invested flow when explicit cash balances exist', () => {
     const history = [
       { date: '2024-01-01', value: 100, invested: 0, dividend: 0 },
       { date: '2024-01-02', value: 110, invested: 0, dividend: 0 },
@@ -53,8 +53,131 @@ describe('normalizeInvestedForExplicitCash', () => {
     );
 
     expect(result[0].invested).toBe(0);
+    expect(result[1].invested).toBe(0);
+    expect(result[2].invested).toBe(0);
+  });
+
+  it('reconstructs invested from Deposit/Withdrawal only when invested is missing', () => {
+    const history = [
+      { date: '2024-01-01', value: 100, invested: 0, dividend: 0 },
+      { date: '2024-01-02', value: 130, invested: 0, dividend: 0 },
+      { date: '2024-01-03', value: 120, invested: 0, dividend: 0 }
+    ];
+
+    const transactions = [
+      {
+        id: 'd1',
+        date: '2024-01-02',
+        type: 'Deposit' as const,
+        amount: 30,
+        currency: 'EUR',
+        broker: 'Test'
+      },
+      {
+        id: 'w1',
+        date: '2024-01-03',
+        type: 'Withdrawal' as const,
+        amount: -10,
+        currency: 'EUR',
+        broker: 'Test'
+      }
+    ];
+
+    const cashAccounts = [
+      {
+        id: 'c1',
+        name: 'Cash',
+        currency: 'EUR',
+        balanceHistory: {
+          '2024-01-01': 1000
+        }
+      }
+    ];
+
+    const result = normalizeInvestedForExplicitCash(
+      history,
+      transactions,
+      cashAccounts,
+      null,
+      'EUR'
+    );
+
+    expect(result[0].invested).toBe(0);
+    expect(result[1].invested).toBe(30);
+    expect(result[2].invested).toBe(20);
+  });
+
+  it('infers external flow from explicit cash delta net of internal cash transactions', () => {
+    const history = [
+      { date: '2024-01-01', value: 100, invested: 0, dividend: 0 },
+      { date: '2024-01-02', value: 220, invested: 0, dividend: 0 },
+      { date: '2024-01-03', value: 210, invested: 0, dividend: 0 }
+    ];
+
+    const transactions = [
+      {
+        id: 'f1',
+        date: '2024-01-03',
+        type: 'Fee' as const,
+        amount: -20,
+        currency: 'EUR',
+        broker: 'Test'
+      }
+    ];
+
+    const cashAccounts = [
+      {
+        id: 'c1',
+        name: 'Cash',
+        currency: 'EUR',
+        balanceHistory: {
+          '2024-01-01': 0,
+          '2024-01-02': 100,
+          '2024-01-03': 80
+        }
+      }
+    ];
+
+    const result = normalizeInvestedForExplicitCash(
+      history,
+      transactions,
+      cashAccounts,
+      null,
+      'EUR'
+    );
+
+    expect(result[0].invested).toBe(0);
     expect(result[1].invested).toBe(100);
     expect(result[2].invested).toBe(100);
+  });
+
+  it('keeps history unchanged when invested already exists', () => {
+    const history = [
+      { date: '2024-01-01', value: 100, invested: 50, dividend: 0 },
+      { date: '2024-01-02', value: 120, invested: 50, dividend: 0 }
+    ];
+
+    const cashAccounts = [
+      {
+        id: 'c1',
+        name: 'Cash',
+        currency: 'EUR',
+        balanceHistory: {
+          '2024-01-01': 10,
+          '2024-01-02': 20
+        }
+      }
+    ];
+
+    const result = normalizeInvestedForExplicitCash(
+      history,
+      [],
+      cashAccounts,
+      null,
+      'EUR'
+    );
+
+    expect(result).toBe(history);
   });
 });
 
