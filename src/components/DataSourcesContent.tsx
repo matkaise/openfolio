@@ -321,11 +321,13 @@ export const DataSourcesContent = () => {
             const portfolios = (prev.portfolios || []).filter(p => p.id !== portfolioId);
             const transactions = prev.transactions.filter(t => t.portfolioId !== portfolioId);
             const cashAccounts = (prev.cashAccounts || []).filter(a => a.portfolioId !== portfolioId);
+            const cashMovements = (prev.cashMovements || []).filter(m => m.portfolioId !== portfolioId);
             return {
                 ...prev,
                 portfolios,
                 transactions,
                 cashAccounts,
+                cashMovements,
                 modified: new Date().toISOString()
             };
         });

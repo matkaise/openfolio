@@ -8,15 +8,54 @@ export type CashBalanceImportPoint = {
     accountLabel?: string;
 };
 
+export type CashMovementImportEntry = {
+    date: string;
+    type: 'Deposit' | 'Withdrawal' | 'Dividend' | 'Tax' | 'Fee' | 'Interest' | 'Transfer' | 'Adjustment';
+    amount: number;
+    currency: string;
+    description: string;
+    isInternal?: boolean;
+    sourceKey?: string;
+    originalData?: unknown;
+};
+
 // Helper to parse Floats (handles "1.234,56" vs "1234.56")
 // The sample provided shows DOT as decimal separator e.g. "-1.43", "1.0770".
 // But German CSVs often use Comma. We will try to detect or strictly follow the sample.
 // Sample: "21-01-2026,06:31,...-1.43" -> Dot decimal.
 const parseNumber = (val: string): number => {
-    if (!val) return 0;
-    // Remove currency symbols if attached (though sample splits them)
-    const clean = val.replace(/[^\d.-]/g, '');
-    return parseFloat(clean);
+    const raw = (val || '').trim();
+    if (!raw) return 0;
+
+    let normalized = raw
+        .replace(/[’']/g, '')
+        .replace(/\s+/g, '');
+
+    const hasDot = normalized.includes('.');
+    const hasComma = normalized.includes(',');
+
+    if (hasDot && hasComma) {
+        if (normalized.lastIndexOf(',') > normalized.lastIndexOf('.')) {
+            normalized = normalized.replace(/\./g, '').replace(/,/g, '.');
+        } else {
+            normalized = normalized.replace(/,/g, '');
+        }
+    } else if (hasComma) {
+        const commaCount = (normalized.match(/,/g) || []).length;
+        if (commaCount === 1) {
+            const [, decimal = ''] = normalized.split(',');
+            if (decimal.length <= 2) {
+                normalized = normalized.replace(',', '.');
+            } else {
+                normalized = normalized.replace(/,/g, '');
+            }
+        } else {
+            normalized = normalized.replace(/,/g, '');
+        }
+    }
+
+    normalized = normalized.replace(/[^\d.-]/g, '');
+    return parseFloat(normalized);
 };
 
 const parseDate = (dateStr: string): string => {
@@ -278,6 +317,160 @@ export const parseFlatexCashBalancesCsv = (text: string): CashBalanceImportPoint
             if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
             return a.date.localeCompare(b.date);
         });
+};
+
+export const parseFlatexCashMovementsCsv = (text: string): CashMovementImportEntry[] => {
+    const rows = parseCsvRows(text);
+    if (!rows.length) return [];
+
+    const header = rows[0].join(',');
+    if (!(header.includes('Valutadatum') && header.includes('Beschreibung'))) {
+        return [];
+    }
+
+    const parseDateOnly = (value: string): string | null => {
+        const raw = (value || '').trim();
+        if (!raw) return null;
+
+        const dmy = /^(\d{2})-(\d{2})-(\d{4})$/.exec(raw);
+        if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+
+        const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+        if (ymd) return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
+
+        return null;
+    };
+
+    const normalizeCurrency = (value: string): string => {
+        const currency = (value || '').trim().toUpperCase();
+        return /^[A-Z]{3}$/.test(currency) ? currency : '';
+    };
+
+    const foldText = (value: string): string => {
+        return (value || '')
+            .toLowerCase()
+            .normalize('NFKD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/ã¤|ä/g, 'a')
+            .replace(/ã¶|ö/g, 'o')
+            .replace(/ã¼|ü/g, 'u')
+            .replace(/ãŸ|ß/g, 'ss')
+            .replace(/â€™|’/g, "'");
+    };
+
+    const extractAmountFromDescription = (description: string): number | null => {
+        const matches = description.match(/[-+]?\d[\d'’.,]*/g);
+        if (!matches || matches.length === 0) return null;
+        const lastMatch = matches[matches.length - 1];
+        const parsed = parseNumber(lastMatch);
+        return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const classify = (
+        description: string
+    ): { type: CashMovementImportEntry['type']; isInternal?: boolean } | null => {
+        const normalized = foldText(description.trim());
+        if (!normalized) return null;
+
+        if (normalized.startsWith('kauf ') || normalized.startsWith('verkauf ')) {
+            return null;
+        }
+        if (normalized.includes('wahrungswechsel')) {
+            return { type: 'Transfer', isInternal: true };
+        }
+        if (normalized.includes('cash sweep transfer') || normalized.includes('uberweisung auf ihr geldkonto')) {
+            return { type: 'Transfer', isInternal: true };
+        }
+        if (normalized.includes('einzahlung')) {
+            return { type: 'Deposit' };
+        }
+        if (normalized.includes('auszahlung von ihrem geldkonto')) {
+            return { type: 'Withdrawal' };
+        }
+        if (normalized.includes('dividendensteuer') || normalized.includes('steuer')) {
+            return { type: 'Tax' };
+        }
+        if (
+            normalized.includes('transaktionsgebuhren')
+            || normalized.includes('weitergabegebuhr')
+            || normalized.includes('zahlungsgebuhr')
+            || normalized.startsWith('gebuhr')
+        ) {
+            return { type: 'Fee' };
+        }
+        if (normalized.includes('zinsen') || normalized.includes('interest')) {
+            return { type: 'Interest' };
+        }
+        if (normalized.includes('dividende') || normalized.includes('kapitalruckzahlung')) {
+            return { type: 'Dividend' };
+        }
+        if (normalized.includes('reservation ideal')) {
+            return { type: 'Transfer', isInternal: true };
+        }
+
+        return { type: 'Adjustment' };
+    };
+
+    const parsedMovements: CashMovementImportEntry[] = [];
+
+    for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.length < 11) continue;
+
+        const description = (row[5] || '').trim();
+        const classification = classify(description);
+        if (!classification) continue;
+
+        const bookingDate = parseDateOnly(row[0]);
+        const valueDate = parseDateOnly(row[2]);
+        const date = valueDate || bookingDate;
+        if (!date) continue;
+
+        const currency = normalizeCurrency(row[7]) || normalizeCurrency(row[9]);
+        const shiftedCurrency = normalizeCurrency(row[8]);
+        const normalizedCurrency = currency || shiftedCurrency;
+        if (!normalizedCurrency) continue;
+
+        let amount = parseNumber(row[8]);
+        if (!Number.isFinite(amount) || (row[8] || '').trim() === '') {
+            const parsedFromDescription = extractAmountFromDescription(description);
+            if (parsedFromDescription !== null) {
+                amount = parsedFromDescription;
+            } else if (shiftedCurrency) {
+                amount = parseNumber(row[9]);
+            }
+        }
+        if (!Number.isFinite(amount) || Math.abs(amount) < 0.0000001) continue;
+
+        if (classification.type === 'Withdrawal' && amount > 0) amount = -amount;
+        if (classification.type === 'Deposit' && amount < 0) amount = Math.abs(amount);
+        if ((classification.type === 'Tax' || classification.type === 'Fee') && amount > 0) amount = -amount;
+
+        const sourceParts = [
+            date,
+            row[1] || '',
+            normalizedCurrency,
+            amount.toFixed(8),
+            description,
+            row[11] || ''
+        ];
+
+        parsedMovements.push({
+            date,
+            type: classification.type,
+            amount,
+            currency: normalizedCurrency,
+            description,
+            isInternal: classification.isInternal,
+            sourceKey: sourceParts.join('|'),
+            originalData: row
+        });
+    }
+
+    return parsedMovements.sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return (a.sourceKey || '').localeCompare(b.sourceKey || '');
+    });
 };
 
 // Simple CSV Splitter that handles quoted fields

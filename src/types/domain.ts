@@ -105,6 +105,20 @@ export interface CashAccount {
     balanceHistory?: Record<string, number>; // YYYY-MM-DD -> end-of-day balance
 }
 
+export interface CashMovement {
+    id: string;
+    date: string; // YYYY-MM-DD
+    type: 'Deposit' | 'Withdrawal' | 'Dividend' | 'Tax' | 'Fee' | 'Interest' | 'Transfer' | 'Adjustment';
+    amount: number; // Positive = inflow, negative = outflow (account perspective)
+    currency: Currency;
+    description?: string;
+    broker: string;
+    portfolioId?: string;
+    isInternal?: boolean;
+    sourceKey?: string; // Import key for deduplication across repeated imports
+    originalData?: unknown;
+}
+
 export interface ProjectData {
     version: number;
     id: string; // UUID
@@ -117,6 +131,7 @@ export interface ProjectData {
     transactions: Transaction[];
     securities: Record<ISIN, Security>;
     cashAccounts?: CashAccount[];
+    cashMovements?: CashMovement[];
     fxData: FxData;
 }
 
@@ -140,6 +155,7 @@ export const createEmptyProject = (name: string = 'Mein Portfolio'): ProjectData
     transactions: [],
     securities: {},
     cashAccounts: [],
+    cashMovements: [],
     fxData: {
         baseCurrency: 'EUR',
         rates: {},

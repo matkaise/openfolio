@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, FileText, Search, X } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, FileText, Search, Wallet, X } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { filterTransactionsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency, getCurrencyOptions } from '@/lib/fxUtils';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
 import { type DeletedTxEntry, type TransactionLike } from '@/types/portfolioView';
-import { type Transaction } from '@/types/domain';
+import { type CashMovement, type Transaction } from '@/types/domain';
 import { Card } from '@/components/ui/Card';
 
 const TransactionEditModal = ({
@@ -268,6 +268,7 @@ const DeletedTransactionsModal = ({
 
 export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: string[] }) => {
   const { project, updateProject } = useProject();
+  const [activeTab, setActiveTab] = useState<'transactions' | 'cash'>('transactions');
   const [txSearch, setTxSearch] = useState('');
   const [txType, setTxType] = useState('Alle');
   const [txDateFrom, setTxDateFrom] = useState('');
@@ -282,6 +283,12 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
   const filteredTransactions = useMemo(() => (
     filterTransactionsByPortfolio(project, selectedPortfolioIds)
   ), [project, selectedPortfolioIds]);
+
+  const filteredCashMovements = useMemo(() => {
+    const movements = project?.cashMovements || [];
+    if (selectedPortfolioIds.length === 0) return movements;
+    return movements.filter((entry) => entry.portfolioId && selectedPortfolioIds.includes(entry.portfolioId));
+  }, [project?.cashMovements, selectedPortfolioIds]);
 
   const transactionTypes = useMemo(() => {
     const types = new Set<string>();
@@ -322,6 +329,46 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [filteredTransactions, txType, txSearch, txDateFrom, txDateTo]);
+
+  const visibleCashMovements = useMemo(() => {
+    const query = txSearch.trim().toLowerCase();
+    const fromDate = txDateFrom ? new Date(`${txDateFrom}T00:00:00`) : null;
+    const toDate = txDateTo ? new Date(`${txDateTo}T23:59:59`) : null;
+
+    return filteredCashMovements
+      .filter((entry) => {
+        if (!fromDate && !toDate) return true;
+        const d = new Date(`${entry.date}T00:00:00`);
+        if (fromDate && d < fromDate) return false;
+        if (toDate && d > toDate) return false;
+        return true;
+      })
+      .filter((entry) => {
+        if (!query) return true;
+        const hay = `${entry.description || ''} ${entry.type} ${entry.currency}`;
+        return hay.toLowerCase().includes(query);
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [filteredCashMovements, txSearch, txDateFrom, txDateTo]);
+
+  const cashMovementSummary = useMemo(() => {
+    const summary = {
+      count: visibleCashMovements.length,
+      internalCount: 0,
+      externalCount: 0,
+      net: 0
+    };
+
+    if (!project) return summary;
+
+    visibleCashMovements.forEach((entry) => {
+      if (entry.isInternal) summary.internalCount += 1;
+      else summary.externalCount += 1;
+      summary.net += convertCurrency(project.fxData, entry.amount, entry.currency, baseCurrency, entry.date);
+    });
+
+    return summary;
+  }, [visibleCashMovements, project, baseCurrency]);
 
   const activeFilterCount = (txSearch ? 1 : 0)
     + (txType !== 'Alle' ? 1 : 0)
@@ -545,31 +592,71 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
       </div>
 
       <Card className="w-full !p-6">
+        <div className="mb-5 inline-flex rounded-2xl p-1 md3-segment">
+          <button
+            type="button"
+            onClick={() => setActiveTab('transactions')}
+            className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${activeTab === 'transactions' ? 'md3-chip-tonal' : 'md3-text-muted'}`}
+          >
+            Transaktionen
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('cash')}
+            className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${activeTab === 'cash' ? 'md3-chip-tonal' : 'md3-text-muted'}`}
+          >
+            Kontobewegungen
+          </button>
+        </div>
+
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="md3-text-main flex items-center gap-2 text-lg font-bold">
-              <FileText size={20} className="md3-accent" />
-              Transaktionen
+              {activeTab === 'transactions' ? <FileText size={20} className="md3-accent" /> : <Wallet size={20} className="md3-accent" />}
+              {activeTab === 'transactions' ? 'Transaktionen' : 'Kontobewegungen'}
             </h2>
             <p className="md3-text-muted mt-1 text-xs">
-              {filteredTransactions.length} gesamt {visibleTransactions.length !== filteredTransactions.length ? `- ${visibleTransactions.length} gefiltert` : ''}
+              {activeTab === 'transactions'
+                ? `${filteredTransactions.length} gesamt ${visibleTransactions.length !== filteredTransactions.length ? `- ${visibleTransactions.length} gefiltert` : ''}`
+                : `${filteredCashMovements.length} gesamt ${visibleCashMovements.length !== filteredCashMovements.length ? `- ${visibleCashMovements.length} gefiltert` : ''}`}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 md:gap-3">
-            <button
-              type="button"
-              onClick={() => setShowDeletedModal(true)}
-              className="md3-chip-tonal rounded-xl px-3 py-1.5 text-xs font-semibold"
-            >
-              Papierkorb ({deletedTxs.length})
-            </button>
+            {activeTab === 'transactions' && (
+              <button
+                type="button"
+                onClick={() => setShowDeletedModal(true)}
+                className="md3-chip-tonal rounded-xl px-3 py-1.5 text-xs font-semibold"
+              >
+                Papierkorb ({deletedTxs.length})
+              </button>
+            )}
 
-            <span className="md3-segment rounded-full px-3 py-1.5 text-xs font-semibold">
-              {visibleTransactions.length}
-              {visibleTransactions.length !== filteredTransactions.length ? ` / ${filteredTransactions.length}` : ''}
-              {' '}Eintraege
-            </span>
+            {activeTab === 'transactions' ? (
+              <span className="md3-segment rounded-full px-3 py-1.5 text-xs font-semibold">
+                {visibleTransactions.length}
+                {visibleTransactions.length !== filteredTransactions.length ? ` / ${filteredTransactions.length}` : ''}
+                {' '}Eintraege
+              </span>
+            ) : (
+              <>
+                <span className="md3-segment rounded-full px-3 py-1.5 text-xs font-semibold">
+                  Intern {cashMovementSummary.internalCount}
+                </span>
+                <span className="md3-segment rounded-full px-3 py-1.5 text-xs font-semibold">
+                  Extern {cashMovementSummary.externalCount}
+                </span>
+                <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${cashMovementSummary.net >= 0 ? 'md3-positive-soft md3-positive' : 'md3-negative-soft md3-negative'}`}>
+                  Netto {cashMovementSummary.net >= 0 ? '+' : ''}{cashMovementSummary.net.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}
+                </span>
+                <span className="md3-segment rounded-full px-3 py-1.5 text-xs font-semibold">
+                  {visibleCashMovements.length}
+                  {visibleCashMovements.length !== filteredCashMovements.length ? ` / ${filteredCashMovements.length}` : ''}
+                  {' '}Eintraege
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -580,23 +667,25 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
               type="text"
               value={txSearch}
               onChange={(e) => setTxSearch(e.target.value)}
-              placeholder="ISIN, Name oder Typ suchen..."
+              placeholder={activeTab === 'transactions' ? 'ISIN, Name oder Typ suchen...' : 'Beschreibung, Typ oder Waehrung suchen...'}
               className="h-12 w-full border-none bg-transparent pl-9 pr-3 text-sm outline-none"
             />
           </div>
 
-          <div className="md3-field flex items-center gap-2 px-3">
-            <span className="md3-text-muted text-xs font-semibold">Typ</span>
-            <select
-              value={txType}
-              onChange={(e) => setTxType(e.target.value)}
-              className="h-10 cursor-pointer border-none bg-transparent text-sm font-semibold outline-none"
-            >
-              {transactionTypes.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-          </div>
+          {activeTab === 'transactions' && (
+            <div className="md3-field flex items-center gap-2 px-3">
+              <span className="md3-text-muted text-xs font-semibold">Typ</span>
+              <select
+                value={txType}
+                onChange={(e) => setTxType(e.target.value)}
+                className="h-10 cursor-pointer border-none bg-transparent text-sm font-semibold outline-none"
+              >
+                {transactionTypes.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="md3-field flex items-center gap-2 px-3">
             <span className="md3-text-muted text-xs font-semibold">Von</span>
@@ -633,46 +722,83 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
         </div>
 
         <div className="custom-scrollbar max-h-[66vh] space-y-3 overflow-y-auto pr-1">
-          {visibleTransactions.length === 0 ? (
-            <div className="md3-list-item p-8 text-center text-sm md3-text-muted">Keine Transaktionen vorhanden.</div>
-          ) : (
-            visibleTransactions.map((tx) => {
-              const txAmount = tx.amount || 0;
-              const prefix = txAmount > 0 ? '+' : txAmount < 0 ? '-' : '';
-              return (
-                <div
-                  key={tx.id}
-                  onClick={() => setEditingTx(tx)}
-                  className="md3-list-item flex cursor-pointer items-center justify-between gap-4 p-4"
-                >
-                  <div className="min-w-0">
-                    <p className="md3-text-main truncate text-sm font-semibold">
-                      {project?.securities?.[tx.isin || '']?.name || tx.name || tx.isin}
-                    </p>
-                    <div className="md3-text-muted mt-1 flex flex-wrap items-center gap-2 text-xs">
-                      <span className="md3-segment rounded-md px-2 py-0.5 font-semibold">{tx.type}</span>
-                      {tx.portfolioId && portfolioNameById[tx.portfolioId] ? (
-                        <span className="md3-chip-tonal rounded-md px-2 py-0.5 font-semibold">{portfolioNameById[tx.portfolioId]}</span>
-                      ) : null}
-                      <span>{new Date(tx.date).toLocaleDateString('de-DE')}</span>
-                      {(tx.shares || tx.quantity) ? (
-                        <span>{Math.abs(tx.shares || tx.quantity || 0)} Stk.</span>
-                      ) : null}
+          {activeTab === 'transactions' ? (
+            visibleTransactions.length === 0 ? (
+              <div className="md3-list-item p-8 text-center text-sm md3-text-muted">Keine Transaktionen vorhanden.</div>
+            ) : (
+              visibleTransactions.map((tx) => {
+                const txAmount = tx.amount || 0;
+                const prefix = txAmount > 0 ? '+' : txAmount < 0 ? '-' : '';
+                return (
+                  <div
+                    key={tx.id}
+                    onClick={() => setEditingTx(tx)}
+                    className="md3-list-item flex cursor-pointer items-center justify-between gap-4 p-4"
+                  >
+                    <div className="min-w-0">
+                      <p className="md3-text-main truncate text-sm font-semibold">
+                        {project?.securities?.[tx.isin || '']?.name || tx.name || tx.isin}
+                      </p>
+                      <div className="md3-text-muted mt-1 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="md3-segment rounded-md px-2 py-0.5 font-semibold">{tx.type}</span>
+                        {tx.portfolioId && portfolioNameById[tx.portfolioId] ? (
+                          <span className="md3-chip-tonal rounded-md px-2 py-0.5 font-semibold">{portfolioNameById[tx.portfolioId]}</span>
+                        ) : null}
+                        <span>{new Date(tx.date).toLocaleDateString('de-DE')}</span>
+                        {(tx.shares || tx.quantity) ? (
+                          <span>{Math.abs(tx.shares || tx.quantity || 0)} Stk.</span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <p className={`text-sm font-semibold ${txAmount >= 0 ? 'md3-positive' : 'md3-negative'}`}>
+                        {prefix}
+                        {Math.abs(txAmount).toLocaleString('de-DE', { style: 'currency', currency: tx.currency || project?.settings.baseCurrency || 'EUR' })}
+                      </p>
+                      <p className="md3-text-muted text-xs">
+                        {tx.currency || project?.settings.baseCurrency || 'EUR'}
+                      </p>
                     </div>
                   </div>
-
-                  <div className="text-right">
-                    <p className={`text-sm font-semibold ${txAmount >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                      {prefix}
-                      {Math.abs(txAmount).toLocaleString('de-DE', { style: 'currency', currency: tx.currency || project?.settings.baseCurrency || 'EUR' })}
-                    </p>
-                    <p className="md3-text-muted text-xs">
-                      {tx.currency || project?.settings.baseCurrency || 'EUR'}
-                    </p>
+                );
+              })
+            )
+          ) : (
+            visibleCashMovements.length === 0 ? (
+              <div className="md3-list-item p-8 text-center text-sm md3-text-muted">Keine Kontobewegungen vorhanden.</div>
+            ) : (
+              visibleCashMovements.map((entry: CashMovement) => {
+                const amount = entry.amount || 0;
+                const prefix = amount > 0 ? '+' : amount < 0 ? '-' : '';
+                return (
+                  <div key={entry.id} className="md3-list-item flex items-center justify-between gap-4 p-4">
+                    <div className="min-w-0">
+                      <p className="md3-text-main truncate text-sm font-semibold">{entry.description || entry.type}</p>
+                      <div className="md3-text-muted mt-1 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="md3-segment rounded-md px-2 py-0.5 font-semibold">{entry.type}</span>
+                        {entry.isInternal ? (
+                          <span className="md3-chip-tonal rounded-md px-2 py-0.5 font-semibold">Intern</span>
+                        ) : (
+                          <span className="md3-chip-tonal rounded-md px-2 py-0.5 font-semibold">Extern</span>
+                        )}
+                        {entry.portfolioId && portfolioNameById[entry.portfolioId] ? (
+                          <span className="md3-chip-tonal rounded-md px-2 py-0.5 font-semibold">{portfolioNameById[entry.portfolioId]}</span>
+                        ) : null}
+                        <span>{new Date(entry.date).toLocaleDateString('de-DE')}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-sm font-semibold ${amount >= 0 ? 'md3-positive' : 'md3-negative'}`}>
+                        {prefix}
+                        {Math.abs(amount).toLocaleString('de-DE', { style: 'currency', currency: entry.currency || baseCurrency })}
+                      </p>
+                      <p className="md3-text-muted text-xs">{entry.currency || baseCurrency}</p>
+                    </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })
+            )
           )}
         </div>
       </Card>

@@ -3,8 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase, Check, ChevronDown } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
-import { Transaction, type CashAccount, type Portfolio, type ProjectData } from '@/types/domain';
-import { parseFlatexCashBalancesCsv, parseFlatexCsv, type CashBalanceImportPoint } from '@/lib/csvParser';
+import { Transaction, type CashAccount, type CashMovement, type Portfolio, type ProjectData } from '@/types/domain';
+import { parseFlatexCashBalancesCsv, parseFlatexCashMovementsCsv, parseFlatexCsv, type CashBalanceImportPoint, type CashMovementImportEntry } from '@/lib/csvParser';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
 import { getCurrencyOptions } from '@/lib/fxUtils';
 import { buildManualPriceHistory } from '@/lib/marketDataService';
@@ -41,6 +41,7 @@ type CsvMapping = {
 };
 type CsvImportSummary = {
     imported: number;
+    importedMovements?: number;
     skipped: number;
     errors: string[];
 };
@@ -76,6 +77,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     const [isDragging, setIsDragging] = useState(false);
     const [parsedTx, setParsedTx] = useState<Transaction[]>([]);
     const [parsedCashBalances, setParsedCashBalances] = useState<CashBalanceImportPoint[]>([]);
+    const [parsedCashMovements, setParsedCashMovements] = useState<CashMovementImportEntry[]>([]);
     const [importStatus, setImportStatus] = useState<'idle' | 'processing' | 'ready' | 'success'>('idle');
     const [genericHeaders, setGenericHeaders] = useState<string[]>([]);
     const [genericRows, setGenericRows] = useState<string[][]>([]);
@@ -134,15 +136,18 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             // In future: Switch parser based on selectedBroker
             const txs = parseFlatexCsv(text);
             const cashBalances = parseFlatexCashBalancesCsv(text);
+            const cashMovements = parseFlatexCashMovementsCsv(text);
 
-            if (txs.length > 0 || cashBalances.length > 0) {
+            if (txs.length > 0 || cashBalances.length > 0 || cashMovements.length > 0) {
                 setParsedTx(txs);
                 setParsedCashBalances(cashBalances);
+                setParsedCashMovements(cashMovements);
                 setImportStatus('ready');
             } else {
                 alert("Keine Daten gefunden. Bitte CSV pruefen.");
                 setParsedTx([]);
                 setParsedCashBalances([]);
+                setParsedCashMovements([]);
                 setImportStatus('idle');
             }
         } catch (err) {
@@ -150,6 +155,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             alert("Fehler beim Lesen der Datei.");
             setParsedTx([]);
             setParsedCashBalances([]);
+            setParsedCashMovements([]);
             setImportStatus('idle');
         }
     };
@@ -581,7 +587,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     };
 
     const commitImport = () => {
-        if (parsedTx.length === 0 && parsedCashBalances.length === 0) return;
+        if (parsedTx.length === 0 && parsedCashBalances.length === 0 && parsedCashMovements.length === 0) return;
 
         let updatedProject: ProjectData | null = null;
 
@@ -653,12 +659,41 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 });
             });
 
+            const existingCashMovements = prev.cashMovements || [];
+            const movementMap = new Map<string, CashMovement>(
+                existingCashMovements.map((movement) => [
+                    `${movement.portfolioId || ''}|${movement.sourceKey || `${movement.date}|${movement.currency}|${movement.amount}|${movement.description || ''}`}`,
+                    movement
+                ])
+            );
+
+            parsedCashMovements.forEach((movement) => {
+                const sourceKey = movement.sourceKey || `${movement.date}|${movement.currency}|${movement.amount}|${movement.description}`;
+                const dedupeKey = `${target.id}|${sourceKey}`;
+                if (movementMap.has(dedupeKey)) return;
+
+                movementMap.set(dedupeKey, {
+                    id: crypto.randomUUID(),
+                    date: movement.date,
+                    type: movement.type,
+                    amount: movement.amount,
+                    currency: movement.currency,
+                    description: movement.description,
+                    broker: 'Flatex',
+                    portfolioId: target.id,
+                    isInternal: movement.isInternal,
+                    sourceKey,
+                    originalData: movement.originalData
+                });
+            });
+
             updatedProject = {
                 ...prev,
                 portfolios: updatedPortfolios,
                 transactions: [...prev.transactions, ...mappedTxs],
                 securities: updatedSecurities,
                 cashAccounts: Array.from(cashAccountMap.values()),
+                cashMovements: Array.from(movementMap.values()),
                 modified: new Date().toISOString()
             };
             return updatedProject;
@@ -776,17 +811,17 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         return { transactions, errors };
     };
 
-    const buildGenericCashBalances = (): { cashPoints: CashBalanceImportPoint[]; errors: string[]; processedRows: number } => {
+    const buildGenericCashBalances = (): { cashPoints: CashBalanceImportPoint[]; cashMovements: CashMovementImportEntry[]; errors: string[]; processedRows: number } => {
         const errors: string[] = [];
         let processedRows = 0;
         if (!genericHeaders.length || !genericRows.length) {
             errors.push('Keine CSV-Daten geladen.');
-            return { cashPoints: [], errors, processedRows };
+            return { cashPoints: [], cashMovements: [], errors, processedRows };
         }
 
         if (!genericMapping.date || (!genericMapping.amount && !genericMapping.balance)) {
             errors.push('Bitte Datum und Betrag oder Saldo zuordnen.');
-            return { cashPoints: [], errors, processedRows };
+            return { cashPoints: [], cashMovements: [], errors, processedRows };
         }
 
         const dateIdx = genericHeaders.indexOf(genericMapping.date);
@@ -811,7 +846,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
         const findHeaderIndex = (predicate: (normalized: string) => boolean) => {
             for (let idx = 0; idx < genericHeaders.length; idx += 1) {
-                if (idx === dateIdx || idx === amountIdx || idx === currencyIdx) continue;
+                if (idx === dateIdx || idx === amountIdx || idx === balanceIdx || idx === currencyIdx) continue;
                 const normalized = normalizeHeaderName(genericHeaders[idx] || '');
                 if (predicate(normalized)) return idx;
             }
@@ -888,6 +923,19 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         }
 
         const currentCurrencyRatio = getCurrencyRatio(currencyIdx);
+        const candidateCurrencyColumns = genericHeaders
+            .map((_, idx) => ({
+                idx,
+                ratio: getCurrencyRatio(idx)
+            }))
+            .filter(({ idx, ratio }) =>
+                idx !== dateIdx
+                && idx !== amountIdx
+                && idx !== balanceIdx
+                && ratio >= 0.6
+            )
+            .sort((a, b) => b.ratio - a.ratio);
+
         if (currencyIdx < 0 || currentCurrencyRatio < 0.5) {
             let bestIdx = currencyIdx;
             let bestRatio = currentCurrencyRatio;
@@ -903,6 +951,24 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 currencyIdx = bestIdx;
             }
         }
+        const primaryCurrencyRatio = getCurrencyRatio(currencyIdx);
+        const currencyFallbackIndices = candidateCurrencyColumns.map((entry) => entry.idx);
+        const hasReliableCurrencyColumn = primaryCurrencyRatio >= 0.5 || currencyFallbackIndices.length > 0;
+        const shouldUseDefaultCurrencyFallback = !hasReliableCurrencyColumn;
+        const resolveCurrencyValue = (row: string[]): string => {
+            if (currencyIdx >= 0) {
+                const primary = normalizeCurrency(row[currencyIdx] ?? '');
+                if (primary) return primary;
+            }
+
+            for (const idx of currencyFallbackIndices) {
+                if (idx === currencyIdx) continue;
+                const fallback = normalizeCurrency(row[idx] ?? '');
+                if (fallback) return fallback;
+            }
+
+            return shouldUseDefaultCurrencyFallback ? genericDefaultCurrency : '';
+        };
 
         const valueDateIdx = findHeaderIndex((normalized) =>
             normalized.includes('valutadatum')
@@ -916,12 +982,170 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             || normalized.includes('buchungszeit')
         );
 
+        const descriptionIdx = genericMapping.description
+            ? genericHeaders.indexOf(genericMapping.description)
+            : findHeaderIndex((normalized) =>
+                normalized.includes('beschreibung')
+                || normalized.includes('description')
+                || normalized.includes('buchung')
+                || normalized.includes('verwendungszweck')
+                || normalized.includes('text')
+            );
+        const typeIdx = genericMapping.type
+            ? genericHeaders.indexOf(genericMapping.type)
+            : findHeaderIndex((normalized) =>
+                normalized.includes('typ')
+                || normalized.includes('type')
+                || normalized.includes('art')
+                || normalized.includes('kategorie')
+                || normalized.includes('category')
+            );
+        const orderIdIdx = findHeaderIndex((normalized) =>
+            normalized.includes('order')
+            || normalized.includes('referenz')
+            || normalized.includes('reference')
+            || normalized === 'id'
+        );
+
+        const parseEffectiveDate = (row: string[]): string | null => {
+            const primaryDate = parseDateValue(row[dateIdx] ?? '', genericDateFormat);
+            const valueDate = valueDateIdx >= 0 ? parseDateValue(row[valueDateIdx] ?? '', genericDateFormat) : null;
+            return valueDate || primaryDate;
+        };
+
+        const foldMovementText = (value: string) => {
+            return (value || '')
+                .toLowerCase()
+                .normalize('NFKD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/\u00df/g, 'ss')
+                .replace(/\u2019/g, "'")
+                .replace(/\u00e2\u20ac\u2122/g, "'");
+        };
+
+        const resolveTypeFromToken = (token: string): CashMovementImportEntry['type'] | null => {
+            if (!token) return null;
+            if (token.includes('deposit') || token.includes('einzahlung')) return 'Deposit';
+            if (token.includes('withdrawal') || token.includes('auszahlung')) return 'Withdrawal';
+            if (token.includes('dividend') || token.includes('dividende')) return 'Dividend';
+            if (token.includes('interest') || token.includes('zinsen')) return 'Interest';
+            if (token.includes('tax') || token.includes('steuer')) return 'Tax';
+            if (token.includes('fee') || token.includes('gebuhr') || token.includes('kommission') || token.includes('commission') || token.includes('cost')) return 'Fee';
+            if (token.includes('transfer') || token.includes('uberweisung') || token.includes('wahrungswechsel')) return 'Transfer';
+            if (token.includes('adjust') || token.includes('korrektur') || token.includes('anpass')) return 'Adjustment';
+            return null;
+        };
+
+        const classifyMovement = (
+            descriptionRaw: string,
+            typeRaw: string,
+            amount: number
+        ): { type: CashMovementImportEntry['type']; isInternal?: boolean } | null => {
+            const description = foldMovementText(descriptionRaw);
+            const explicitType = foldMovementText(typeRaw);
+            const combined = `${explicitType} ${description}`.trim();
+            if (!combined) {
+                if (amount > 0) return { type: 'Deposit' };
+                if (amount < 0) return { type: 'Withdrawal' };
+                return null;
+            }
+
+            if (
+                combined.startsWith('kauf ')
+                || combined.startsWith('verkauf ')
+                || combined.includes(' kauf ')
+                || combined.includes(' verkauf ')
+                || combined.startsWith('buy ')
+                || combined.startsWith('sell ')
+            ) {
+                return null;
+            }
+
+            const internalHint =
+                combined.includes('wahrungswechsel')
+                || combined.includes('cash sweep transfer')
+                || combined.includes('uberweisung auf ihr geldkonto')
+                || combined.includes('internal transfer')
+                || combined.includes('reservation ideal');
+
+            if (internalHint) {
+                return { type: 'Transfer', isInternal: true };
+            }
+
+            const explicit = resolveTypeFromToken(explicitType);
+            if (explicit) {
+                return explicit === 'Transfer'
+                    ? { type: explicit, isInternal: internalHint }
+                    : { type: explicit };
+            }
+
+            const inferred = resolveTypeFromToken(description);
+            if (inferred) {
+                return inferred === 'Transfer'
+                    ? { type: inferred, isInternal: internalHint }
+                    : { type: inferred };
+            }
+
+            return { type: 'Adjustment' };
+        };
+
+        const cashMovements: CashMovementImportEntry[] = [];
+        if (amountIdx >= 0) {
+            genericRows.forEach((row) => {
+                const dateValue = parseEffectiveDate(row);
+                if (!dateValue) return;
+
+                const currencyValue = resolveCurrencyValue(row);
+                if (!currencyValue) return;
+
+                const amountRaw = row[amountIdx] ?? '';
+                const amountValue = parseNumberStrict(amountRaw);
+                if (!Number.isFinite(amountValue) || Math.abs(amountValue) < 0.0000001) return;
+
+                const description = descriptionIdx >= 0 ? (row[descriptionIdx] ?? '').trim() : '';
+                const rawType = typeIdx >= 0 ? (row[typeIdx] ?? '').trim() : '';
+                const classification = classifyMovement(description, rawType, amountValue);
+                if (!classification) return;
+
+                let normalizedAmount = amountValue;
+                if (classification.type === 'Withdrawal' && normalizedAmount > 0) normalizedAmount = -normalizedAmount;
+                if (classification.type === 'Deposit' && normalizedAmount < 0) normalizedAmount = Math.abs(normalizedAmount);
+                if ((classification.type === 'Tax' || classification.type === 'Fee') && normalizedAmount > 0) normalizedAmount = -normalizedAmount;
+
+                const orderRef = orderIdIdx >= 0 ? (row[orderIdIdx] ?? '').trim() : '';
+                const timeRaw = timeIdx >= 0 ? (row[timeIdx] ?? '').trim() : '';
+                const sourceParts = [
+                    dateValue,
+                    timeRaw,
+                    currencyValue,
+                    normalizedAmount.toFixed(8),
+                    description || rawType || classification.type,
+                    orderRef,
+                    row.join('|')
+                ];
+
+                cashMovements.push({
+                    date: dateValue,
+                    type: classification.type,
+                    amount: normalizedAmount,
+                    currency: currencyValue,
+                    description: description || rawType || classification.type,
+                    isInternal: classification.isInternal,
+                    sourceKey: sourceParts.join('|'),
+                    originalData: row
+                });
+            });
+        }
+
+        cashMovements.sort((a, b) => {
+            if (a.date !== b.date) return a.date.localeCompare(b.date);
+            return (a.sourceKey || '').localeCompare(b.sourceKey || '');
+        });
+
         let firstTimestamp: number | null = null;
         let lastTimestamp: number | null = null;
         genericRows.forEach((row) => {
-            const primaryDate = parseDateValue(row[dateIdx] ?? '', genericDateFormat);
-            const valueDate = valueDateIdx >= 0 ? parseDateValue(row[valueDateIdx] ?? '', genericDateFormat) : null;
-            const dateValue = valueDate || primaryDate;
+            const dateValue = parseEffectiveDate(row);
             if (!dateValue) return;
             const timeMinutes = timeIdx >= 0 ? parseTimeToMinutes(row[timeIdx] ?? '') : 0;
             const timestamp = Date.parse(`${dateValue}T00:00:00Z`) + (timeMinutes * 60 * 1000);
@@ -936,16 +1160,16 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         if (balanceIdx >= 0) {
             const pointMap = new Map<string, { point: CashBalanceImportPoint; timeMinutes: number; rowIndex: number }>();
             genericRows.forEach((row, index) => {
-                const primaryDateRaw = row[dateIdx] ?? '';
-                const primaryDate = parseDateValue(primaryDateRaw, genericDateFormat);
-                const valueDate = valueDateIdx >= 0 ? parseDateValue(row[valueDateIdx] ?? '', genericDateFormat) : null;
-                const dateValue = valueDate || primaryDate;
+                const dateValue = parseEffectiveDate(row);
                 if (!dateValue) {
                     errors.push(`Zeile ${index + 2}: Datum ungueltig.`);
                     return;
                 }
-                const currencyRaw = currencyIdx >= 0 ? (row[currencyIdx] ?? '') : '';
-                const currencyValue = normalizeCurrency(currencyRaw) || genericDefaultCurrency;
+                const currencyValue = resolveCurrencyValue(row);
+                if (!currencyValue) {
+                    errors.push(`Zeile ${index + 2}: Waehrung ungueltig.`);
+                    return;
+                }
                 const balanceRaw = row[balanceIdx] ?? '';
                 const balanceValue = parseNumberStrict(balanceRaw);
                 if (!Number.isFinite(balanceValue)) {
@@ -983,22 +1207,22 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
                 return a.date.localeCompare(b.date);
             });
-            return { cashPoints, errors, processedRows };
+            return { cashPoints, cashMovements, errors, processedRows };
         }
 
         const grouped: Record<string, Record<string, number>> = {};
         genericRows.forEach((row, index) => {
             if (amountIdx < 0) return;
-            const primaryDateRaw = row[dateIdx] ?? '';
-            const primaryDate = parseDateValue(primaryDateRaw, genericDateFormat);
-            const valueDate = valueDateIdx >= 0 ? parseDateValue(row[valueDateIdx] ?? '', genericDateFormat) : null;
-            const dateValue = valueDate || primaryDate;
+            const dateValue = parseEffectiveDate(row);
             if (!dateValue) {
                 errors.push(`Zeile ${index + 2}: Datum ungueltig.`);
                 return;
             }
-            const currencyRaw = currencyIdx >= 0 ? (row[currencyIdx] ?? '') : '';
-            const currencyValue = normalizeCurrency(currencyRaw) || genericDefaultCurrency;
+            const currencyValue = resolveCurrencyValue(row);
+            if (!currencyValue) {
+                errors.push(`Zeile ${index + 2}: Waehrung ungueltig.`);
+                return;
+            }
             const amountRaw = row[amountIdx] ?? '';
             const amountValue = parseNumberStrict(amountRaw);
             if (!Number.isFinite(amountValue)) {
@@ -1024,15 +1248,17 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             });
         });
 
-        return { cashPoints, errors, processedRows };
+        return { cashPoints, cashMovements, errors, processedRows };
     };
+
 
     const commitGenericImport = () => {
         if (genericImportType === 'cash') {
-            const { cashPoints, errors, processedRows } = buildGenericCashBalances();
-            if (cashPoints.length === 0) {
+            const { cashPoints, cashMovements, errors, processedRows } = buildGenericCashBalances();
+            if (cashPoints.length === 0 && cashMovements.length === 0) {
                 setGenericImportSummary({
                     imported: 0,
+                    importedMovements: 0,
                     skipped: genericRows.length,
                     errors: errors.length ? errors.slice(0, 3) : ['Keine gueltigen Zeilen gefunden.']
                 });
@@ -1052,6 +1278,13 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                     `${account.portfolioId || ''}|${account.currency}|${account.sourceKey || ''}`;
                 const cashAccountMap = new Map<string, CashAccount>(
                     existingCashAccounts.map(account => [mergeKeyFor(account), account])
+                );
+                const existingCashMovements = prev.cashMovements || [];
+                const movementMap = new Map<string, CashMovement>(
+                    existingCashMovements.map((movement) => [
+                        `${movement.portfolioId || ''}|${movement.sourceKey || `${movement.date}|${movement.currency}|${movement.amount}|${movement.description || ''}`}`,
+                        movement
+                    ])
                 );
 
                 cashPoints.forEach(point => {
@@ -1079,16 +1312,38 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                     });
                 });
 
+                cashMovements.forEach((movement) => {
+                    const sourceKey = movement.sourceKey || `${movement.date}|${movement.currency}|${movement.amount}|${movement.description || ''}`;
+                    const dedupeKey = `${target.id}|${sourceKey}`;
+                    if (movementMap.has(dedupeKey)) return;
+
+                    movementMap.set(dedupeKey, {
+                        id: crypto.randomUUID(),
+                        date: movement.date,
+                        type: movement.type,
+                        amount: movement.amount,
+                        currency: movement.currency,
+                        description: movement.description,
+                        broker: 'CSV',
+                        portfolioId: target.id,
+                        isInternal: movement.isInternal,
+                        sourceKey,
+                        originalData: movement.originalData
+                    });
+                });
+
                 return {
                     ...prev,
                     portfolios: updatedPortfolios,
                     cashAccounts: Array.from(cashAccountMap.values()),
+                    cashMovements: Array.from(movementMap.values()),
                     modified: new Date().toISOString()
                 };
             });
 
             setGenericImportSummary({
                 imported: cashPoints.length,
+                importedMovements: cashMovements.length,
                 skipped: Math.max(0, genericRows.length - processedRows),
                 errors: errors.slice(0, 3)
             });
@@ -1723,6 +1978,36 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                             </select>
                                                         </div>
                                                     )}
+                                                    {genericImportType === 'cash' && (
+                                                        <div className="space-y-1">
+                                                            <label className="text-[11px] uppercase tracking-wider md3-text-muted">Beschreibung (optional)</label>
+                                                            <select
+                                                                value={genericMapping.description || ''}
+                                                                onChange={(e) => updateMapping('description', e.target.value)}
+                                                                className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                            >
+                                                                <option value="">Nicht verwendet</option>
+                                                                {headerOptions.map((h) => (
+                                                                    <option key={`cash_desc_${h}`} value={h}>{h}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    )}
+                                                    {genericImportType === 'cash' && (
+                                                        <div className="space-y-1">
+                                                            <label className="text-[11px] uppercase tracking-wider md3-text-muted">Bewegungstyp (optional)</label>
+                                                            <select
+                                                                value={genericMapping.type || ''}
+                                                                onChange={(e) => updateMapping('type', e.target.value)}
+                                                                className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                            >
+                                                                <option value="">Nicht verwendet</option>
+                                                                {headerOptions.map((h) => (
+                                                                    <option key={`cash_type_${h}`} value={h}>{h}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    )}
                                                     <div className="space-y-1">
                                                         <label className="text-[11px] uppercase tracking-wider md3-text-muted">Standard Waehrung</label>
                                                         <select
@@ -1803,7 +2088,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
                                 {genericImportSummary && (
                                     <div className="md3-list-item p-3 text-xs md3-text-muted">
-                                        Importiert: {genericImportSummary.imported} {genericImportType === 'cash' ? 'Kontostaende' : 'Transaktionen'} - Uebersprungen: {genericImportSummary.skipped}
+                                        Importiert: {genericImportSummary.imported} {genericImportType === 'cash' ? 'Kontostaende' : 'Transaktionen'}
+                                        {genericImportType === 'cash' && (
+                                            <> - Kontobewegungen: {genericImportSummary.importedMovements || 0}</>
+                                        )}
+                                        {' '} - Uebersprungen: {genericImportSummary.skipped}
                                         {genericImportSummary.errors.length > 0 && (
                                             <div className="mt-2 text-xs md3-negative">{genericImportSummary.errors.join(' ')}</div>
                                         )}
@@ -1846,7 +2135,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     </div>
                                     <h3 className="text-sm font-semibold md3-text-main">
                                         {importStatus === 'ready'
-                                            ? `${parsedTx.length} Transaktionen, ${parsedCashBalances.length} Kontostaende erkannt`
+                                            ? `${parsedTx.length} Transaktionen, ${parsedCashBalances.length} Kontostaende, ${parsedCashMovements.length} Kontobewegungen erkannt`
                                             : 'Datei hier ablegen'}
                                     </h3>
                                     <p className="text-xs md3-text-muted mt-1">
@@ -1859,7 +2148,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                         <Search size={18} />
                                     </div>
                                     <div className="text-xs md3-text-muted">
-                                        Lade deine <strong>Account.csv</strong> (Dividenden) oder <strong>Transactions.csv</strong> (Kaeufe/Verkaeufe) hoch.
+                                        Lade deine <strong>Account.csv</strong> (Kontobewegungen, Dividenden, Salden) oder <strong>Transactions.csv</strong> (Kaeufe/Verkaeufe) hoch.
                                     </div>
                                 </div>
                             </div>
