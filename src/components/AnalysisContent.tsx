@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, AlertCircle, Banknote, BarChart3, Check, ChevronLeft, ChevronRight, Globe, Loader2, X } from 'lucide-react';
 import { AreaChart, Area, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from 'recharts';
-import { calculatePortfolioHistory, type Holding, type AnalysisMetrics } from '@/lib/portfolioUtils';
+import { calculatePortfolioHistory, calculateTWRSeries, type Holding, type AnalysisMetrics } from '@/lib/portfolioUtils';
 import { calculateAnalysisMetrics } from '@/lib/analysisService';
-import { buildMwrSeries, normalizeInvestedForExplicitCash } from '@/lib/performanceUtils';
+import { buildMwrSeries, normalizeInvestedForExplicitCash, smoothPerformanceSeries } from '@/lib/performanceUtils';
 import { filterTransactionsByPortfolio, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency as convertFxCurrency } from '@/lib/fxUtils';
 import { parseDateOnlyUTC, toDateKeyUTC } from '@/lib/dateUtils';
@@ -193,6 +193,8 @@ export const AnalysisContent = ({
 }) => {
   const { project } = useProject();
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
+  const performanceMethod = project?.settings?.performanceMethod || 'MWR';
+  const performanceSmoothing = project?.settings?.performanceSmoothing || '1d';
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [showDrawdown, setShowDrawdown] = useState(false);
   const [isCalculating, setIsCalculating] = useState(true);
@@ -487,8 +489,10 @@ export const AnalysisContent = ({
   }, [historyData, includeDividends, filteredTransactions]);
 
   const monthlyReturnsMap = useMemo(() => {
-    const primary = analysisMetrics?.monthlyReturnsMap || {};
-    const fallback = mwrMonthlyReturnsMap;
+    const twrMap = analysisMetrics?.monthlyReturnsMap || {};
+    const mwrMap = mwrMonthlyReturnsMap;
+    const primary = performanceMethod === 'TWR' ? twrMap : mwrMap;
+    const fallback = performanceMethod === 'TWR' ? mwrMap : twrMap;
     const merged: Record<string, number> = {};
     const keys = new Set([...Object.keys(fallback), ...Object.keys(primary)]);
 
@@ -505,7 +509,7 @@ export const AnalysisContent = ({
     });
 
     return merged;
-  }, [analysisMetrics?.monthlyReturnsMap, mwrMonthlyReturnsMap]);
+  }, [analysisMetrics?.monthlyReturnsMap, mwrMonthlyReturnsMap, performanceMethod]);
 
   const yearsWithReturns = useMemo(() => {
     const yearSet = new Set<number>();
@@ -621,6 +625,16 @@ export const AnalysisContent = ({
 
   // Build a period chart series from the single TWR source of truth
   const buildPeriodSeries = (periodStart: string, periodEnd: string) => {
+    if (performanceMethod === 'MWR') {
+      if (!historyData.length) return [];
+      const isFullRange = historyData.length > 0 && periodStart === historyData[0].date;
+      return buildMwrSeries(historyData, periodStart, periodEnd, {
+        includeDividends,
+        isFullRange,
+        transactions: filteredTransactions
+      });
+    }
+
     const series = analysisMetrics?.twrSeries || [];
     if (!series.length) return [];
 
@@ -687,14 +701,21 @@ export const AnalysisContent = ({
     };
   }, [performanceHistoryData]);
 
-  const portfolioPerformanceSeries = useMemo(() => {
+  const rawPortfolioPerformanceSeries = useMemo(() => {
     if (!performanceRangeDates.start || !performanceRangeDates.end) return [];
+    if (performanceMethod === 'TWR') {
+      return calculateTWRSeries(performanceHistoryData, includeDividends);
+    }
     return buildMwrSeries(performanceHistoryData, performanceRangeDates.start, performanceRangeDates.end, {
       includeDividends,
       isFullRange: performanceRange === 'MAX',
       transactions: filteredTransactions
     });
-  }, [performanceHistoryData, performanceRangeDates.start, performanceRangeDates.end, includeDividends, performanceRange, filteredTransactions]);
+  }, [performanceHistoryData, performanceRangeDates.start, performanceRangeDates.end, includeDividends, performanceRange, filteredTransactions, performanceMethod]);
+
+  const portfolioPerformanceSeries = useMemo(() => (
+    smoothPerformanceSeries(rawPortfolioPerformanceSeries, performanceSmoothing)
+  ), [rawPortfolioPerformanceSeries, performanceSmoothing]);
 
   const alignSeriesToDates = useCallback((series: { date: string; value: number }[], dates: string[]) => {
     if (!series.length || !dates.length) return [];
@@ -833,12 +854,15 @@ export const AnalysisContent = ({
     baseCurrency: string
   ) => {
     const syntheticHistory = buildBenchmarkMwrHistory(history, currency, baseCurrency, start, end);
-    return buildMwrSeries(syntheticHistory, start, end, {
+    if (performanceMethod === 'TWR') {
+      return smoothPerformanceSeries(calculateTWRSeries(syntheticHistory, false), performanceSmoothing);
+    }
+    return smoothPerformanceSeries(buildMwrSeries(syntheticHistory, start, end, {
       includeDividends: false,
       isFullRange: performanceRange === 'MAX',
       transactions: filteredTransactions
-    });
-  }, [buildBenchmarkMwrHistory, performanceRange, filteredTransactions]);
+    }), performanceSmoothing);
+  }, [buildBenchmarkMwrHistory, performanceRange, filteredTransactions, performanceMethod, performanceSmoothing]);
 
   const benchmarkSeries = useMemo(() => {
     if (!performanceRangeDates.start || !performanceRangeDates.end) return [];

@@ -81,6 +81,8 @@ export interface FxData {
 
 export interface ProjectSettings {
     baseCurrency: Currency; // Portfolio display currency (e.g. EUR)
+    performanceMethod?: 'MWR' | 'TWR';
+    performanceSmoothing?: '1d' | '7d' | '1m';
     taxRate?: number;
     wealthGoal?: number; // Single stored target value
     wealthGoalCurrency?: Currency; // Currency in which wealthGoal was last saved
@@ -127,6 +129,8 @@ export const createEmptyProject = (name: string = 'Mein Portfolio'): ProjectData
     modified: new Date().toISOString(),
     settings: {
         baseCurrency: 'EUR',
+        performanceMethod: 'MWR',
+        performanceSmoothing: '1d',
         wealthGoal: 100000,
         wealthGoalCurrency: 'EUR',
         themeId: 'baseline',

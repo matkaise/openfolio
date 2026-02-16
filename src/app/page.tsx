@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LayoutDashboard,
+  Activity,
   PieChart,
   Wallet,
   Calendar,
@@ -330,6 +331,8 @@ export default function PortfolioApp() {
   const [activeThemeId, setActiveThemeId] = useState<keyof typeof MATERIAL_THEMES>('baseline');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const lastMarketAutoSyncRef = useRef(0);
+  const performanceMethod = project?.settings?.performanceMethod || 'MWR';
+  const performanceSmoothing = project?.settings?.performanceSmoothing || '1d';
 
   const [importTargetPortfolio, setImportTargetPortfolio] = useState<{ id: string; name: string; isNew: boolean } | null>(null);
 
@@ -514,6 +517,110 @@ export default function PortfolioApp() {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            <div className="md3-card p-6">
+              <div className="flex items-start gap-4">
+                <div
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                  style={{
+                    background: 'var(--md3-primary-container)',
+                    color: 'var(--md3-on-primary-container)'
+                  }}
+                >
+                  <Activity size={22} />
+                </div>
+                <div className="space-y-1">
+                  <h2 className="text-xl font-semibold">Performance</h2>
+                  <p className="text-sm" style={{ color: 'var(--md3-on-surface-variant)' }}>
+                    Waehle, wie Renditen berechnet werden sollen.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-col gap-3">
+                <div className="md3-segment flex w-fit p-1">
+                  <button
+                    type="button"
+                    onClick={() => updateProject((prev) => ({
+                      ...prev,
+                      settings: {
+                        ...prev.settings,
+                        performanceMethod: 'MWR'
+                      }
+                    }))}
+                    className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${performanceMethod === 'MWR' ? 'md3-chip-accent' : 'md3-text-muted'}`}
+                  >
+                    Geldgewichtet (MWR)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateProject((prev) => ({
+                      ...prev,
+                      settings: {
+                        ...prev.settings,
+                        performanceMethod: 'TWR'
+                      }
+                    }))}
+                    className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${performanceMethod === 'TWR' ? 'md3-chip-accent' : 'md3-text-muted'}`}
+                  >
+                    Zeitgewichtet (TWR)
+                  </button>
+                </div>
+                <p className="text-xs" style={{ color: 'var(--md3-on-surface-variant)' }}>
+                  MWR beruecksichtigt Ein- und Auszahlungen, TWR zeigt die reine Anlagestrategie ohne Cashflow-Effekte.
+                </p>
+
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--md3-on-surface-variant)' }}>
+                    Glaettung
+                  </span>
+                  <div className="md3-segment flex w-fit p-1">
+                    <button
+                      type="button"
+                      onClick={() => updateProject((prev) => ({
+                        ...prev,
+                        settings: {
+                          ...prev.settings,
+                          performanceSmoothing: '1d'
+                        }
+                      }))}
+                      className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${performanceSmoothing === '1d' ? 'md3-chip-accent' : 'md3-text-muted'}`}
+                    >
+                      1 Tag
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateProject((prev) => ({
+                        ...prev,
+                        settings: {
+                          ...prev.settings,
+                          performanceSmoothing: '7d'
+                        }
+                      }))}
+                      className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${performanceSmoothing === '7d' ? 'md3-chip-accent' : 'md3-text-muted'}`}
+                    >
+                      7 Tage
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateProject((prev) => ({
+                        ...prev,
+                        settings: {
+                          ...prev.settings,
+                          performanceSmoothing: '1m'
+                        }
+                      }))}
+                      className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${performanceSmoothing === '1m' ? 'md3-chip-accent' : 'md3-text-muted'}`}
+                    >
+                      1 Monat
+                    </button>
+                  </div>
+                  <p className="text-xs" style={{ color: 'var(--md3-on-surface-variant)' }}>
+                    Wir glätten nur die Darstellung der Performance-Charts. Kennzahlen bleiben unveraendert.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

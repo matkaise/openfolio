@@ -12,6 +12,7 @@ type BuildMwrOptions = {
 };
 
 type PerformancePoint = { date: string; value: number };
+export type PerformanceSmoothing = '1d' | '7d' | '1m';
 
 export const normalizeInvestedForExplicitCash = (
   sourceHistory: HistoryPoint[],
@@ -132,4 +133,45 @@ export const buildMwrSeries = (
 
     return { date: point.date, value: percent };
   });
+};
+
+const resolveSmoothingWindowDays = (option: PerformanceSmoothing): number => {
+  if (option === '7d') return 7;
+  if (option === '1m') return 30;
+  return 1;
+};
+
+export const smoothPerformanceSeries = (
+  series: PerformancePoint[],
+  option: PerformanceSmoothing
+): PerformancePoint[] => {
+  if (!series.length) return series;
+
+  const windowDays = resolveSmoothingWindowDays(option);
+  if (windowDays <= 1) return series;
+
+  const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date));
+  const windowMs = windowDays * 24 * 60 * 60 * 1000;
+  const result: PerformancePoint[] = [];
+
+  let startIndex = 0;
+  let runningSum = 0;
+
+  for (let i = 0; i < sorted.length; i++) {
+    const currentTime = toUtcTime(sorted[i].date);
+    runningSum += sorted[i].value;
+
+    while (startIndex < i) {
+      const startTime = toUtcTime(sorted[startIndex].date);
+      if (currentTime - startTime <= windowMs) break;
+      runningSum -= sorted[startIndex].value;
+      startIndex += 1;
+    }
+
+    const windowCount = i - startIndex + 1;
+    const smoothed = windowCount > 0 ? runningSum / windowCount : sorted[i].value;
+    result.push({ date: sorted[i].date, value: smoothed });
+  }
+
+  return result;
 };

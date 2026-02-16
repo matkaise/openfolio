@@ -1,7 +1,7 @@
 ﻿import React, { useMemo, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, Check, ChevronRight, PenLine, PieChart, Wallet, X } from 'lucide-react';
-import { calculatePortfolioHistory } from '@/lib/portfolioUtils';
-import { buildMwrSeries, normalizeInvestedForExplicitCash } from '@/lib/performanceUtils';
+import { calculatePortfolioHistory, calculateTWRSeries } from '@/lib/portfolioUtils';
+import { buildMwrSeries, normalizeInvestedForExplicitCash, smoothPerformanceSeries } from '@/lib/performanceUtils';
 import { filterTransactionsByPortfolio, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency } from '@/lib/fxUtils';
 import { resolveWealthGoalSource } from '@/lib/wealthGoalUtils';
@@ -15,6 +15,8 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
   const { project, updateProject } = useProject();
   const [chartMode, setChartMode] = useState<'value' | 'performance'>('value');
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
+  const performanceMethod = project?.settings?.performanceMethod || 'MWR';
+  const performanceSmoothing = project?.settings?.performanceSmoothing || '1d';
   const [dividendRange, setDividendRange] = useState<'YTD' | '1J'>('YTD');
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState('');
@@ -98,8 +100,11 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     );
   }, [project, historyData, filteredCashAccounts, filteredTransactions, baseCurrency]);
 
-  const performanceSeries = useMemo(() => {
+  const rawPerformanceSeries = useMemo(() => {
     if (historyForPerformance.length === 0) return [];
+    if (performanceMethod === 'TWR') {
+      return calculateTWRSeries(historyForPerformance, includeDividends);
+    }
     const start = historyForPerformance[0].date;
     const end = historyForPerformance[historyForPerformance.length - 1].date;
     return buildMwrSeries(historyForPerformance, start, end, {
@@ -107,7 +112,11 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       isFullRange: timeRange === 'MAX',
       transactions: filteredTransactions
     });
-  }, [historyForPerformance, includeDividends, timeRange, filteredTransactions]);
+  }, [historyForPerformance, includeDividends, timeRange, filteredTransactions, performanceMethod]);
+
+  const performanceSeries = useMemo(() => {
+    return smoothPerformanceSeries(rawPerformanceSeries, performanceSmoothing);
+  }, [rawPerformanceSeries, performanceSmoothing]);
 
   const displayData = useMemo(() => {
     if (chartMode === 'value') return historyData;
@@ -129,6 +138,8 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     ? latestKpiHistoryPoint.value
     : holdings.reduce((sum, h) => sum + h.value, 0);
 
+  const cashFlowTypes = useMemo(() => new Set(['Deposit', 'Withdrawal', 'Dividend', 'Tax', 'Fee']), []);
+
   const cashBalance = useMemo(() => {
     if (!project) return 0;
 
@@ -146,15 +157,27 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       }, 0);
     }
 
-    const cashTypes = new Set(['Deposit', 'Withdrawal', 'Dividend', 'Tax', 'Fee']);
-    const cashTransactions = filteredTransactions.filter((tx) => cashTypes.has(tx.type));
+    const cashTransactions = filteredTransactions.filter((tx) => cashFlowTypes.has(tx.type));
     if (cashTransactions.length === 0) return 0;
 
     return cashTransactions.reduce((sum, tx) => {
       return sum + convertCurrency(project.fxData, tx.amount, tx.currency, baseCurrency, tx.date);
     }, 0);
-  }, [project, filteredCashAccounts, filteredTransactions, baseCurrency]);
-  const totalReturn = (currentMaketValue - holdingsCostBasis) + (realizedPnL || 0);
+  }, [project, filteredCashAccounts, filteredTransactions, baseCurrency, cashFlowTypes]);
+
+  const hasExplicitCashBalances = useMemo(() => (
+    filteredCashAccounts.some((account) => account.balanceHistory && Object.keys(account.balanceHistory).length > 0)
+  ), [filteredCashAccounts]);
+
+  const hasCashFlows = useMemo(() => (
+    filteredTransactions.some((tx) => cashFlowTypes.has(tx.type))
+  ), [filteredTransactions, cashFlowTypes]);
+
+  const totalReturnBaseValue = (hasExplicitCashBalances || hasCashFlows)
+    ? holdingsMarketValue
+    : currentMaketValue;
+
+  const totalReturn = (totalReturnBaseValue - holdingsCostBasis) + (realizedPnL || 0);
   const wealthGoalStep = 25000;
   const goalSource = resolveWealthGoalSource(project?.settings);
   const storedGoal = goalSource.amount;

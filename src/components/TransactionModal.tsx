@@ -34,6 +34,10 @@ type CsvMapping = {
     shares?: string;
     price?: string;
     currency?: string;
+    amount?: string;
+    balance?: string;
+    description?: string;
+    type?: string;
 };
 type CsvImportSummary = {
     imported: number;
@@ -83,6 +87,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     const [genericStep, setGenericStep] = useState<'upload' | 'mapping'>('upload');
     const [showGenericPreview, setShowGenericPreview] = useState(false);
     const [showGenericAdvanced, setShowGenericAdvanced] = useState(false);
+    const [genericImportType, setGenericImportType] = useState<'security' | 'cash'>('security');
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
@@ -195,6 +200,12 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             .replace(/\u00c3\u00b6/g, 'o')
             .replace(/\u00c3\u00bc/g, 'u')
             .replace(/\u00c3\u009f/g, 'ss')
+            .replace(/\u00c3\u0084/g, 'a')
+            .replace(/\u00c3\u0096/g, 'o')
+            .replace(/\u00c3\u009c/g, 'u')
+            .replace(/\u00c4/g, 'a')
+            .replace(/\u00d6/g, 'o')
+            .replace(/\u00dc/g, 'u')
             .replace(/\u00e4/g, 'a')
             .replace(/\u00f6/g, 'o')
             .replace(/\u00fc/g, 'u')
@@ -301,7 +312,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         return bestIdx;
     };
 
-    const guessMappingFromHeaders = (headers: string[], rows: string[][]) => {
+    const guessMappingFromHeaders = (headers: string[], rows: string[][], mode: 'security' | 'cash') => {
         const mapping: CsvMapping = {};
         const used = new Set<number>();
 
@@ -313,38 +324,76 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         };
 
         const scoreDate = (normalized: string) => (normalized.includes('datum') || normalized.includes('date') ? 10 : 0);
-        const scoreIdentifier = (normalized: string) => {
-            if (normalized.includes('isin')) return 12;
-            if (normalized.includes('wkn')) return 10;
-            if (normalized.includes('ticker') || normalized.includes('symbol')) return 9;
-            return 0;
-        };
-        const scoreShares = (normalized: string) => {
-            if (normalized.includes('anzahl')) return 10;
-            if (normalized.includes('shares') || normalized.includes('quantity') || normalized.includes('qty')) return 8;
-            return 0;
-        };
-        const scorePrice = (normalized: string) => {
-            if (normalized.includes('kurs')) return 10;
-            if (normalized.includes('price') || normalized.includes('preis')) return 8;
-            return 0;
-        };
         const scoreCurrency = (normalized: string) => {
             if (normalized.includes('waehrung') || normalized.includes('wahrung')) return 10;
             if (normalized.includes('currency') || normalized.includes('ccy')) return 8;
             return 0;
         };
 
-        assign('date', pickBestHeaderIndex(headers, scoreDate, used));
-        assign('identifier', pickBestHeaderIndex(headers, scoreIdentifier, used));
-        assign('shares', pickBestHeaderIndex(headers, scoreShares, used));
-        assign('price', pickBestHeaderIndex(headers, scorePrice, used));
-        const currencyIdx = pickBestHeaderIndex(headers, scoreCurrency, used);
-        if (currencyIdx >= 0) {
-            assign('currency', currencyIdx);
+        if (mode === 'cash') {
+            const scoreAmount = (normalized: string) => {
+                if (normalized.includes('betrag')) return 10;
+                if (normalized.includes('anderung') || normalized.includes('aenderung')) return 9;
+                if (normalized.includes('amount') || normalized.includes('change') || normalized.includes('delta')) return 8;
+                return 0;
+            };
+            const scoreBalance = (normalized: string) => {
+                if (normalized.includes('saldo')) return 10;
+                if (normalized.includes('balance') || normalized.includes('kontostand') || normalized.includes('bestand')) return 8;
+                return 0;
+            };
+            const scoreDescription = (normalized: string) => {
+                if (normalized.includes('beschreibung') || normalized.includes('verwendungszweck')) return 10;
+                if (normalized.includes('text') || normalized.includes('desc') || normalized.includes('buchung')) return 8;
+                return 0;
+            };
+            const scoreType = (normalized: string) => {
+                if (normalized.includes('typ') || normalized.includes('type') || normalized.includes('art')) return 10;
+                if (normalized.includes('kategorie') || normalized.includes('category')) return 8;
+                return 0;
+            };
+
+            assign('date', pickBestHeaderIndex(headers, scoreDate, used));
+            assign('amount', pickBestHeaderIndex(headers, scoreAmount, used));
+            assign('balance', pickBestHeaderIndex(headers, scoreBalance, used));
+            const currencyIdx = pickBestHeaderIndex(headers, scoreCurrency, used);
+            if (currencyIdx >= 0) {
+                assign('currency', currencyIdx);
+            } else {
+                const detectedCurrencyIdx = detectCurrencyColumn(headers, rows, used);
+                assign('currency', detectedCurrencyIdx);
+            }
+            assign('description', pickBestHeaderIndex(headers, scoreDescription, used));
+            assign('type', pickBestHeaderIndex(headers, scoreType, used));
         } else {
-            const detectedCurrencyIdx = detectCurrencyColumn(headers, rows, used);
-            assign('currency', detectedCurrencyIdx);
+            const scoreIdentifier = (normalized: string) => {
+                if (normalized.includes('isin')) return 12;
+                if (normalized.includes('wkn')) return 10;
+                if (normalized.includes('ticker') || normalized.includes('symbol')) return 9;
+                return 0;
+            };
+            const scoreShares = (normalized: string) => {
+                if (normalized.includes('anzahl')) return 10;
+                if (normalized.includes('shares') || normalized.includes('quantity') || normalized.includes('qty')) return 8;
+                return 0;
+            };
+            const scorePrice = (normalized: string) => {
+                if (normalized.includes('kurs')) return 10;
+                if (normalized.includes('price') || normalized.includes('preis')) return 8;
+                return 0;
+            };
+
+            assign('date', pickBestHeaderIndex(headers, scoreDate, used));
+            assign('identifier', pickBestHeaderIndex(headers, scoreIdentifier, used));
+            assign('shares', pickBestHeaderIndex(headers, scoreShares, used));
+            assign('price', pickBestHeaderIndex(headers, scorePrice, used));
+            const currencyIdx = pickBestHeaderIndex(headers, scoreCurrency, used);
+            if (currencyIdx >= 0) {
+                assign('currency', currencyIdx);
+            } else {
+                const detectedCurrencyIdx = detectCurrencyColumn(headers, rows, used);
+                assign('currency', detectedCurrencyIdx);
+            }
         }
 
         const dateHeader = mapping.date ? headers.indexOf(mapping.date) : -1;
@@ -412,20 +461,24 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         return tryYmd(trimmed) || tryDmy(trimmed) || tryMdy(trimmed);
     };
 
+    const applyGenericGuess = (headers: string[], rows: string[][], mode: 'security' | 'cash') => {
+        const guess = guessMappingFromHeaders(headers, rows, mode);
+        setGenericMapping(guess.mapping);
+        if (guess.dateFormat !== 'auto') {
+            setGenericDateFormat(guess.dateFormat);
+        } else {
+            setGenericDateFormat('auto');
+        }
+    };
+
     const processGenericFile = async (file: File) => {
         try {
             const text = await file.text();
             const { headers, rows } = parseGenericCsv(text);
-            const guess = guessMappingFromHeaders(headers, rows);
             setGenericFileName(file.name);
             setGenericHeaders(headers);
             setGenericRows(rows);
-            setGenericMapping(guess.mapping);
-            if (guess.dateFormat !== 'auto') {
-                setGenericDateFormat(guess.dateFormat);
-            } else {
-                setGenericDateFormat('auto');
-            }
+            applyGenericGuess(headers, rows, genericImportType);
             setGenericImportSummary(null);
             setGenericDefaultCurrency(project?.settings.baseCurrency || 'EUR');
             setGenericStep('mapping');
@@ -436,6 +489,14 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             setGenericHeaders([]);
             setGenericRows([]);
         }
+    };
+
+    const handleGenericImportTypeChange = (nextType: 'security' | 'cash') => {
+        setGenericImportType(nextType);
+        if (genericHeaders.length > 0 && genericRows.length > 0) {
+            applyGenericGuess(genericHeaders, genericRows, nextType);
+        }
+        setGenericImportSummary(null);
     };
 
     // Helper to get or create target portfolio ID
@@ -551,13 +612,19 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         return genericHeaders.filter((h) => h && h.length > 0);
     }, [genericHeaders]);
 
-    const isGenericMappingReady = Boolean(
-        genericHeaders.length > 0 &&
-        genericMapping.date &&
-        genericMapping.identifier &&
-        genericMapping.shares &&
-        genericMapping.price
-    );
+    const isGenericMappingReady = genericImportType === 'cash'
+        ? Boolean(
+            genericHeaders.length > 0 &&
+            genericMapping.date &&
+            (genericMapping.amount || genericMapping.balance)
+        )
+        : Boolean(
+            genericHeaders.length > 0 &&
+            genericMapping.date &&
+            genericMapping.identifier &&
+            genericMapping.shares &&
+            genericMapping.price
+        );
 
     const showMarketSyncProgress = Boolean(isMarketSyncing && marketSyncProgress && marketSyncProgress.total > 0);
     const marketSyncPercent = showMarketSyncProgress
@@ -639,7 +706,165 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         return { transactions, errors };
     };
 
+    const buildGenericCashBalances = (): { cashPoints: CashBalanceImportPoint[]; errors: string[]; processedRows: number } => {
+        const errors: string[] = [];
+        let processedRows = 0;
+        if (!genericHeaders.length || !genericRows.length) {
+            errors.push('Keine CSV-Daten geladen.');
+            return { cashPoints: [], errors, processedRows };
+        }
+
+        if (!genericMapping.date || (!genericMapping.amount && !genericMapping.balance)) {
+            errors.push('Bitte Datum und Betrag oder Saldo zuordnen.');
+            return { cashPoints: [], errors, processedRows };
+        }
+
+        const dateIdx = genericHeaders.indexOf(genericMapping.date);
+        const amountIdx = genericMapping.amount ? genericHeaders.indexOf(genericMapping.amount) : -1;
+        const balanceIdx = genericMapping.balance ? genericHeaders.indexOf(genericMapping.balance) : -1;
+        const currencyIdx = genericMapping.currency ? genericHeaders.indexOf(genericMapping.currency) : -1;
+
+        const normalizeCurrency = (value: string) => {
+            const trimmed = value.trim().toUpperCase();
+            return /^[A-Z]{3}$/.test(trimmed) ? trimmed : '';
+        };
+
+        if (balanceIdx >= 0) {
+            const pointMap = new Map<string, CashBalanceImportPoint>();
+            genericRows.forEach((row, index) => {
+                const dateRaw = row[dateIdx] ?? '';
+                const dateValue = parseDateValue(dateRaw, genericDateFormat);
+                if (!dateValue) {
+                    errors.push(`Zeile ${index + 2}: Datum ungueltig.`);
+                    return;
+                }
+                const currencyRaw = currencyIdx >= 0 ? (row[currencyIdx] ?? '') : '';
+                const currencyValue = normalizeCurrency(currencyRaw) || genericDefaultCurrency;
+                const balanceRaw = row[balanceIdx] ?? '';
+                const balanceValue = parseNumberFlexible(balanceRaw);
+                if (!Number.isFinite(balanceValue)) {
+                    errors.push(`Zeile ${index + 2}: Saldo ungueltig.`);
+                    return;
+                }
+                processedRows += 1;
+                pointMap.set(`${currencyValue}|${dateValue}`, {
+                    date: dateValue,
+                    currency: currencyValue,
+                    balance: balanceValue
+                });
+            });
+
+            const cashPoints = Array.from(pointMap.values()).sort((a, b) => {
+                if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
+                return a.date.localeCompare(b.date);
+            });
+            return { cashPoints, errors, processedRows };
+        }
+
+        const grouped: Record<string, Record<string, number>> = {};
+        genericRows.forEach((row, index) => {
+            if (amountIdx < 0) return;
+            const dateRaw = row[dateIdx] ?? '';
+            const dateValue = parseDateValue(dateRaw, genericDateFormat);
+            if (!dateValue) {
+                errors.push(`Zeile ${index + 2}: Datum ungueltig.`);
+                return;
+            }
+            const currencyRaw = currencyIdx >= 0 ? (row[currencyIdx] ?? '') : '';
+            const currencyValue = normalizeCurrency(currencyRaw) || genericDefaultCurrency;
+            const amountRaw = row[amountIdx] ?? '';
+            const amountValue = parseNumberFlexible(amountRaw);
+            if (!Number.isFinite(amountValue)) {
+                errors.push(`Zeile ${index + 2}: Betrag ungueltig.`);
+                return;
+            }
+
+            processedRows += 1;
+            if (!grouped[currencyValue]) grouped[currencyValue] = {};
+            grouped[currencyValue][dateValue] = (grouped[currencyValue][dateValue] || 0) + amountValue;
+        });
+
+        const cashPoints: CashBalanceImportPoint[] = [];
+        Object.entries(grouped).forEach(([currency, byDate]) => {
+            let running = 0;
+            Object.keys(byDate).sort().forEach(date => {
+                running += byDate[date] || 0;
+                cashPoints.push({
+                    date,
+                    currency,
+                    balance: running
+                });
+            });
+        });
+
+        return { cashPoints, errors, processedRows };
+    };
+
     const commitGenericImport = () => {
+        if (genericImportType === 'cash') {
+            const { cashPoints, errors, processedRows } = buildGenericCashBalances();
+            if (cashPoints.length === 0) {
+                setGenericImportSummary({
+                    imported: 0,
+                    skipped: genericRows.length,
+                    errors: errors.length ? errors.slice(0, 3) : ['Keine gueltigen Zeilen gefunden.']
+                });
+                return;
+            }
+
+            updateProject(prev => {
+                const portfolios = prev.portfolios || [];
+                const target = getTargetPortfolioId(portfolios);
+                let updatedPortfolios = portfolios;
+                if (target.isNew && !updatedPortfolios.find(p => p.id === target.id)) {
+                    updatedPortfolios = [...portfolios, { id: target.id, name: target.name }];
+                }
+
+                const existingCashAccounts = prev.cashAccounts || [];
+                const mergeKeyFor = (account: Pick<CashAccount, 'portfolioId' | 'currency'>) => `${account.portfolioId || ''}|${account.currency}`;
+                const cashAccountMap = new Map<string, CashAccount>(
+                    existingCashAccounts.map(account => [mergeKeyFor(account), account])
+                );
+
+                cashPoints.forEach(point => {
+                    const key = `${target.id}|${point.currency}`;
+                    const existing = cashAccountMap.get(key);
+                    if (!existing) {
+                        cashAccountMap.set(key, {
+                            id: crypto.randomUUID(),
+                            name: `${target.name} ${point.currency} Konto`,
+                            portfolioId: target.id,
+                            currency: point.currency,
+                            balanceHistory: { [point.date]: point.balance }
+                        });
+                        return;
+                    }
+
+                    cashAccountMap.set(key, {
+                        ...existing,
+                        balanceHistory: {
+                            ...(existing.balanceHistory || {}),
+                            [point.date]: point.balance
+                        }
+                    });
+                });
+
+                return {
+                    ...prev,
+                    portfolios: updatedPortfolios,
+                    cashAccounts: Array.from(cashAccountMap.values()),
+                    modified: new Date().toISOString()
+                };
+            });
+
+            setGenericImportSummary({
+                imported: cashPoints.length,
+                skipped: Math.max(0, genericRows.length - processedRows),
+                errors: errors.slice(0, 3)
+            });
+            return;
+        }
+
         const { transactions, errors } = buildGenericTransactions();
         if (transactions.length === 0) {
             setGenericImportSummary({
@@ -1106,60 +1331,140 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                             <div className="text-sm font-semibold md3-text-main">Spalten zuordnen</div>
                                             <div className="text-xs md3-text-muted">{genericFileName}</div>
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] uppercase tracking-wider md3-text-muted">Datum *</label>
-                                                <select
-                                                    value={genericMapping.date || ''}
-                                                    onChange={(e) => updateMapping('date', e.target.value)}
-                                                    className="md3-field w-full px-3 py-2 text-sm outline-none"
-                                                >
-                                                    <option value="">Bitte waehlen...</option>
-                                                    {headerOptions.map((h) => (
-                                                        <option key={`date_${h}`} value={h}>{h}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] uppercase tracking-wider md3-text-muted">WKN / ISIN / Ticker *</label>
-                                                <select
-                                                    value={genericMapping.identifier || ''}
-                                                    onChange={(e) => updateMapping('identifier', e.target.value)}
-                                                    className="md3-field w-full px-3 py-2 text-sm outline-none"
-                                                >
-                                                    <option value="">Bitte waehlen...</option>
-                                                    {headerOptions.map((h) => (
-                                                        <option key={`id_${h}`} value={h}>{h}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] uppercase tracking-wider md3-text-muted">Anzahl *</label>
-                                                <select
-                                                    value={genericMapping.shares || ''}
-                                                    onChange={(e) => updateMapping('shares', e.target.value)}
-                                                    className="md3-field w-full px-3 py-2 text-sm outline-none"
-                                                >
-                                                    <option value="">Bitte waehlen...</option>
-                                                    {headerOptions.map((h) => (
-                                                        <option key={`shares_${h}`} value={h}>{h}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] uppercase tracking-wider md3-text-muted">Preis pro Stueck *</label>
-                                                <select
-                                                    value={genericMapping.price || ''}
-                                                    onChange={(e) => updateMapping('price', e.target.value)}
-                                                    className="md3-field w-full px-3 py-2 text-sm outline-none"
-                                                >
-                                                    <option value="">Bitte waehlen...</option>
-                                                    {headerOptions.map((h) => (
-                                                        <option key={`price_${h}`} value={h}>{h}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
+                                        <div className="md3-segment flex w-max items-center gap-1 p-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleGenericImportTypeChange('security')}
+                                                className={`px-3 py-1 text-[11px] font-semibold transition-all ${genericImportType === 'security'
+                                                    ? 'md3-chip-tonal'
+                                                    : 'md3-text-muted hover:opacity-90'
+                                                    }`}
+                                            >
+                                                Wertpapiere
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleGenericImportTypeChange('cash')}
+                                                className={`px-3 py-1 text-[11px] font-semibold transition-all ${genericImportType === 'cash'
+                                                    ? 'md3-chip-tonal'
+                                                    : 'md3-text-muted hover:opacity-90'
+                                                    }`}
+                                            >
+                                                Cash
+                                            </button>
                                         </div>
+
+                                        {genericImportType === 'security' ? (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Datum *</label>
+                                                    <select
+                                                        value={genericMapping.date || ''}
+                                                        onChange={(e) => updateMapping('date', e.target.value)}
+                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                    >
+                                                        <option value="">Bitte waehlen...</option>
+                                                        {headerOptions.map((h) => (
+                                                            <option key={`date_${h}`} value={h}>{h}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">WKN / ISIN / Ticker *</label>
+                                                    <select
+                                                        value={genericMapping.identifier || ''}
+                                                        onChange={(e) => updateMapping('identifier', e.target.value)}
+                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                    >
+                                                        <option value="">Bitte waehlen...</option>
+                                                        {headerOptions.map((h) => (
+                                                            <option key={`id_${h}`} value={h}>{h}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Anzahl *</label>
+                                                    <select
+                                                        value={genericMapping.shares || ''}
+                                                        onChange={(e) => updateMapping('shares', e.target.value)}
+                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                    >
+                                                        <option value="">Bitte waehlen...</option>
+                                                        {headerOptions.map((h) => (
+                                                            <option key={`shares_${h}`} value={h}>{h}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Preis pro Stueck *</label>
+                                                    <select
+                                                        value={genericMapping.price || ''}
+                                                        onChange={(e) => updateMapping('price', e.target.value)}
+                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                    >
+                                                        <option value="">Bitte waehlen...</option>
+                                                        {headerOptions.map((h) => (
+                                                            <option key={`price_${h}`} value={h}>{h}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Datum *</label>
+                                                    <select
+                                                        value={genericMapping.date || ''}
+                                                        onChange={(e) => updateMapping('date', e.target.value)}
+                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                    >
+                                                        <option value="">Bitte waehlen...</option>
+                                                        {headerOptions.map((h) => (
+                                                            <option key={`date_${h}`} value={h}>{h}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Aenderung (optional bei Saldo)</label>
+                                                    <select
+                                                        value={genericMapping.amount || ''}
+                                                        onChange={(e) => updateMapping('amount', e.target.value)}
+                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                    >
+                                                        <option value="">Nicht verwendet</option>
+                                                        {headerOptions.map((h) => (
+                                                            <option key={`amt_${h}`} value={h}>{h}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Saldo (optional bei Aenderung)</label>
+                                                    <select
+                                                        value={genericMapping.balance || ''}
+                                                        onChange={(e) => updateMapping('balance', e.target.value)}
+                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                    >
+                                                        <option value="">Nicht verwendet</option>
+                                                        {headerOptions.map((h) => (
+                                                            <option key={`bal_${h}`} value={h}>{h}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Waehrung (optional)</label>
+                                                    <select
+                                                        value={genericMapping.currency || ''}
+                                                        onChange={(e) => updateMapping('currency', e.target.value)}
+                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                    >
+                                                        <option value="">Nicht verwendet</option>
+                                                        {headerOptions.map((h) => (
+                                                            <option key={`cash_cur_${h}`} value={h}>{h}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <button
                                             type="button"
@@ -1173,19 +1478,21 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                         {showGenericAdvanced && (
                                             <div className="space-y-3">
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    <div className="space-y-1">
-                                                        <label className="text-[11px] uppercase tracking-wider md3-text-muted">Waehrung (optional)</label>
-                                                        <select
-                                                            value={genericMapping.currency || ''}
-                                                            onChange={(e) => updateMapping('currency', e.target.value)}
-                                                            className="md3-field w-full px-3 py-2 text-sm outline-none"
-                                                        >
-                                                            <option value="">Nicht verwendet</option>
-                                                            {headerOptions.map((h) => (
-                                                                <option key={`cur_${h}`} value={h}>{h}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
+                                                    {genericImportType === 'security' && (
+                                                        <div className="space-y-1">
+                                                            <label className="text-[11px] uppercase tracking-wider md3-text-muted">Waehrung (optional)</label>
+                                                            <select
+                                                                value={genericMapping.currency || ''}
+                                                                onChange={(e) => updateMapping('currency', e.target.value)}
+                                                                className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                            >
+                                                                <option value="">Nicht verwendet</option>
+                                                                {headerOptions.map((h) => (
+                                                                    <option key={`cur_${h}`} value={h}>{h}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    )}
                                                     <div className="space-y-1">
                                                         <label className="text-[11px] uppercase tracking-wider md3-text-muted">Standard Waehrung</label>
                                                         <select
@@ -1213,7 +1520,9 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     </div>
                                                 </div>
                                                 <div className="text-xs md3-text-muted">
-                                                    Hinweis: Negative Anzahl wird als Verkauf interpretiert, positive als Kauf.
+                                                    {genericImportType === 'security'
+                                                        ? 'Hinweis: Negative Anzahl wird als Verkauf interpretiert, positive als Kauf.'
+                                                        : 'Hinweis: Wenn Saldo gesetzt ist, wird er fuer den Kontostand genutzt. Sonst wird der Saldo aus der Aenderung kumuliert.'}
                                                 </div>
                                             </div>
                                         )}
@@ -1264,7 +1573,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
                                 {genericImportSummary && (
                                     <div className="md3-list-item p-3 text-xs md3-text-muted">
-                                        Importiert: {genericImportSummary.imported} - Uebersprungen: {genericImportSummary.skipped}
+                                        Importiert: {genericImportSummary.imported} {genericImportType === 'cash' ? 'Kontostaende' : 'Transaktionen'} - Uebersprungen: {genericImportSummary.skipped}
                                         {genericImportSummary.errors.length > 0 && (
                                             <div className="mt-2 text-xs md3-negative">{genericImportSummary.errors.join(' ')}</div>
                                         )}
