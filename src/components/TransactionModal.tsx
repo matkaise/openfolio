@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase, Check } from 'lucide-react';
+import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase, Check, ChevronDown } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { Transaction, type CashAccount, type Portfolio, type ProjectData } from '@/types/domain';
 import { parseFlatexCashBalancesCsv, parseFlatexCsv, type CashBalanceImportPoint } from '@/lib/csvParser';
@@ -82,6 +82,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     const [genericImportSummary, setGenericImportSummary] = useState<CsvImportSummary | null>(null);
     const [genericStep, setGenericStep] = useState<'upload' | 'mapping'>('upload');
     const [showGenericPreview, setShowGenericPreview] = useState(false);
+    const [showGenericAdvanced, setShowGenericAdvanced] = useState(false);
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
@@ -1015,55 +1016,46 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 </div>
             </div>
 
-            <div className="p-5 pt-4 flex-1 overflow-y-auto custom-scrollbar md:overflow-visible">
+            <div className="p-5 pt-4 flex-1 overflow-y-auto custom-scrollbar">
                 {activeTab === 'import' ? (
                     <div className="space-y-5">
-                        <div className="md3-segment flex w-full items-center gap-1 p-1">
-                            <button
-                                type="button"
-                                onClick={() => setImportMode('generic')}
-                                className={`flex-1 px-3 py-2 text-xs font-semibold transition-all ${importMode === 'generic'
-                                    ? 'md3-chip-tonal'
-                                    : 'md3-text-muted hover:opacity-90'
-                                    }`}
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="text-xs font-semibold uppercase tracking-wider md3-text-muted">Importtyp</div>
+                            <select
+                                value={importMode}
+                                onChange={(e) => setImportMode(e.target.value as 'generic' | 'template')}
+                                className="md3-field w-full sm:w-auto px-3 py-2 text-xs font-semibold outline-none"
                             >
-                                CSV mit Spaltenzuordnung
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setImportMode('template')}
-                                className={`flex-1 px-3 py-2 text-xs font-semibold transition-all ${importMode === 'template'
-                                    ? 'md3-chip-tonal'
-                                    : 'md3-text-muted hover:opacity-90'
-                                    }`}
-                            >
-                                Broker Templates
-                            </button>
+                                <option value="generic">CSV mit Spaltenzuordnung</option>
+                                <option value="template">Broker Templates</option>
+                            </select>
                         </div>
 
                         {importMode === 'generic' ? (
                             <div className="space-y-4">
-                                <div className="md3-segment flex w-full items-center gap-1 p-1">
-                                    <button
-                                        type="button"
-                                        onClick={() => setGenericStep('upload')}
-                                        className={`flex-1 px-3 py-2 text-xs font-semibold transition-all ${genericStep === 'upload'
-                                            ? 'md3-chip-tonal'
-                                            : 'md3-text-muted hover:opacity-90'
-                                            }`}
-                                    >
-                                        1. Upload
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setGenericStep('mapping')}
-                                        disabled={genericHeaders.length === 0}
-                                        className={`flex-1 px-3 py-2 text-xs font-semibold transition-all ${genericStep === 'mapping'
-                                            ? 'md3-chip-tonal'
-                                            : 'md3-text-muted hover:opacity-90'} ${genericHeaders.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                        2. Zuordnung
-                                    </button>
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider">
+                                        <span className={`rounded-full px-3 py-1 ${genericStep === 'upload' ? 'md3-chip-tonal' : 'md3-segment md3-text-muted'}`}>
+                                            1 Upload
+                                        </span>
+                                        <span className="md3-text-muted">→</span>
+                                        <span className={`rounded-full px-3 py-1 ${genericStep === 'mapping' && !showGenericPreview ? 'md3-chip-tonal' : 'md3-segment md3-text-muted'}`}>
+                                            2 Zuordnung
+                                        </span>
+                                        <span className="md3-text-muted">→</span>
+                                        <span className={`rounded-full px-3 py-1 ${genericStep === 'mapping' && showGenericPreview ? 'md3-chip-tonal' : 'md3-segment md3-text-muted'}`}>
+                                            3 Vorschau
+                                        </span>
+                                    </div>
+                                    {genericHeaders.length > 0 && genericStep === 'upload' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setGenericStep('mapping')}
+                                            className="md3-filled-btn px-3 py-1.5 text-xs font-semibold"
+                                        >
+                                            Zuordnung starten
+                                        </button>
+                                    )}
                                 </div>
 
                                 {genericStep === 'upload' && (
@@ -1097,18 +1089,12 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                         </div>
 
                                         {genericHeaders.length > 0 && (
-                                            <div className="md3-list-item p-4 flex items-center justify-between">
-                                                <div>
-                                                    <div className="text-sm font-semibold md3-text-main">Datei bereit</div>
-                                                    <div className="text-xs md3-text-muted">{genericFileName}</div>
+                                            <div className="flex flex-wrap items-center justify-between gap-3 text-xs md3-text-muted">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="font-semibold md3-text-main">{genericFileName}</span>
+                                                    <span>• {genericRows.length} Zeilen</span>
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setGenericStep('mapping')}
-                                                    className="md3-filled-btn px-4 py-2 text-sm font-semibold"
-                                                >
-                                                    Weiter zur Zuordnung
-                                                </button>
+                                                <span className="md3-chip-tonal px-2 py-0.5 rounded-full">Bereit</span>
                                             </div>
                                         )}
                                     </div>
@@ -1116,7 +1102,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
                                 {genericStep === 'mapping' && genericHeaders.length > 0 && (
                                     <div className="md3-list-item p-4 space-y-4">
-                                        <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
                                             <div className="text-sm font-semibold md3-text-main">Spalten zuordnen</div>
                                             <div className="text-xs md3-text-muted">{genericFileName}</div>
                                         </div>
@@ -1173,51 +1159,64 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     ))}
                                                 </select>
                                             </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] uppercase tracking-wider md3-text-muted">Waehrung (optional)</label>
-                                                <select
-                                                    value={genericMapping.currency || ''}
-                                                    onChange={(e) => updateMapping('currency', e.target.value)}
-                                                    className="md3-field w-full px-3 py-2 text-sm outline-none"
-                                                >
-                                                    <option value="">Nicht verwendet</option>
-                                                    {headerOptions.map((h) => (
-                                                        <option key={`cur_${h}`} value={h}>{h}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div className="text-xs md3-text-muted">
-                                            Hinweis: Negative Anzahl wird als Verkauf interpretiert, positive als Kauf.
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] uppercase tracking-wider md3-text-muted">Standard Waehrung</label>
-                                                <select
-                                                    value={genericDefaultCurrency}
-                                                    onChange={(e) => setGenericDefaultCurrency(e.target.value)}
-                                                    className="md3-field w-full px-3 py-2 text-sm outline-none"
-                                                >
-                                                    {currencies.map((c) => (
-                                                        <option key={`def_${c}`} value={c}>{c}</option>
-                                                    ))}
-                                                </select>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowGenericAdvanced(prev => !prev)}
+                                            className="inline-flex items-center gap-2 text-xs font-semibold md3-text-muted hover:opacity-90"
+                                        >
+                                            Erweiterte Optionen
+                                            <ChevronDown size={14} className={`transition-transform ${showGenericAdvanced ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {showGenericAdvanced && (
+                                            <div className="space-y-3">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    <div className="space-y-1">
+                                                        <label className="text-[11px] uppercase tracking-wider md3-text-muted">Waehrung (optional)</label>
+                                                        <select
+                                                            value={genericMapping.currency || ''}
+                                                            onChange={(e) => updateMapping('currency', e.target.value)}
+                                                            className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                        >
+                                                            <option value="">Nicht verwendet</option>
+                                                            {headerOptions.map((h) => (
+                                                                <option key={`cur_${h}`} value={h}>{h}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-[11px] uppercase tracking-wider md3-text-muted">Standard Waehrung</label>
+                                                        <select
+                                                            value={genericDefaultCurrency}
+                                                            onChange={(e) => setGenericDefaultCurrency(e.target.value)}
+                                                            className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                        >
+                                                            {currencies.map((c) => (
+                                                                <option key={`def_${c}`} value={c}>{c}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-[11px] uppercase tracking-wider md3-text-muted">Datumsformat</label>
+                                                        <select
+                                                            value={genericDateFormat}
+                                                            onChange={(e) => setGenericDateFormat(e.target.value as 'auto' | 'ymd' | 'dmy' | 'mdy')}
+                                                            className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                        >
+                                                            <option value="auto">Auto</option>
+                                                            <option value="ymd">YYYY-MM-DD</option>
+                                                            <option value="dmy">DD.MM.YYYY</option>
+                                                            <option value="mdy">MM/DD/YYYY</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div className="text-xs md3-text-muted">
+                                                    Hinweis: Negative Anzahl wird als Verkauf interpretiert, positive als Kauf.
+                                                </div>
                                             </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] uppercase tracking-wider md3-text-muted">Datumsformat</label>
-                                                <select
-                                                    value={genericDateFormat}
-                                                    onChange={(e) => setGenericDateFormat(e.target.value as 'auto' | 'ymd' | 'dmy' | 'mdy')}
-                                                    className="md3-field w-full px-3 py-2 text-sm outline-none"
-                                                >
-                                                    <option value="auto">Auto</option>
-                                                    <option value="ymd">YYYY-MM-DD</option>
-                                                    <option value="dmy">DD.MM.YYYY</option>
-                                                    <option value="mdy">MM/DD/YYYY</option>
-                                                </select>
-                                            </div>
-                                        </div>
+                                        )}
 
                                         <div className="flex items-center justify-between">
                                             <button
@@ -1613,7 +1612,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-sm">
-            <div className="md3-card w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] md:max-h-none rounded-[28px]">
+            <div className="md3-card w-full max-w-5xl overflow-hidden flex flex-col min-h-[70vh] max-h-[92vh] rounded-[28px]">
                 {renderContent()}
             </div>
             {isCompanySearchOpen && (
