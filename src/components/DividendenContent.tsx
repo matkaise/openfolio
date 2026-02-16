@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Activity, BarChart3, CalendarCheck, Coins, PiggyBank, Timer, TrendingUp, Wallet, X } from 'lucide-react';
 import { filterTransactionsByPortfolio, calculateProjectHoldings } from '@/lib/portfolioSelectors';
+import { buildSplitIgnoreDates } from '@/lib/portfolioUtils';
 import { convertCurrency } from '@/lib/fxUtils';
 import { useProject } from '@/contexts/ProjectContext';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { Card } from '@/components/ui/Card';
 import { type DividendHistoryEntry, type EventEntry, type TransactionLike, type UpcomingDividendEntry } from '@/types/portfolioView';
+import { type Security, type Transaction } from '@/types/domain';
 
 const DividendListModal = ({
   isOpen,
@@ -291,6 +293,14 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       txByIsin[id].push(t);
     });
 
+    const splitsByIsin: Record<string, Record<string, number>> = {};
+    const securityByIsin: Record<string, Security> = {};
+    Object.values(project.securities || {}).forEach(sec => {
+      securityByIsin[sec.isin] = sec;
+      if (sec.splits) splitsByIsin[sec.isin] = sec.splits;
+    });
+    const splitIgnoreDates = buildSplitIgnoreDates(txByIsin as unknown as Record<string, Transaction[]>, splitsByIsin, securityByIsin);
+
     relevantIsins.forEach((isin: string) => {
       const sec = project.securities?.[isin];
       // If security or history missing, we can't do anything
@@ -304,7 +314,9 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
         events.push({ time: new Date(t.date).getTime(), type: 'Tx', data: t });
       });
       if (sec.splits) {
+        const ignoredDates = splitIgnoreDates[isin];
         Object.entries(sec.splits).forEach(([d, r]) => {
+          if (ignoredDates && ignoredDates.has(d)) return;
           events.push({ time: new Date(d).getTime(), type: 'Split', ratio: r as number });
         });
       }

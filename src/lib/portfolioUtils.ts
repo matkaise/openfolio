@@ -48,11 +48,57 @@ const getCashDeltaForTransaction = (tx: Transaction, includeTrades: boolean): nu
     return 0;
 };
 
-const buildSplitIgnoreDates = (
+export const buildSplitIgnoreDates = (
     txByIsin: Record<string, Transaction[]>,
-    splitsByIsin: Record<string, Record<string, number>>
+    splitsByIsin: Record<string, Record<string, number>>,
+    securitiesByIsin?: Record<string, Security>
 ) => {
     const ignoreMap: Record<string, Set<string>> = {};
+
+    const normalizeKey = (value?: string) => {
+        if (!value) return '';
+        return value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    };
+
+    const symbolToIsins: Record<string, string[]> = {};
+    const nameToIsins: Record<string, string[]> = {};
+
+    if (securitiesByIsin) {
+        Object.entries(securitiesByIsin).forEach(([isin, sec]) => {
+            const symbolKey = normalizeKey(sec.symbol);
+            const nameKey = normalizeKey(sec.name);
+            if (symbolKey) {
+                if (!symbolToIsins[symbolKey]) symbolToIsins[symbolKey] = [];
+                symbolToIsins[symbolKey].push(isin);
+            }
+            if (nameKey) {
+                if (!nameToIsins[nameKey]) nameToIsins[nameKey] = [];
+                nameToIsins[nameKey].push(isin);
+            }
+        });
+    }
+
+    const txSummaryByIsin: Record<string, Record<string, { buyShares: number; sellShares: number; buyAmount: number; sellAmount: number }>> = {};
+    Object.entries(txByIsin).forEach(([isin, txs]) => {
+        txs.forEach(tx => {
+            if (!tx.date) return;
+            if (!isBuyType(tx.type) && tx.type !== 'Sell') return;
+            const shares = Math.abs(tx.shares || 0);
+            const amount = Math.abs(tx.amount || 0);
+            if (!txSummaryByIsin[isin]) txSummaryByIsin[isin] = {};
+            if (!txSummaryByIsin[isin][tx.date]) {
+                txSummaryByIsin[isin][tx.date] = { buyShares: 0, sellShares: 0, buyAmount: 0, sellAmount: 0 };
+            }
+            const summary = txSummaryByIsin[isin][tx.date];
+            if (isBuyType(tx.type)) {
+                summary.buyShares += shares;
+                summary.buyAmount += amount;
+            } else if (tx.type === 'Sell') {
+                summary.sellShares += shares;
+                summary.sellAmount += amount;
+            }
+        });
+    });
 
     Object.entries(splitsByIsin).forEach(([isin, splits]) => {
         const txs = txByIsin[isin] || [];
@@ -72,36 +118,79 @@ const buildSplitIgnoreDates = (
 
             const buys = list.filter(tx => isBuyType(tx.type));
             const sells = list.filter(tx => tx.type === 'Sell');
-            if (buys.length === 0 || sells.length === 0) return;
+            if (buys.length > 0 && sells.length > 0) {
+                let hasSplitLike = false;
 
-            let hasSplitLike = false;
+                for (const buy of buys) {
+                    const buyShares = Math.abs(buy.shares || 0);
+                    const buyAmount = Math.abs(buy.amount || 0);
+                    if (!buyShares) continue;
+                    for (const sell of sells) {
+                        const sellShares = Math.abs(sell.shares || 0);
+                        const sellAmount = Math.abs(sell.amount || 0);
+                        if (!sellShares) continue;
 
-            for (const buy of buys) {
-                const buyShares = Math.abs(buy.shares || 0);
-                const buyAmount = Math.abs(buy.amount || 0);
-                if (!buyShares) continue;
-                for (const sell of sells) {
-                    const sellShares = Math.abs(sell.shares || 0);
-                    const sellAmount = Math.abs(sell.amount || 0);
-                    if (!sellShares) continue;
+                        const shareRatio = buyShares > sellShares ? (buyShares / sellShares) : (sellShares / buyShares);
+                        const ratioTolerance = Math.max(0.05, ratio * 0.05);
+                        if (Math.abs(shareRatio - ratio) > ratioTolerance) continue;
 
-                    const shareRatio = buyShares > sellShares ? (buyShares / sellShares) : (sellShares / buyShares);
-                    const ratioTolerance = Math.max(0.05, ratio * 0.05);
-                    if (Math.abs(shareRatio - ratio) > ratioTolerance) continue;
-
-                    const amountDiff = Math.abs(buyAmount - sellAmount);
-                    const amountTolerance = Math.max(1, Math.max(buyAmount, sellAmount) * 0.02);
-                    if (amountDiff <= amountTolerance) {
-                        hasSplitLike = true;
-                        break;
+                        const amountDiff = Math.abs(buyAmount - sellAmount);
+                        const amountTolerance = Math.max(1, Math.max(buyAmount, sellAmount) * 0.02);
+                        if (amountDiff <= amountTolerance) {
+                            hasSplitLike = true;
+                            break;
+                        }
                     }
+                    if (hasSplitLike) break;
                 }
-                if (hasSplitLike) break;
+
+                if (hasSplitLike) {
+                    if (!ignoreMap[isin]) ignoreMap[isin] = new Set<string>();
+                    ignoreMap[isin].add(date);
+                    return;
+                }
             }
 
-            if (hasSplitLike) {
+            if (!securitiesByIsin) return;
+
+            const baseSummary = txSummaryByIsin[isin]?.[date];
+            if (!baseSummary || baseSummary.sellShares <= 0) return;
+
+            const sec = securitiesByIsin[isin];
+            if (!sec) return;
+            const symbolKey = normalizeKey(sec.symbol);
+            const nameKey = normalizeKey(sec.name);
+
+            const candidateIsins = new Set<string>();
+            if (symbolKey && symbolToIsins[symbolKey]) {
+                symbolToIsins[symbolKey].forEach(id => candidateIsins.add(id));
+            }
+            if (nameKey && nameToIsins[nameKey]) {
+                nameToIsins[nameKey].forEach(id => candidateIsins.add(id));
+            }
+            candidateIsins.delete(isin);
+
+            for (const candidate of candidateIsins) {
+                const otherSummary = txSummaryByIsin[candidate]?.[date];
+                if (!otherSummary || otherSummary.buyShares <= 0) continue;
+
+                const shareRatio = otherSummary.buyShares > baseSummary.sellShares
+                    ? (otherSummary.buyShares / baseSummary.sellShares)
+                    : (baseSummary.sellShares / otherSummary.buyShares);
+                const ratioTolerance = Math.max(0.05, ratio * 0.05);
+                if (Math.abs(shareRatio - ratio) > ratioTolerance) continue;
+
+                const baseAmount = baseSummary.sellAmount;
+                const otherAmount = otherSummary.buyAmount;
+                if (baseAmount > 0 && otherAmount > 0) {
+                    const amountDiff = Math.abs(baseAmount - otherAmount);
+                    const amountTolerance = Math.max(1, Math.max(baseAmount, otherAmount) * 0.02);
+                    if (amountDiff > amountTolerance) continue;
+                }
+
                 if (!ignoreMap[isin]) ignoreMap[isin] = new Set<string>();
                 ignoreMap[isin].add(date);
+                break;
             }
         });
     });
@@ -256,7 +345,11 @@ export function calculateHoldings(
             splitsByIsin[sec.isin] = sec.splits;
         }
     });
-    const splitIgnoreDates = buildSplitIgnoreDates(txByIsin, splitsByIsin);
+    const securityByIsin: Record<string, Security> = {};
+    securities.forEach(sec => {
+        securityByIsin[sec.isin] = sec;
+    });
+    const splitIgnoreDates = buildSplitIgnoreDates(txByIsin, splitsByIsin, securityByIsin);
 
     // Process each security
     const allKeys = new Set([...Object.keys(txByHoldingKey), ...Object.keys(holdingsMap)]);
@@ -757,7 +850,7 @@ export function calculatePortfolioHistory(
         list.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     });
 
-    const splitIgnoreDates = buildSplitIgnoreDates(txByIsin, splitsByIsin);
+    const splitIgnoreDates = buildSplitIgnoreDates(txByIsin, splitsByIsin, securityByIsin);
     Object.keys(splitsMap).forEach((isin) => {
         const ignoredDates = splitIgnoreDates[isin];
         if (!ignoredDates) return;

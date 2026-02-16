@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { Globe, Loader2, RefreshCw, CheckCircle, Search, Check, PencilLine } from 'lucide-react';
+import { Globe, Loader2, RefreshCw, CheckCircle, Search, Check, PencilLine, Trash2 } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import {
     AreaChart,
@@ -78,6 +78,7 @@ export const DataSourcesContent = () => {
     const [companyMatches, setCompanyMatches] = useState<CompanyMatch[]>([]);
     const [companySearchMessage, setCompanySearchMessage] = useState<string | null>(null);
     const [isCompanySearching, setIsCompanySearching] = useState(false);
+    const [portfolioToDelete, setPortfolioToDelete] = useState<{ id: string; name: string; txCount: number; cashCount: number } | null>(null);
 
     // Filter Security Data based on Time Range
     const getFilteredHistory = (history: Record<string, number> | undefined) => {
@@ -121,6 +122,29 @@ export const DataSourcesContent = () => {
     const unresolvedSecurities = useMemo(() => {
         return marketStats.securities.filter(sec => sec.symbolStatus === 'unresolved');
     }, [marketStats.securities]);
+
+    const portfolioStats = useMemo(() => {
+        const portfolios = project?.portfolios || [];
+        const txCounts: Record<string, number> = {};
+        const cashCounts: Record<string, number> = {};
+
+        (project?.transactions || []).forEach(tx => {
+            if (!tx.portfolioId) return;
+            txCounts[tx.portfolioId] = (txCounts[tx.portfolioId] || 0) + 1;
+        });
+
+        (project?.cashAccounts || []).forEach(acc => {
+            if (!acc.portfolioId) return;
+            cashCounts[acc.portfolioId] = (cashCounts[acc.portfolioId] || 0) + 1;
+        });
+
+        return portfolios.map(p => ({
+            id: p.id,
+            name: p.name,
+            txCount: txCounts[p.id] || 0,
+            cashCount: cashCounts[p.id] || 0
+        }));
+    }, [project?.portfolios, project?.transactions, project?.cashAccounts]);
 
     const applyResolvedTicker = (
         sec: Security,
@@ -290,6 +314,22 @@ export const DataSourcesContent = () => {
     const handleQuoteSync = async () => {
         if (!project) return;
         await syncMarket(true, { full: true });
+    };
+
+    const handleDeletePortfolio = (portfolioId: string) => {
+        updateProject(prev => {
+            const portfolios = (prev.portfolios || []).filter(p => p.id !== portfolioId);
+            const transactions = prev.transactions.filter(t => t.portfolioId !== portfolioId);
+            const cashAccounts = (prev.cashAccounts || []).filter(a => a.portfolioId !== portfolioId);
+            return {
+                ...prev,
+                portfolios,
+                transactions,
+                cashAccounts,
+                modified: new Date().toISOString()
+            };
+        });
+        setPortfolioToDelete(null);
     };
 
     return (
@@ -563,6 +603,41 @@ export const DataSourcesContent = () => {
                         </div>
                     </div>
                 )}
+
+                <div className="md3-card p-6">
+                    <div className="space-y-1">
+                        <h3 className="font-semibold md3-text-main">Depots verwalten</h3>
+                        <p className="text-sm md3-text-muted">
+                            Loesche einzelne Depots inklusive zugehoeriger Transaktionen und Konten.
+                        </p>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                        {portfolioStats.length === 0 ? (
+                            <div className="md3-list-item p-4 text-sm md3-text-muted">Keine Depots vorhanden.</div>
+                        ) : (
+                            portfolioStats.map((portfolio) => (
+                                <div key={portfolio.id} className="md3-list-item flex items-center justify-between gap-3 p-3">
+                                    <div className="min-w-0">
+                                        <div className="md3-text-main text-sm font-semibold truncate">{portfolio.name}</div>
+                                        <div className="text-xs md3-text-muted mt-1">
+                                            {portfolio.txCount} Transaktionen • {portfolio.cashCount} Konten
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPortfolioToDelete(portfolio)}
+                                        className="md3-icon-btn h-9 w-9 md3-negative-soft"
+                                        aria-label={`Depot ${portfolio.name} loeschen`}
+                                        title="Depot loeschen"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Chart Modal Overlay */}
@@ -736,6 +811,58 @@ export const DataSourcesContent = () => {
                             <button type="button" onClick={closeCompanySearch} className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80">
                                 Schliessen
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {portfolioToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setPortfolioToDelete(null)}>
+                    <div className="md3-card w-full max-w-lg rounded-[24px] p-5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl md3-negative-soft">
+                                    <Trash2 size={18} />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-semibold md3-text-main">Depot loeschen</h3>
+                                    <p className="text-xs md3-text-muted">
+                                        {portfolioToDelete.name} wird inklusive Transaktionen und Konten geloescht.
+                                    </p>
+                                </div>
+                            </div>
+                            <button type="button" onClick={() => setPortfolioToDelete(null)} className="md3-icon-btn" aria-label="Schliessen">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="mt-4 rounded-2xl border border-white/10 bg-black/5 p-3">
+                            <div className="text-[11px] uppercase tracking-wider md3-text-muted">Enthalten</div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                <span className="md3-chip-tonal px-2 py-1 text-xs font-semibold">
+                                    {portfolioToDelete.txCount} Transaktionen
+                                </span>
+                                <span className="md3-chip-tonal px-2 py-1 text-xs font-semibold">
+                                    {portfolioToDelete.cashCount} Konten
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setPortfolioToDelete(null)}
+                                className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80"
+                            >
+                                Abbrechen
+                            </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleDeletePortfolio(portfolioToDelete.id)}
+                                    className="md3-filled-btn px-4 py-2 text-sm font-semibold"
+                                >
+                                    Loeschen
+                                </button>
                         </div>
                     </div>
                 </div>
