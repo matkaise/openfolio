@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase } from 'lucide-react';
+import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase, Check } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { Transaction, type CashAccount, type Portfolio, type ProjectData } from '@/types/domain';
 import { parseFlatexCashBalancesCsv, parseFlatexCsv, type CashBalanceImportPoint } from '@/lib/csvParser';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
 import { getCurrencyOptions } from '@/lib/fxUtils';
 import { buildManualPriceHistory } from '@/lib/marketDataService';
+import { searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
 
 interface TransactionModalProps {
     isOpen: boolean;
@@ -26,13 +27,6 @@ type ResolveTickerResult = {
     name?: string;
     currency?: string;
     source?: 'kursliste' | 'openfigi' | 'yahoo';
-};
-type CompanyMatch = {
-    symbol: string;
-    name?: string;
-    exchange?: string;
-    currency?: string;
-    quoteType?: string;
 };
 type CsvMapping = {
     date?: string;
@@ -827,32 +821,40 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         onClose();
     };
 
-    const searchCompanyMatches = async (query: string): Promise<CompanyMatch[]> => {
-        const res = await fetch('/api/ticker-search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query })
-        });
-        if (!res.ok) return [];
-        const data = await res.json();
-        return Array.isArray(data?.matches) ? data.matches : [];
-    };
-
     const handleCompanySearch = async () => {
         if (!companyQuery.trim()) return;
         setIsCompanySearching(true);
         setCompanySearchMessage(null);
         setCompanyMatches([]);
 
-        const matches = await searchCompanyMatches(companyQuery.trim());
+        const query = companyQuery.trim();
+        const resolveResult = await resolveTicker(query, currency);
+        const directMatches: CompanyMatch[] = [];
+
+        if (resolveResult?.status === 'resolved' && resolveResult.symbol) {
+            directMatches.push({
+                symbol: resolveResult.symbol,
+                name: resolveResult.name,
+                currency: resolveResult.currency
+            });
+        }
+
+        const matches = await searchCompanyMatches(query);
         setIsCompanySearching(false);
 
-        if (!matches.length) {
+        const combinedMatches = directMatches.length
+            ? [
+                ...directMatches,
+                ...matches.filter(match => match.symbol !== directMatches[0].symbol)
+            ]
+            : matches;
+
+        if (!combinedMatches.length) {
             setCompanySearchMessage('Kein Treffer gefunden.');
             return;
         }
 
-        setCompanyMatches(matches);
+        setCompanyMatches(combinedMatches);
     };
 
     const handleSelectCompanyMatch = (match: CompanyMatch) => {
@@ -1619,7 +1621,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                     <div className="md3-card w-full max-w-lg rounded-[24px] p-5" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="text-base font-semibold md3-text-main">Firmennamen suchen</h3>
+                                <h3 className="text-base font-semibold md3-text-main">Ticker zuweisen</h3>
                                 <p className="text-xs md3-text-muted">Waehle den passenden Treffer aus.</p>
                             </div>
                             <button type="button" onClick={() => setIsCompanySearchOpen(false)} className="md3-icon-btn" aria-label="Schliessen">
@@ -1636,16 +1638,18 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     setCompanySearchMessage(null);
                                     setCompanyMatches([]);
                                 }}
-                                placeholder="Firmennamen eingeben (z.B. Apple)"
+                                placeholder="Ticker oder Firmenname (z.B. AAPL oder Apple)"
                                 className="md3-field w-full px-3 py-2 text-sm outline-none"
                             />
                             <button
                                 type="button"
                                 onClick={handleCompanySearch}
                                 disabled={isCompanySearching || !companyQuery.trim()}
-                                className="md3-filled-btn px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="md3-icon-btn h-10 w-10 disabled:opacity-60 disabled:cursor-not-allowed"
+                                aria-label="Suchen"
+                                title="Suchen"
                             >
-                                {isCompanySearching ? 'Suche...' : 'Suchen'}
+                                <Search size={16} className={isCompanySearching ? 'animate-spin' : ''} />
                             </button>
                         </div>
 
@@ -1654,28 +1658,32 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                         )}
 
                         {companyMatches.length > 0 && (
-                            <div className="mt-4 rounded-xl border border-white/10 bg-black/5 p-2">
-                                <div className="mb-2 flex items-center justify-between text-[11px] uppercase tracking-wider md3-text-muted">
-                                    <span>Treffer ({companyMatches.length})</span>
-                                    <span>Scrollen fuer mehr</span>
-                                </div>
-                                <div className="max-h-64 space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                            <div className="mt-5 rounded-2xl border border-white/10 bg-black/5 p-3">
+                                <div className="max-h-72 space-y-3 overflow-y-auto pr-2 [scrollbar-width:thin]">
                                     {companyMatches.map(match => (
-                                        <div key={match.symbol} className="md3-list-item flex items-center justify-between gap-3 px-3 py-2">
+                                        <div key={match.symbol} className="md3-list-item flex items-start justify-between gap-4 rounded-2xl px-4 py-3">
                                             <div className="min-w-0">
-                                                <div className="text-sm md3-text-main font-medium truncate">{match.name || match.symbol}</div>
-                                                <div className="text-xs md3-text-muted">
-                                                    <span>{match.symbol}</span>
-                                                    {match.exchange && <span> - {match.exchange}</span>}
-                                                    {match.currency && <span> - {match.currency}</span>}
+                                                <div className="text-sm md3-text-main font-semibold leading-snug truncate">
+                                                    {match.name || match.symbol}
+                                                </div>
+                                                <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] md3-text-muted">
+                                                    <span className="md3-chip-tonal px-2 py-0.5 rounded-full">{match.symbol}</span>
+                                                    {match.exchange && (
+                                                        <span className="md3-chip-tonal px-2 py-0.5 rounded-full">{match.exchange}</span>
+                                                    )}
+                                                    {match.currency && (
+                                                        <span className="md3-chip-tonal px-2 py-0.5 rounded-full">{match.currency}</span>
+                                                    )}
                                                 </div>
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={() => handleSelectCompanyMatch(match)}
-                                                className="md3-filled-btn px-3 py-1.5 text-xs font-semibold"
+                                                className="md3-icon-btn h-10 w-10 md3-positive-soft border border-emerald-300/40"
+                                                aria-label="Uebernehmen"
+                                                title="Uebernehmen"
                                             >
-                                                Uebernehmen
+                                                <Check size={18} className="text-emerald-500" />
                                             </button>
                                         </div>
                                     ))}
