@@ -193,6 +193,49 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         return result.map((c) => c.trim().replace(/^"|"$/g, ''));
     };
 
+    const mergeSparseContinuationRows = (rows: string[][]): string[][] => {
+        if (rows.length <= 2) return rows;
+
+        const width = rows[0].length;
+        const normalizeRow = (row: string[]) => {
+            const normalized = row.slice(0, width);
+            while (normalized.length < width) normalized.push('');
+            return normalized;
+        };
+
+        const shouldMerge = (row: string[]) => {
+            if ((row[0] || '').trim() !== '') return false;
+            const nonEmptyCells = row.reduce((count, cell) => count + ((cell || '').trim().length > 0 ? 1 : 0), 0);
+            return nonEmptyCells > 0 && nonEmptyCells <= 2;
+        };
+
+        const merged = [normalizeRow(rows[0])];
+        for (let i = 1; i < rows.length; i += 1) {
+            const row = normalizeRow(rows[i]);
+            const previous = merged[merged.length - 1];
+
+            if (!shouldMerge(row) || !previous || (previous[0] || '').trim() === '') {
+                merged.push(row);
+                continue;
+            }
+
+            for (let idx = 0; idx < width; idx += 1) {
+                const value = (row[idx] || '').trim();
+                if (!value) continue;
+                const existing = previous[idx] || '';
+                if (!existing) {
+                    previous[idx] = value;
+                } else if (existing.endsWith('-') || value.startsWith('-')) {
+                    previous[idx] = `${existing}${value}`;
+                } else {
+                    previous[idx] = `${existing} ${value}`.trim();
+                }
+            }
+        }
+
+        return merged;
+    };
+
     const normalizeHeaderName = (value: string) => {
         return value
             .toLowerCase()
@@ -403,7 +446,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     };
 
     const parseGenericCsv = (text: string): { headers: string[]; rows: string[][] } => {
-        const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+        const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
         if (lines.length === 0) return { headers: [], rows: [] };
 
         const delimiter = detectDelimiter(lines[0]);
@@ -411,7 +454,8 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             const trimmed = h.trim();
             return trimmed.length > 0 ? trimmed : `Spalte ${index + 1}`;
         });
-        const rows = lines.slice(1).map((line) => parseCsvLineWithDelimiter(line, delimiter));
+        const parsedRows = lines.slice(1).map((line) => parseCsvLineWithDelimiter(line, delimiter));
+        const rows = mergeSparseContinuationRows([headers, ...parsedRows]).slice(1);
         return { headers, rows };
     };
 
@@ -429,6 +473,29 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         }
         const parsed = parseFloat(cleaned);
         return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const parseNumberStrict = (value: string): number => {
+        const raw = (value ?? '').trim();
+        if (!raw) return Number.NaN;
+
+        let cleaned = raw.replace(/[^\d,.-]/g, '');
+        if (!cleaned || cleaned === '-' || cleaned === '.' || cleaned === ',') {
+            return Number.NaN;
+        }
+
+        if (cleaned.includes(',') && cleaned.includes('.')) {
+            if (cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
+                cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+            } else {
+                cleaned = cleaned.replace(/,/g, '');
+            }
+        } else if (cleaned.includes(',')) {
+            cleaned = cleaned.replace(',', '.');
+        }
+
+        const parsed = parseFloat(cleaned);
+        return Number.isFinite(parsed) ? parsed : Number.NaN;
     };
 
     const parseDateValue = (value: string, format: 'auto' | 'ymd' | 'dmy' | 'mdy'): string | null => {
@@ -552,23 +619,26 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 portfolioId: target.id
             }));
 
-            // Merge imported balances into one reference account per portfolio + currency
+            // Merge imported balances by portfolio + currency + sourceKey
             const existingCashAccounts = prev.cashAccounts || [];
-            const mergeKeyFor = (account: Pick<CashAccount, 'portfolioId' | 'currency'>) => `${account.portfolioId || ''}|${account.currency}`;
+            const mergeKeyFor = (account: Pick<CashAccount, 'portfolioId' | 'currency' | 'sourceKey'>) =>
+                `${account.portfolioId || ''}|${account.currency}|${account.sourceKey || ''}`;
             const cashAccountMap = new Map<string, CashAccount>(
                 existingCashAccounts.map(account => [mergeKeyFor(account), account])
             );
 
             parsedCashBalances.forEach(point => {
-                const key = `${target.id}|${point.currency}`;
+                const pointSourceKey = point.accountKey || '';
+                const key = `${target.id}|${point.currency}|${pointSourceKey}`;
                 const existing = cashAccountMap.get(key);
 
                 if (!existing) {
                     cashAccountMap.set(key, {
                         id: crypto.randomUUID(),
-                        name: `${target.name} ${point.currency} Konto`,
+                        name: `${target.name} ${point.currency} ${point.accountLabel || 'Konto'}`,
                         portfolioId: target.id,
                         currency: point.currency,
+                        sourceKey: pointSourceKey || undefined,
                         balanceHistory: { [point.date]: point.balance }
                     });
                     return;
@@ -721,19 +791,155 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
         const dateIdx = genericHeaders.indexOf(genericMapping.date);
         const amountIdx = genericMapping.amount ? genericHeaders.indexOf(genericMapping.amount) : -1;
-        const balanceIdx = genericMapping.balance ? genericHeaders.indexOf(genericMapping.balance) : -1;
-        const currencyIdx = genericMapping.currency ? genericHeaders.indexOf(genericMapping.currency) : -1;
+        let balanceIdx = genericMapping.balance ? genericHeaders.indexOf(genericMapping.balance) : -1;
+        let currencyIdx = genericMapping.currency ? genericHeaders.indexOf(genericMapping.currency) : -1;
 
         const normalizeCurrency = (value: string) => {
             const trimmed = value.trim().toUpperCase();
             return /^[A-Z]{3}$/.test(trimmed) ? trimmed : '';
         };
 
+        const parseTimeToMinutes = (value: string): number => {
+            const raw = (value ?? '').trim();
+            const match = /^(\d{1,2}):(\d{2})$/.exec(raw);
+            if (!match) return 0;
+            const hh = Number(match[1]);
+            const mm = Number(match[2]);
+            if (!Number.isFinite(hh) || !Number.isFinite(mm)) return 0;
+            return (Math.max(0, Math.min(23, hh)) * 60) + Math.max(0, Math.min(59, mm));
+        };
+
+        const findHeaderIndex = (predicate: (normalized: string) => boolean) => {
+            for (let idx = 0; idx < genericHeaders.length; idx += 1) {
+                if (idx === dateIdx || idx === amountIdx || idx === currencyIdx) continue;
+                const normalized = normalizeHeaderName(genericHeaders[idx] || '');
+                if (predicate(normalized)) return idx;
+            }
+            return -1;
+        };
+
+        const sampleRows = genericRows.slice(0, 200);
+        const getNumericRatio = (columnIdx: number) => {
+            if (columnIdx < 0) return 0;
+            let nonEmpty = 0;
+            let valid = 0;
+            sampleRows.forEach((row) => {
+                const raw = (row[columnIdx] ?? '').trim();
+                if (!raw) return;
+                nonEmpty += 1;
+                if (Number.isFinite(parseNumberStrict(raw))) {
+                    valid += 1;
+                }
+            });
+            if (nonEmpty === 0) return 0;
+            return valid / nonEmpty;
+        };
+
+        const getCurrencyRatio = (columnIdx: number) => {
+            if (columnIdx < 0) return 0;
+            let nonEmpty = 0;
+            let valid = 0;
+            sampleRows.forEach((row) => {
+                const raw = (row[columnIdx] ?? '').trim();
+                if (!raw) return;
+                nonEmpty += 1;
+                if (/^[A-Z]{3}$/.test(raw.toUpperCase())) {
+                    valid += 1;
+                }
+            });
+            if (nonEmpty === 0) return 0;
+            return valid / nonEmpty;
+        };
+
+        const resolveLikelyBalanceColumn = (candidateIdx: number) => {
+            if (candidateIdx < 0) return candidateIdx;
+            const normalized = normalizeHeaderName(genericHeaders[candidateIdx] || '');
+            const currentRatio = getNumericRatio(candidateIdx);
+            const rightIdx = candidateIdx + 1 < genericHeaders.length ? candidateIdx + 1 : -1;
+            const rightRatio = rightIdx >= 0 ? getNumericRatio(rightIdx) : 0;
+
+            // Degiro Account.csv labels "Saldo" on a currency column, while the numeric
+            // balance is usually in the next unnamed column.
+            if (normalized.includes('saldo') && currentRatio < 0.3 && rightRatio > 0.75) {
+                return rightIdx;
+            }
+
+            return candidateIdx;
+        };
+
+        // If a balance-like column exists, prefer it over amount-based reconstruction.
+        if (balanceIdx < 0) {
+            const guessedBalanceIdx = findHeaderIndex((normalized) =>
+                normalized.includes('saldo')
+                || normalized.includes('balance')
+                || normalized.includes('kontostand')
+                || normalized.includes('bestand')
+            );
+
+            if (guessedBalanceIdx >= 0) {
+                const resolvedIdx = resolveLikelyBalanceColumn(guessedBalanceIdx);
+                const numericRatio = getNumericRatio(resolvedIdx);
+                if (numericRatio >= 0.6) {
+                    balanceIdx = resolvedIdx;
+                }
+            }
+        } else {
+            balanceIdx = resolveLikelyBalanceColumn(balanceIdx);
+        }
+
+        const currentCurrencyRatio = getCurrencyRatio(currencyIdx);
+        if (currencyIdx < 0 || currentCurrencyRatio < 0.5) {
+            let bestIdx = currencyIdx;
+            let bestRatio = currentCurrencyRatio;
+            for (let idx = 0; idx < genericHeaders.length; idx += 1) {
+                if (idx === dateIdx || idx === amountIdx || idx === balanceIdx) continue;
+                const ratio = getCurrencyRatio(idx);
+                if (ratio > bestRatio) {
+                    bestRatio = ratio;
+                    bestIdx = idx;
+                }
+            }
+            if (bestIdx >= 0 && bestRatio >= 0.6) {
+                currencyIdx = bestIdx;
+            }
+        }
+
+        const valueDateIdx = findHeaderIndex((normalized) =>
+            normalized.includes('valutadatum')
+            || normalized.includes('valuedate')
+            || normalized.includes('settlementdate')
+        );
+        const timeIdx = findHeaderIndex((normalized) =>
+            normalized.includes('uhr')
+            || normalized.includes('zeit')
+            || normalized === 'time'
+            || normalized.includes('buchungszeit')
+        );
+
+        let firstTimestamp: number | null = null;
+        let lastTimestamp: number | null = null;
+        genericRows.forEach((row) => {
+            const primaryDate = parseDateValue(row[dateIdx] ?? '', genericDateFormat);
+            const valueDate = valueDateIdx >= 0 ? parseDateValue(row[valueDateIdx] ?? '', genericDateFormat) : null;
+            const dateValue = valueDate || primaryDate;
+            if (!dateValue) return;
+            const timeMinutes = timeIdx >= 0 ? parseTimeToMinutes(row[timeIdx] ?? '') : 0;
+            const timestamp = Date.parse(`${dateValue}T00:00:00Z`) + (timeMinutes * 60 * 1000);
+            if (!Number.isFinite(timestamp)) return;
+            if (firstTimestamp === null) firstTimestamp = timestamp;
+            lastTimestamp = timestamp;
+        });
+        const isReverseChronological = firstTimestamp !== null && lastTimestamp !== null
+            ? firstTimestamp >= lastTimestamp
+            : true;
+
         if (balanceIdx >= 0) {
-            const pointMap = new Map<string, CashBalanceImportPoint>();
+            const pointMap = new Map<string, { point: CashBalanceImportPoint; timeMinutes: number; rowIndex: number }>();
             genericRows.forEach((row, index) => {
-                const dateRaw = row[dateIdx] ?? '';
-                const dateValue = parseDateValue(dateRaw, genericDateFormat);
+                const primaryDateRaw = row[dateIdx] ?? '';
+                const primaryDate = parseDateValue(primaryDateRaw, genericDateFormat);
+                const valueDate = valueDateIdx >= 0 ? parseDateValue(row[valueDateIdx] ?? '', genericDateFormat) : null;
+                const dateValue = valueDate || primaryDate;
                 if (!dateValue) {
                     errors.push(`Zeile ${index + 2}: Datum ungueltig.`);
                     return;
@@ -741,20 +947,39 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 const currencyRaw = currencyIdx >= 0 ? (row[currencyIdx] ?? '') : '';
                 const currencyValue = normalizeCurrency(currencyRaw) || genericDefaultCurrency;
                 const balanceRaw = row[balanceIdx] ?? '';
-                const balanceValue = parseNumberFlexible(balanceRaw);
+                const balanceValue = parseNumberStrict(balanceRaw);
                 if (!Number.isFinite(balanceValue)) {
                     errors.push(`Zeile ${index + 2}: Saldo ungueltig.`);
                     return;
                 }
                 processedRows += 1;
-                pointMap.set(`${currencyValue}|${dateValue}`, {
-                    date: dateValue,
-                    currency: currencyValue,
-                    balance: balanceValue
+                const key = `${currencyValue}|${dateValue}`;
+                const timeMinutes = timeIdx >= 0 ? parseTimeToMinutes(row[timeIdx] ?? '') : 0;
+                const existing = pointMap.get(key);
+                const shouldReplace = !existing
+                    || timeMinutes > existing.timeMinutes
+                    || (
+                        timeMinutes === existing.timeMinutes
+                        && (
+                            isReverseChronological
+                                ? index < existing.rowIndex
+                                : index > existing.rowIndex
+                        )
+                    );
+                if (!shouldReplace) return;
+
+                pointMap.set(key, {
+                    point: {
+                        date: dateValue,
+                        currency: currencyValue,
+                        balance: balanceValue
+                    },
+                    timeMinutes,
+                    rowIndex: index
                 });
             });
 
-            const cashPoints = Array.from(pointMap.values()).sort((a, b) => {
+            const cashPoints = Array.from(pointMap.values()).map((item) => item.point).sort((a, b) => {
                 if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
                 return a.date.localeCompare(b.date);
             });
@@ -764,8 +989,10 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         const grouped: Record<string, Record<string, number>> = {};
         genericRows.forEach((row, index) => {
             if (amountIdx < 0) return;
-            const dateRaw = row[dateIdx] ?? '';
-            const dateValue = parseDateValue(dateRaw, genericDateFormat);
+            const primaryDateRaw = row[dateIdx] ?? '';
+            const primaryDate = parseDateValue(primaryDateRaw, genericDateFormat);
+            const valueDate = valueDateIdx >= 0 ? parseDateValue(row[valueDateIdx] ?? '', genericDateFormat) : null;
+            const dateValue = valueDate || primaryDate;
             if (!dateValue) {
                 errors.push(`Zeile ${index + 2}: Datum ungueltig.`);
                 return;
@@ -773,7 +1000,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             const currencyRaw = currencyIdx >= 0 ? (row[currencyIdx] ?? '') : '';
             const currencyValue = normalizeCurrency(currencyRaw) || genericDefaultCurrency;
             const amountRaw = row[amountIdx] ?? '';
-            const amountValue = parseNumberFlexible(amountRaw);
+            const amountValue = parseNumberStrict(amountRaw);
             if (!Number.isFinite(amountValue)) {
                 errors.push(`Zeile ${index + 2}: Betrag ungueltig.`);
                 return;
@@ -821,20 +1048,23 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 }
 
                 const existingCashAccounts = prev.cashAccounts || [];
-                const mergeKeyFor = (account: Pick<CashAccount, 'portfolioId' | 'currency'>) => `${account.portfolioId || ''}|${account.currency}`;
+                const mergeKeyFor = (account: Pick<CashAccount, 'portfolioId' | 'currency' | 'sourceKey'>) =>
+                    `${account.portfolioId || ''}|${account.currency}|${account.sourceKey || ''}`;
                 const cashAccountMap = new Map<string, CashAccount>(
                     existingCashAccounts.map(account => [mergeKeyFor(account), account])
                 );
 
                 cashPoints.forEach(point => {
-                    const key = `${target.id}|${point.currency}`;
+                    const pointSourceKey = point.accountKey || '';
+                    const key = `${target.id}|${point.currency}|${pointSourceKey}`;
                     const existing = cashAccountMap.get(key);
                     if (!existing) {
                         cashAccountMap.set(key, {
                             id: crypto.randomUUID(),
-                            name: `${target.name} ${point.currency} Konto`,
+                            name: `${target.name} ${point.currency} ${point.accountLabel || 'Konto'}`,
                             portfolioId: target.id,
                             currency: point.currency,
+                            sourceKey: pointSourceKey || undefined,
                             balanceHistory: { [point.date]: point.balance }
                         });
                         return;

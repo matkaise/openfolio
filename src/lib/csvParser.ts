@@ -4,6 +4,8 @@ export type CashBalanceImportPoint = {
     date: string; // YYYY-MM-DD
     currency: string;
     balance: number;
+    accountKey?: string;
+    accountLabel?: string;
 };
 
 // Helper to parse Floats (handles "1.234,56" vs "1234.56")
@@ -29,19 +31,20 @@ const parseDate = (dateStr: string): string => {
 };
 
 export const parseFlatexCsv = (text: string): Transaction[] => {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const rows = parseCsvRows(text);
     const transactions: Transaction[] = [];
+    if (!rows.length) return transactions;
 
     // Header detection
-    const header = lines[0];
+    const header = rows[0].join(',');
 
     // Strategy 1: "Transactions.csv" (Trades)
     // Header: Datum,Uhrzeit,Produkt,ISIN,Referenzbörse,Ausführungsort,Anzahl,Kurs,,Wert in Lokalwährung...
     if (header.includes('Referenzbörse') && header.includes('Anzahl')) {
         console.log("Detected Flatex Transactions CSV");
         // Skip header
-        for (let i = 1; i < lines.length; i++) {
-            const row = parseCsvLine(lines[i]);
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
             if (row.length < 10) continue;
 
             // Map columns (Indices based on sample)
@@ -86,8 +89,8 @@ export const parseFlatexCsv = (text: string): Transaction[] => {
     // Header: Datum,Uhrze,Valutadatum,Produkt,ISIN,Beschreibung...
     else if (header.includes('Valutadatum') && header.includes('Beschreibung')) {
         console.log("Detected Flatex Account CSV");
-        for (let i = 1; i < lines.length; i++) {
-            const row = parseCsvLine(lines[i]);
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
             if (row.length < 6) continue;
 
             const description = row[5];
@@ -159,43 +162,127 @@ export const parseFlatexCsv = (text: string): Transaction[] => {
 };
 
 export const parseFlatexCashBalancesCsv = (text: string): CashBalanceImportPoint[] => {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    if (lines.length === 0) return [];
+    const rows = parseCsvRows(text);
+    if (rows.length === 0) return [];
 
-    const header = lines[0];
+    const header = rows[0].join(',');
     if (!(header.includes('Valutadatum') && header.includes('Beschreibung'))) {
         return [];
     }
 
-    const byCurrencyAndDate: Record<string, CashBalanceImportPoint> = {};
+    const parseDateOnly = (value: string): string | null => {
+        const raw = (value || '').trim();
+        if (!raw) return null;
 
-    for (let i = 1; i < lines.length; i++) {
-        const row = parseCsvLine(lines[i]);
-        if (row.length < 11) continue;
+        const dmy = /^(\d{2})-(\d{2})-(\d{4})$/.exec(raw);
+        if (dmy) {
+            return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+        }
 
-        const date = parseDate(row[0]);
-        const currency = row[9] || row[7];
-        const balance = parseNumber(row[10] || row[8]);
+        const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+        if (ymd) {
+            return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
+        }
 
-        if (!currency || Number.isNaN(balance)) continue;
+        return null;
+    };
 
-        // Keep the last seen balance for each day/currency.
-        byCurrencyAndDate[`${currency}|${date}`] = {
-            date,
-            currency,
-            balance
-        };
+    const parseTimeMinutes = (value: string): number => {
+        const raw = (value || '').trim();
+        const match = /^(\d{1,2}):(\d{2})$/.exec(raw);
+        if (!match) return 0;
+        const hh = Number(match[1]);
+        const mm = Number(match[2]);
+        if (!Number.isFinite(hh) || !Number.isFinite(mm)) return 0;
+        return (Math.max(0, Math.min(23, hh)) * 60) + Math.max(0, Math.min(59, mm));
+    };
+
+    const normalizeCurrency = (value: string): string => {
+        const currency = (value || '').trim().toUpperCase();
+        return /^[A-Z]{3}$/.test(currency) ? currency : '';
+    };
+
+    const dayEndPoints: Record<string, { balance: number; timeMinutes: number; seq: number }> = {};
+    let firstTimestamp: number | null = null;
+    let lastTimestamp: number | null = null;
+
+    const buildTimestamp = (row: string[]): number | null => {
+        const bookingDate = parseDateOnly(row[0]);
+        const valueDate = parseDateOnly(row[2]);
+        const date = bookingDate || valueDate;
+        if (!date) return null;
+        const timeMinutes = parseTimeMinutes(row[1]);
+        return Date.parse(`${date}T00:00:00Z`) + (timeMinutes * 60 * 1000);
+    };
+
+    for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const timestamp = buildTimestamp(row);
+        if (timestamp !== null) {
+            if (firstTimestamp === null) firstTimestamp = timestamp;
+            lastTimestamp = timestamp;
+        }
     }
 
-    return Object.values(byCurrencyAndDate).sort((a, b) => {
-        if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
-        return a.date.localeCompare(b.date);
-    });
+    const isReverseChronological = firstTimestamp !== null && lastTimestamp !== null
+        ? firstTimestamp >= lastTimestamp
+        : true;
+
+    for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.length < 11) continue;
+
+        const bookingDate = parseDateOnly(row[0]);
+        const valueDate = parseDateOnly(row[2]);
+        const date = valueDate || bookingDate;
+        if (!date) continue;
+
+        const currency = normalizeCurrency(row[9] || row[7]);
+        if (!currency) continue;
+
+        const balance = parseNumber(row[10] || row[8]);
+        if (!Number.isFinite(balance)) continue;
+
+        const timeMinutes = parseTimeMinutes(row[1]);
+        const key = `${currency}|${date}`;
+        const existing = dayEndPoints[key];
+        const shouldReplace = !existing
+            || timeMinutes > existing.timeMinutes
+            || (
+                timeMinutes === existing.timeMinutes
+                && (
+                    isReverseChronological
+                        ? i < existing.seq
+                        : i > existing.seq
+                )
+            );
+
+        if (shouldReplace) {
+            dayEndPoints[key] = {
+                balance,
+                timeMinutes,
+                seq: i
+            };
+        }
+    }
+    return Object.entries(dayEndPoints)
+        .map(([key, point]) => {
+            const [currency, date] = key.split('|');
+            return {
+                date,
+                currency,
+                balance: point.balance
+            };
+        })
+        .sort((a, b) => {
+            if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
+            return a.date.localeCompare(b.date);
+        });
 };
 
 // Simple CSV Splitter that handles quoted fields
 // e.g. "Mes, XETB",123
-const parseCsvLine = (line: string): string[] => {
+const parseCsvLine = (line: string, delimiter = ','): string[] => {
     const result: string[] = [];
     let current = '';
     let inQuotes = false;
@@ -203,8 +290,13 @@ const parseCsvLine = (line: string): string[] => {
     for (let i = 0; i < line.length; i++) {
         const char = line[i];
         if (char === '"') {
-            inQuotes = !inQuotes;
-        } else if (char === ',' && !inQuotes) {
+            if (inQuotes && line[i + 1] === '"') {
+                current += '"';
+                i += 1;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === delimiter && !inQuotes) {
             result.push(current);
             current = '';
         } else {
@@ -213,4 +305,54 @@ const parseCsvLine = (line: string): string[] => {
     }
     result.push(current);
     return result.map(c => c.trim().replace(/^"|"$/g, ''));
+};
+
+const parseCsvRows = (text: string, delimiter = ','): string[][] => {
+    const rawLines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
+    const parsedRows = rawLines.map((line) => parseCsvLine(line, delimiter));
+    return mergeSparseContinuationRows(parsedRows);
+};
+
+const mergeSparseContinuationRows = (rows: string[][]): string[][] => {
+    if (rows.length <= 2) return rows;
+
+    const width = rows[0].length;
+    const normalizeRow = (row: string[]) => {
+        const normalized = row.slice(0, width);
+        while (normalized.length < width) normalized.push('');
+        return normalized;
+    };
+
+    const shouldMerge = (row: string[]) => {
+        if ((row[0] || '').trim() !== '') return false;
+        const nonEmptyCells = row.reduce((count, cell) => count + ((cell || '').trim().length > 0 ? 1 : 0), 0);
+        return nonEmptyCells > 0 && nonEmptyCells <= 2;
+    };
+
+    const merged = [normalizeRow(rows[0])];
+
+    for (let i = 1; i < rows.length; i += 1) {
+        const row = normalizeRow(rows[i]);
+        const previous = merged[merged.length - 1];
+
+        if (!shouldMerge(row) || !previous || (previous[0] || '').trim() === '') {
+            merged.push(row);
+            continue;
+        }
+
+        for (let idx = 0; idx < width; idx += 1) {
+            const value = (row[idx] || '').trim();
+            if (!value) continue;
+            const existing = previous[idx] || '';
+            if (!existing) {
+                previous[idx] = value;
+            } else if (existing.endsWith('-') || value.startsWith('-')) {
+                previous[idx] = `${existing}${value}`;
+            } else {
+                previous[idx] = `${existing} ${value}`.trim();
+            }
+        }
+    }
+
+    return merged;
 };

@@ -101,6 +101,7 @@ export interface CashAccount {
     name: string;
     portfolioId?: string;
     currency: Currency;
+    sourceKey?: string; // Optional import/source identifier to separate sub-ledgers per currency
     balanceHistory?: Record<string, number>; // YYYY-MM-DD -> end-of-day balance
 }
 
