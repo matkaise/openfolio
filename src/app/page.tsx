@@ -330,6 +330,7 @@ export default function PortfolioApp() {
   const [includeDividendsInPerformance, setIncludeDividendsInPerformance] = useState(false);
   const [activeThemeId, setActiveThemeId] = useState<keyof typeof MATERIAL_THEMES>('baseline');
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showStartupSyncModal, setShowStartupSyncModal] = useState(false);
   const lastMarketAutoSyncRef = useRef(0);
   const performanceMethod = project?.settings?.performanceMethod || 'MWR';
   const performanceSmoothing = project?.settings?.performanceSmoothing || '1d';
@@ -349,7 +350,7 @@ export default function PortfolioApp() {
 
   // Sync Market Data on load and auto-repair missing securities.
   useEffect(() => {
-    if (!isLoaded || !project) return;
+    if (!isLoaded || !project || isMarketSyncing) return;
 
     const repaired = repairProjectSecurities(project);
     const needsRepairUpdate = repaired !== project;
@@ -381,8 +382,11 @@ export default function PortfolioApp() {
     }
 
     lastMarketAutoSyncRef.current = Date.now();
-    void syncMarket(false);
-  }, [isLoaded, project, syncMarket, updateProject]);
+    setShowStartupSyncModal(true);
+    void syncMarket(false, { full: true }).finally(() => {
+      setShowStartupSyncModal(false);
+    });
+  }, [isLoaded, project, isMarketSyncing, syncMarket, updateProject]);
 
   const handleCacheUpdate = useCallback((data: AnalysisCache) => {
     setAnalysisCache(data);
@@ -428,6 +432,11 @@ export default function PortfolioApp() {
     '--md3-orb-a': tones.orbA,
     '--md3-orb-b': tones.orbB
   }) as React.CSSProperties, [tones]);
+
+  const startupSyncModalVisible = showStartupSyncModal && isMarketSyncing;
+  const startupSyncProgress = marketSyncProgress && marketSyncProgress.total > 0
+    ? Math.min(100, Math.round((marketSyncProgress.current / marketSyncProgress.total) * 100))
+    : 0;
 
   if (!isLoaded) {
     return <ProjectLauncher />;
@@ -833,23 +842,6 @@ export default function PortfolioApp() {
                   {(isSyncing || isMarketSyncing) ? <Loader2 size={20} className="animate-spin" /> : <RefreshCw size={20} />}
                 </button>
 
-                {isMarketSyncing && marketSyncProgress && marketSyncProgress.total > 0 && (
-                  <div className="hidden items-center gap-2 text-[11px] font-semibold md:flex" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                    <span>Markt {marketSyncProgress.current}/{marketSyncProgress.total}</span>
-                    <div className="h-1.5 w-24 rounded-full" style={{ background: 'var(--md3-surface-container-highest)' }}>
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${Math.min(100, Math.round((marketSyncProgress.current / marketSyncProgress.total) * 100))}%`,
-                          background: 'var(--md3-primary)'
-                        }}
-                      />
-                    </div>
-                    {marketSyncProgress.symbol && (
-                      <span className="max-w-[140px] truncate">{marketSyncProgress.symbol}</span>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           </header>
@@ -920,6 +912,58 @@ export default function PortfolioApp() {
           <Plus size={24} />
         </button>
       </div>
+
+      {startupSyncModalVisible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] p-4">
+          <div
+            className="w-full max-w-md rounded-3xl p-6 shadow-2xl border"
+            style={{
+              background: 'var(--md3-surface)',
+              borderColor: 'var(--md3-outline)'
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-11 w-11 items-center justify-center rounded-2xl"
+                style={{
+                  background: 'var(--md3-primary-container)',
+                  color: 'var(--md3-on-primary-container)'
+                }}
+              >
+                <Loader2 size={20} className="animate-spin" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold" style={{ color: 'var(--md3-on-surface)' }}>
+                  Marktdaten werden synchronisiert
+                </div>
+                <div className="text-xs mt-0.5" style={{ color: 'var(--md3-on-surface-variant)' }}>
+                  Projektstart-Update
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold" style={{ color: 'var(--md3-on-surface-variant)' }}>
+                <span>
+                  {marketSyncProgress && marketSyncProgress.total > 0
+                    ? `Markt ${marketSyncProgress.current}/${marketSyncProgress.total}`
+                    : 'Vorbereitung...'}
+                </span>
+                <span>{marketSyncProgress?.symbol || ''}</span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--md3-surface-container-highest)' }}>
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${startupSyncProgress}%`,
+                    background: 'var(--md3-primary)'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isTransactionModalOpen && (
         <TransactionModal

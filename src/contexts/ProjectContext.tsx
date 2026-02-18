@@ -145,7 +145,6 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             // Trigger Auto-Sync
             // We pass 'data' directly because 'project' state is not updated yet in this closure
             performSync(data);
-            performMarketSync(data, true);
 
         } catch (err: unknown) {
             if (err && typeof err === 'object' && 'name' in err && (err as { name?: string }).name === 'AbortError') {
@@ -155,7 +154,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             console.error('Failed to open project:', err);
             alert('Fehler beim Öffnen der Datei: ' + message);
         }
-    }, [performSync, performMarketSync]);
+    }, [performSync]);
 
     const saveProjectAs = useCallback(async () => {
         if (!project) return;
@@ -263,7 +262,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         }
         await Promise.all([
             performSync(project),
-            performMarketSync(project, forceMarket)
+            performMarketSync(project, forceMarket, true)
         ]);
     }, [project, performSync, performMarketSync]);
 

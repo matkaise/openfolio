@@ -1,4 +1,4 @@
-import { ProjectData, type Transaction } from '@/types/domain';
+import { ProjectData, type Security, type Transaction } from '@/types/domain';
 
 type ResolveTickerResult = {
     status: 'resolved' | 'unresolved' | 'error';
@@ -26,10 +26,54 @@ const parsePositiveNumber = (raw: string | number | undefined, fallback: number)
 const MAX_SYNC_PER_RUN = Math.floor(parsePositiveNumber(process.env.NEXT_PUBLIC_MARKET_SYNC_LIMIT, 5));
 const SYNC_DELAY_MS = Math.floor(parsePositiveNumber(process.env.NEXT_PUBLIC_MARKET_SYNC_DELAY_MS, 350));
 const MAX_SYNC_TIME_MS = Math.floor(parsePositiveNumber(process.env.NEXT_PUBLIC_MARKET_SYNC_MAX_MS, 15000));
+const SYNC_CONCURRENCY = Math.floor(parsePositiveNumber(process.env.NEXT_PUBLIC_MARKET_SYNC_CONCURRENCY, 1));
+const FULL_SYNC_DELAY_MS = Math.floor(parsePositiveNumber(process.env.NEXT_PUBLIC_MARKET_SYNC_FULL_DELAY_MS, 50));
+const FULL_SYNC_CONCURRENCY = Math.floor(parsePositiveNumber(process.env.NEXT_PUBLIC_MARKET_SYNC_FULL_CONCURRENCY, 4));
 
 const isBuyType = (type: Transaction['type']) => type === 'Buy' || type === 'Sparplan_Buy';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type DividendHistoryItem = { date: string; amount: number };
+
+const mergeDividendHistory = (
+    existing: DividendHistoryItem[] | undefined,
+    incoming: DividendHistoryItem[] | undefined
+): DividendHistoryItem[] => {
+    const merged = new Map<string, DividendHistoryItem>();
+
+    const add = (items: DividendHistoryItem[] | undefined) => {
+        if (!items || !Array.isArray(items)) return;
+        for (const item of items) {
+            if (!item || !item.date) continue;
+            const amount = Number(item.amount);
+            if (!Number.isFinite(amount) || amount <= 0) continue;
+            const key = `${item.date}|${amount}`;
+            merged.set(key, { date: item.date, amount });
+        }
+    };
+
+    add(existing);
+    add(incoming);
+
+    return Array.from(merged.values()).sort((a, b) => {
+        if (a.date === b.date) return a.amount - b.amount;
+        return a.date.localeCompare(b.date);
+    });
+};
+
+const hasMissingDividendData = (sec: Security): boolean => {
+    const missingFields = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
+    if (missingFields) return true;
+
+    const hasDividendSignal =
+        Number(sec.dividendYield || 0) > 0 ||
+        Number(sec.annualDividendRate || 0) > 0 ||
+        ((sec.upcomingDividends?.length || 0) > 0);
+
+    const emptyDividendHistory = Array.isArray(sec.dividendHistory) && sec.dividendHistory.length === 0;
+    return hasDividendSignal && emptyDividendHistory;
+};
 
 export const buildManualPriceHistory = (transactions: Transaction[], isin: string): Record<string, number> => {
     const history: Record<string, number> = {};
@@ -84,6 +128,7 @@ export const syncProjectQuotes = async (
         maxPerRun?: number;
         maxTimeMs?: number;
         delayMs?: number;
+        concurrency?: number;
     }
 ): Promise<ProjectData> => {
     const now = new Date();
@@ -94,8 +139,19 @@ export const syncProjectQuotes = async (
     const maxPerRun = Number.isFinite(maxPerRunRaw) ? Math.floor(maxPerRunRaw as number) : MAX_SYNC_PER_RUN;
     const maxTimeMsRaw = options?.maxTimeMs;
     const maxTimeMs = Number.isFinite(maxTimeMsRaw) ? Math.floor(maxTimeMsRaw as number) : MAX_SYNC_TIME_MS;
+    const fullSyncMode =
+        Number.isFinite(maxPerRunRaw) &&
+        Number.isFinite(maxTimeMsRaw) &&
+        Math.floor(maxPerRunRaw as number) === 0 &&
+        Math.floor(maxTimeMsRaw as number) === 0;
     const delayMsRaw = options?.delayMs;
-    const delayMs = Number.isFinite(delayMsRaw) ? Math.floor(delayMsRaw as number) : SYNC_DELAY_MS;
+    const delayMs = Number.isFinite(delayMsRaw)
+        ? Math.floor(delayMsRaw as number)
+        : (fullSyncMode ? FULL_SYNC_DELAY_MS : SYNC_DELAY_MS);
+    const concurrencyRaw = options?.concurrency;
+    const concurrency = Number.isFinite(concurrencyRaw)
+        ? Math.floor(concurrencyRaw as number)
+        : (fullSyncMode ? FULL_SYNC_CONCURRENCY : SYNC_CONCURRENCY);
 
     // Filter out old "System" split transactions as we now store them in Security
     // This is a one-time migration/cleanup
@@ -119,7 +175,7 @@ export const syncProjectQuotes = async (
         if (!sec.lastSync) return true;
         const diffHours = (now.getTime() - new Date(sec.lastSync).getTime()) / (1000 * 60 * 60);
         const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
-        const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
+        const missingDividends = hasMissingDividendData(sec);
         return force || diffHours > 24 || missingHistory || missingDividends;
     });
 
@@ -130,14 +186,20 @@ export const syncProjectQuotes = async (
     const targetIsins = shouldSyncIsins.slice(0, maxTargets);
 
     onProgress?.({ current: 0, total: targetIsins.length, stage: 'start' });
+    const hasTimeBudget = Number.isFinite(maxTimeMs) && maxTimeMs > 0;
+    let limitNotified = false;
 
-    for (const isin of targetIsins) {
-        if (Number.isFinite(maxTimeMs) && maxTimeMs > 0 && Date.now() - syncStartedAt >= maxTimeMs) {
-            console.log(`[MarketData] Sync time budget reached (${maxTimeMs}ms). Stopping early.`);
-            onProgress?.({ current: processedCount, total: targetIsins.length, stage: 'limit' });
-            break;
-        }
-        const sec = securities[isin];
+    const notifyLimitReached = () => {
+        if (limitNotified) return;
+        limitNotified = true;
+        console.log(`[MarketData] Sync time budget reached (${maxTimeMs}ms). Stopping early.`);
+        onProgress?.({ current: processedCount, total: targetIsins.length, stage: 'limit' });
+    };
+
+    const processTarget = async (isin: string) => {
+        let sec = securities[isin];
+        if (!sec) return;
+
         const fallbackSymbol = sec.symbol || sec.isin || isin;
         onProgress?.({ current: processedCount, total: targetIsins.length, symbol: fallbackSymbol, stage: 'start' });
 
@@ -157,24 +219,22 @@ export const syncProjectQuotes = async (
             }
             processedCount += 1;
             onProgress?.({ current: processedCount, total: targetIsins.length, symbol: fallbackSymbol, stage: 'skip' });
-            continue;
+            return;
         }
 
         const lastSync = sec.lastSync ? new Date(sec.lastSync) : new Date(0);
         const diffHours = (now.getTime() - lastSync.getTime()) / (1000 * 60 * 60);
-
         const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
-        const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
+        const missingDividends = hasMissingDividendData(sec);
 
         const shouldSync = force || diffHours > 24 || missingHistory || missingDividends;
         if (!shouldSync) {
             processedCount += 1;
             onProgress?.({ current: processedCount, total: targetIsins.length, symbol: fallbackSymbol, stage: 'skip' });
-            continue;
+            return;
         }
 
         let symbolToFetch = sec.symbol || sec.isin;
-
         const shouldResolve = !sec.symbol || sec.symbol === sec.isin || sec.symbolStatus === 'unresolved';
         const canRetryResolve = force || sec.symbolStatus !== 'unresolved';
 
@@ -183,28 +243,32 @@ export const syncProjectQuotes = async (
             const resolveResult = await resolveSecuritySymbol(symbolToFetch || '', sec.currency, sec.isin, sec.name);
             if (resolveResult?.status === 'resolved' && resolveResult.symbol) {
                 symbolToFetch = resolveResult.symbol;
+                const secForResolve = securities[isin] || sec;
                 securities[isin] = {
-                    ...sec,
+                    ...secForResolve,
                     symbol: resolveResult.symbol,
-                    name: resolveResult.name || sec.name,
-                    currency: resolveResult.currency || sec.currency,
+                    name: resolveResult.name || secForResolve.name,
+                    currency: resolveResult.currency || secForResolve.currency,
                     symbolStatus: 'resolved',
                     symbolSource: resolveResult.source || 'unknown',
                     symbolLastTried: now.toISOString()
                 };
                 hasChanges = true;
+                sec = securities[isin];
             } else if (resolveResult?.status === 'unresolved') {
+                const secForResolve = securities[isin] || sec;
                 securities[isin] = {
-                    ...sec,
+                    ...secForResolve,
                     symbolStatus: 'unresolved',
                     symbolSource: resolveResult.source || 'unknown',
                     symbolLastTried: now.toISOString()
                 };
                 hasChanges = true;
+                sec = securities[isin];
                 if (!sec.symbol || sec.symbol === sec.isin) {
                     processedCount += 1;
                     onProgress?.({ current: processedCount, total: targetIsins.length, symbol: symbolToFetch || fallbackSymbol, stage: 'skip' });
-                    continue;
+                    return;
                 }
             }
         }
@@ -212,27 +276,18 @@ export const syncProjectQuotes = async (
         if (!symbolToFetch) {
             processedCount += 1;
             onProgress?.({ current: processedCount, total: targetIsins.length, symbol: fallbackSymbol, stage: 'skip' });
-            continue;
+            return;
         }
-        const secForFetch = securities[isin];
 
-        if (Number.isFinite(effectiveMaxPerRun) && attemptedCount >= effectiveMaxPerRun) {
-            console.log(`[MarketData] Sync limit reached (${effectiveMaxPerRun}). Stopping early.`);
-            onProgress?.({ current: processedCount, total: targetIsins.length, symbol: symbolToFetch, stage: 'limit' });
-            break;
-        }
+        const secForFetch = securities[isin] || sec;
         attemptedCount += 1;
         onProgress?.({ current: processedCount, total: targetIsins.length, symbol: symbolToFetch, stage: 'fetch' });
 
         try {
-            // Determine start date: lastSync or default full history
-            // If we have existing history, we only need new data? 
-            // Currently simpler to re-fetch relevant chunk or full. 
-            // Let's fetch from lastSync if available, UNLESS force is true (repair mode)
-            const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
-            const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
-            const requiresFullHistory = force || !sec.lastSync || missingHistory || missingDividends;
-            const from = requiresFullHistory ? '1970-01-01' : sec.lastSync.split('T')[0];
+            const fetchMissingHistory = !secForFetch.priceHistory || Object.keys(secForFetch.priceHistory).length === 0;
+            const fetchMissingDividends = hasMissingDividendData(secForFetch);
+            const requiresFullHistory = !secForFetch.lastSync || fetchMissingHistory || fetchMissingDividends;
+            const from = requiresFullHistory ? '1970-01-01' : secForFetch.lastSync.split('T')[0];
 
             const res = await fetch('/api/yahoo', {
                 method: 'POST',
@@ -243,36 +298,37 @@ export const syncProjectQuotes = async (
             if (res.ok) {
                 const data = await res.json();
                 if (data.history) {
+                    const incomingDividendHistory = Array.isArray(data.dividendHistory) ? data.dividendHistory : [];
+                    const nextDividendHistory = requiresFullHistory
+                        ? incomingDividendHistory
+                        : mergeDividendHistory(secForFetch.dividendHistory, incomingDividendHistory);
+
                     securities[isin] = {
                         ...secForFetch,
-                        priceHistory: { ...(sec.priceHistory || {}), ...data.history },
-                        splits: { ...(sec.splits || {}), ...data.splits }, // Store splits in security
-                        currency: data.currency || sec.currency,
-                        symbol: data.symbol || symbolToFetch || sec.symbol,
-                        name: data.longName || sec.name, // Update Name if available (e.g. Amazon.com, Inc.)
+                        priceHistory: { ...(secForFetch.priceHistory || {}), ...data.history },
+                        splits: { ...(secForFetch.splits || {}), ...data.splits },
+                        currency: data.currency || secForFetch.currency,
+                        symbol: data.symbol || symbolToFetch || secForFetch.symbol,
+                        name: data.longName || secForFetch.name,
                         symbolStatus: 'resolved',
                         symbolSource: secForFetch.symbolSource || 'yahoo',
                         symbolLastTried: secForFetch.symbolLastTried || now.toISOString(),
-                        quoteType: mapYahooQuoteType(data.quoteType) || sec.quoteType, // Update Type
-                        // Metrics
+                        quoteType: mapYahooQuoteType(data.quoteType) || secForFetch.quoteType,
                         marketCap: data.marketCap,
                         trailingPE: data.trailingPE,
                         dividendYield: data.dividendYield,
                         fiftyTwoWeekHigh: data.fiftyTwoWeekHigh,
                         fiftyTwoWeekLow: data.fiftyTwoWeekLow,
-                        // Advanced Metrics
                         totalRevenue: data.totalRevenue,
                         forwardPE: data.forwardPE,
                         epsTrailingTwelveMonths: data.epsTrailingTwelveMonths,
                         epsForward: data.epsForward,
                         earningsHistory: data.earningsHistory,
-                        // Profile
                         country: data.country,
                         sector: data.sector,
                         industry: data.industry,
-                        // Dividends
                         annualDividendRate: data.annualDividendRate,
-                        dividendHistory: data.dividendHistory || [],
+                        dividendHistory: nextDividendHistory,
                         upcomingDividends: data.upcomingDividends || [],
                         dividendHistorySynced: true,
                         lastSync: now.toISOString()
@@ -300,6 +356,28 @@ export const syncProjectQuotes = async (
 
         processedCount += 1;
         onProgress?.({ current: processedCount, total: targetIsins.length, symbol: symbolToFetch, stage: 'done' });
+    };
+
+    if (targetIsins.length > 0) {
+        const workerCount = Math.max(1, Math.min(concurrency > 0 ? concurrency : 1, targetIsins.length));
+        let nextIndex = 0;
+
+        const worker = async () => {
+            while (true) {
+                if (hasTimeBudget && Date.now() - syncStartedAt >= maxTimeMs) {
+                    notifyLimitReached();
+                    return;
+                }
+                const currentIndex = nextIndex;
+                if (currentIndex >= targetIsins.length) {
+                    return;
+                }
+                nextIndex += 1;
+                await processTarget(targetIsins[currentIndex]);
+            }
+        };
+
+        await Promise.all(Array.from({ length: workerCount }, () => worker()));
     }
 
     if (syncedCount > 0 || attemptedCount > 0) {
