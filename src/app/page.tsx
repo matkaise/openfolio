@@ -348,6 +348,13 @@ export default function PortfolioApp() {
     setIsDarkMode(Boolean(project.settings?.isDarkMode));
   }, [project?.id, project?.settings?.themeId, project?.settings?.isDarkMode, resolveThemeId, project]);
 
+  useEffect(() => {
+    if (project) return;
+    // Reset startup sync cooldown after closing a project so the next opened project syncs immediately.
+    lastMarketAutoSyncRef.current = 0;
+    setShowStartupSyncModal(false);
+  }, [project]);
+
   // Sync Market Data on load and auto-repair missing securities.
   useEffect(() => {
     if (!isLoaded || !project || isMarketSyncing) return;
