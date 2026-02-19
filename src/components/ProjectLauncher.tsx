@@ -116,7 +116,7 @@ export const ProjectLauncher = () => {
               </span>
               <span className="space-y-1">
                 <span className="block text-sm font-semibold md3-text-main">Portfolio oeffnen</span>
-                <span className="block text-xs md3-text-muted">Lade eine existierende .json Datei</span>
+                <span className="block text-xs md3-text-muted">Lade eine existierende .sqlite oder .json Datei</span>
               </span>
             </button>
           </div>

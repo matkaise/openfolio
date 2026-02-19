@@ -11,6 +11,8 @@ interface MultiSelectProps {
 export const MultiSelectDropdown = ({ options, selectedIds, onChange, label = 'Depot' }: MultiSelectProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const optionIdSet = new Set(options.map((option) => option.id));
+  const effectiveSelectedIds = selectedIds.filter((id) => optionIdSet.has(id));
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -25,11 +27,11 @@ export const MultiSelectDropdown = ({ options, selectedIds, onChange, label = 'D
 
   const toggleOption = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (selectedIds.includes(id)) {
-      onChange(selectedIds.filter((prev) => prev !== id));
+    if (effectiveSelectedIds.includes(id)) {
+      onChange(effectiveSelectedIds.filter((prev) => prev !== id));
       return;
     }
-    onChange([...selectedIds, id]);
+    onChange([...effectiveSelectedIds, id]);
   };
 
   const toggleAll = (e: React.MouseEvent) => {
@@ -37,14 +39,14 @@ export const MultiSelectDropdown = ({ options, selectedIds, onChange, label = 'D
     onChange([]);
   };
 
-  const isAllSelected = selectedIds.length === 0;
+  const isAllSelected = effectiveSelectedIds.length === 0;
 
   const getDisplayLabel = () => {
     if (isAllSelected) return 'Alle';
-    if (selectedIds.length === 1) {
-      return options.find((o) => o.id === selectedIds[0])?.name || 'Unbekannt';
+    if (effectiveSelectedIds.length === 1) {
+      return options.find((o) => o.id === effectiveSelectedIds[0])?.name || 'Unbekannt';
     }
-    return `${selectedIds.length} ausgewaehlt`;
+    return `${effectiveSelectedIds.length} ausgewaehlt`;
   };
 
   return (
@@ -88,7 +90,7 @@ export const MultiSelectDropdown = ({ options, selectedIds, onChange, label = 'D
 
             <div className="custom-scrollbar max-h-60 overflow-y-auto">
               {options.map((option) => {
-                const isSelected = selectedIds.includes(option.id);
+                const isSelected = effectiveSelectedIds.includes(option.id);
                 return (
                   <button
                     type="button"

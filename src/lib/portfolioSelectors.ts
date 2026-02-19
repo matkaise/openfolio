@@ -9,8 +9,15 @@ export const filterTransactionsByPortfolio = (
   if (selectedPortfolioIds.length === 0) {
     return project.transactions;
   }
+
+  const validPortfolioIds = new Set((project.portfolios || []).map((portfolio) => portfolio.id));
+  const activeIds = selectedPortfolioIds.filter((id) => validPortfolioIds.has(id));
+  if (activeIds.length === 0) {
+    return project.transactions;
+  }
+
   return project.transactions.filter(
-    t => t.portfolioId && selectedPortfolioIds.includes(t.portfolioId)
+    t => t.portfolioId && activeIds.includes(t.portfolioId)
   );
 };
 
@@ -37,8 +44,15 @@ export const filterCashAccountsByPortfolio = (
   if (selectedPortfolioIds.length === 0) {
     return project.cashAccounts;
   }
+
+  const validPortfolioIds = new Set((project.portfolios || []).map((portfolio) => portfolio.id));
+  const activeIds = selectedPortfolioIds.filter((id) => validPortfolioIds.has(id));
+  if (activeIds.length === 0) {
+    return project.cashAccounts;
+  }
+
   return project.cashAccounts.filter(
-    a => !!a.portfolioId && selectedPortfolioIds.includes(a.portfolioId)
+    a => !!a.portfolioId && activeIds.includes(a.portfolioId)
   );
 };
 

@@ -319,7 +319,7 @@ const MATERIAL_THEMES = {
 const MOBILE_NAV_ITEMS = NAV_ITEMS.slice(0, 4);
 
 export default function PortfolioApp() {
-  const { isLoaded, closeProject, saveProject, project, isModified, updateProject, syncAll, syncMarket, isSyncing, isMarketSyncing, marketSyncProgress } = useProject();
+  const { isLoaded, closeProject, saveProject, project, isModified, updateProject, syncAll, syncMarket, isSyncing, isMarketSyncing, marketSyncProgress, isHydratingProject } = useProject();
   const [activeTab, setActiveTab] = useState<TabKey>('Dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -357,7 +357,7 @@ export default function PortfolioApp() {
 
   // Sync Market Data on load and auto-repair missing securities.
   useEffect(() => {
-    if (!isLoaded || !project || isMarketSyncing) return;
+    if (!isLoaded || !project || isMarketSyncing || isHydratingProject) return;
 
     const repaired = repairProjectSecurities(project);
     const needsRepairUpdate = repaired !== project;
@@ -393,7 +393,7 @@ export default function PortfolioApp() {
     void syncMarket(false, { full: true }).finally(() => {
       setShowStartupSyncModal(false);
     });
-  }, [isLoaded, project, isMarketSyncing, syncMarket, updateProject]);
+  }, [isLoaded, project, isMarketSyncing, isHydratingProject, syncMarket, updateProject]);
 
   const handleCacheUpdate = useCallback((data: AnalysisCache) => {
     setAnalysisCache(data);

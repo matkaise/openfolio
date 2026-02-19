@@ -1,10 +1,42 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from 'react';
 import { ProjectData, createEmptyProject } from '@/types/domain';
 import { CurrencyService } from '@/lib/currencyService';
 import { syncProjectQuotes, type MarketSyncProgress } from '@/lib/marketDataService';
-import { normalizeProjectWealthGoal } from '@/lib/wealthGoalUtils';
+import { openProjectFile, serializeProjectForFile, type SqliteProjectSession } from '@/lib/projectPersistence';
+
+const ensurePortfoliosFromData = (project: ProjectData): ProjectData => {
+    if ((project.portfolios || []).length > 0) {
+        return project;
+    }
+
+    const discoveredIds: string[] = [];
+    const pushId = (id?: string) => {
+        if (!id) return;
+        if (!discoveredIds.includes(id)) discoveredIds.push(id);
+    };
+
+    (project.transactions || []).forEach((tx) => pushId(tx.portfolioId));
+    (project.cashAccounts || []).forEach((account) => pushId(account.portfolioId));
+    (project.cashMovements || []).forEach((movement) => pushId(movement.portfolioId));
+
+    if (discoveredIds.length === 0) {
+        return project;
+    }
+
+    const rebuiltPortfolios = discoveredIds.map((id, index) => ({
+        id,
+        name: `Depot ${index + 1}`
+    }));
+
+    console.warn(`[ProjectContext] Portfolios were missing in loaded data. Rebuilt ${rebuiltPortfolios.length} entries from transaction/cash references.`);
+
+    return {
+        ...project,
+        portfolios: rebuiltPortfolios
+    };
+};
 
 interface ProjectContextType {
     project: ProjectData | null;
@@ -12,6 +44,7 @@ interface ProjectContextType {
     isModified: boolean;
     fileName: string | null;
     marketSyncProgress: MarketSyncProgress | null;
+    isHydratingProject: boolean;
 
     // Actions
     newProject: () => void;
@@ -49,31 +82,55 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [isSyncing, setIsSyncing] = useState(false);
     const [isMarketSyncing, setIsMarketSyncing] = useState(false);
     const [marketSyncProgress, setMarketSyncProgress] = useState<MarketSyncProgress | null>(null);
+    const [isHydratingProject, setIsHydratingProject] = useState(false);
+
+    const sqliteSessionRef = useRef<SqliteProjectSession | null>(null);
+
+    const setSqliteSession = useCallback((nextSession: SqliteProjectSession | null) => {
+        if (sqliteSessionRef.current === nextSession) return;
+        if (sqliteSessionRef.current) {
+            sqliteSessionRef.current.close();
+        }
+        sqliteSessionRef.current = nextSession;
+    }, []);
+
+    const writeToHandle = useCallback(async (handle: FileSystemFileHandle, data: ProjectData) => {
+        const writable = await handle.createWritable();
+        const serialized = await serializeProjectForFile(handle.name, data, sqliteSessionRef.current);
+
+        setSqliteSession(serialized.sqliteSession);
+
+        if (typeof serialized.data === 'string') {
+            await writable.write(serialized.data);
+        } else {
+            const bytes = new Uint8Array(serialized.data.byteLength);
+            bytes.set(serialized.data);
+            await writable.write(new Blob([bytes]));
+        }
+
+        await writable.close();
+    }, [setSqliteSession]);
 
     // Helper to perform sync on a given project data state
     const performSync = useCallback(async (currentProject: ProjectData) => {
         setIsSyncing(true);
         try {
-            console.log("Auto-syncing FX rates...");
+            console.log('Auto-syncing FX rates...');
             const newFxData = await CurrencyService.syncRates(currentProject.fxData);
 
-            // Only update if changes found or just to update timestamp? 
-            // ECB sync returns same if no new data, but let's assume it returns formatted data.
-            // Check if lastUpdated changed to avoid unnecessary re-renders/modified flag if nothing changed?
-            // For now, simple:
             if (newFxData.lastUpdated !== currentProject.fxData.lastUpdated) {
-                setProject(prev => prev ? ({
+                setProject((prev) => prev ? ({
                     ...prev,
                     fxData: newFxData,
                     modified: new Date().toISOString()
                 }) : null);
                 setIsModified(true);
-                console.log("FX Sync completed. Updated to:", newFxData.lastUpdated);
+                console.log('FX Sync completed. Updated to:', newFxData.lastUpdated);
             } else {
-                console.log("FX Sync completed. No new data.");
+                console.log('FX Sync completed. No new data.');
             }
         } catch (e) {
-            console.error("FX Sync failed", e);
+            console.error('FX Sync failed', e);
         } finally {
             setIsSyncing(false);
         }
@@ -83,24 +140,24 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         setIsMarketSyncing(true);
         setMarketSyncProgress({ current: 0, total: 0, stage: 'start' });
         try {
-            console.log("Auto-syncing market data...");
+            console.log('Auto-syncing market data...');
             const updated = await syncProjectQuotes(currentProject, force, (progress) => {
                 setMarketSyncProgress(progress);
             }, full ? { maxPerRun: 0, maxTimeMs: 0 } : undefined);
             if (updated !== currentProject) {
-                setProject(prev => prev ? ({
+                setProject((prev) => prev ? ({
                     ...prev,
                     securities: updated.securities,
                     transactions: updated.transactions,
                     modified: updated.modified
                 }) : null);
                 setIsModified(true);
-                console.log("Market sync completed.");
+                console.log('Market sync completed.');
             } else {
-                console.log("Market sync completed. No new data.");
+                console.log('Market sync completed. No new data.');
             }
         } catch (e) {
-            console.error("Market sync failed", e);
+            console.error('Market sync failed', e);
         } finally {
             setIsMarketSyncing(false);
             setMarketSyncProgress(null);
@@ -111,40 +168,98 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         const created = createEmptyProject();
         setProject(created);
         setFileHandle(null);
-        setFileName('Unbenannt.json');
+        setFileName('Unbenannt.sqlite');
         setIsModified(true);
-        performSync(created);
-    }, [performSync]);
+        setIsHydratingProject(false);
+        setSqliteSession(null);
+        void performSync(created);
+    }, [performSync, setSqliteSession]);
 
     const openProject = useCallback(async () => {
         try {
             // @ts-expect-error File System Access API types might need polyfill
             const [handle] = await window.showOpenFilePicker({
-                types: [{
-                    description: 'OpenParqet Portfolio',
-                    accept: { 'application/json': ['.json', '.parqet'] }
-                }],
+                types: [
+                    {
+                        description: 'OpenParqet SQLite',
+                        accept: { 'application/vnd.sqlite3': ['.sqlite', '.sqlite3', '.db'] }
+                    },
+                    {
+                        description: 'OpenParqet JSON',
+                        accept: { 'application/json': ['.json', '.parqet'] }
+                    }
+                ],
                 multiple: false
             });
 
             const file = await handle.getFile();
-            const text = await file.text();
-            const parsedData = JSON.parse(text) as ProjectData;
-            const data = normalizeProjectWealthGoal(parsedData);
+            const opened = await openProjectFile(file);
+            const data = ensurePortfoliosFromData(opened.project);
 
             // Basic validation
             if (!data.version || !data.transactions) {
-                throw new Error("Ungültiges Dateiformat");
+                throw new Error('Ungueltiges Dateiformat');
             }
 
+            setSqliteSession(opened.sqliteSession);
             setProject(data);
             setFileHandle(handle);
             setFileName(file.name);
             setIsModified(false);
 
-            // Trigger Auto-Sync
-            // We pass 'data' directly because 'project' state is not updated yet in this closure
-            performSync(data);
+            if (opened.hasLazyPayload && opened.sqliteSession) {
+                setIsHydratingProject(true);
+                void opened.sqliteSession
+                    .hydrateHeavyData(data)
+                    .then((hydratedProject) => {
+                        setProject((prev) => {
+                            if (!prev || prev.id !== data.id) return prev;
+
+                            const mergedSecurities = { ...prev.securities };
+                            Object.entries(hydratedProject.securities || {}).forEach(([isin, hydratedSec]) => {
+                                const currentSec = mergedSecurities[isin];
+                                if (!currentSec) {
+                                    mergedSecurities[isin] = hydratedSec;
+                                    return;
+                                }
+
+                                const hasCurrentHistory = Boolean(
+                                    currentSec.priceHistory && Object.keys(currentSec.priceHistory).length > 0
+                                );
+
+                                mergedSecurities[isin] = {
+                                    ...hydratedSec,
+                                    ...currentSec,
+                                    priceHistory: hasCurrentHistory
+                                        ? currentSec.priceHistory
+                                        : (hydratedSec.priceHistory || currentSec.priceHistory || {})
+                                };
+                            });
+
+                            const hasCurrentFxRates = Object.keys(prev.fxData?.rates || {}).length > 0;
+                            return {
+                                ...prev,
+                                securities: mergedSecurities,
+                                fxData: {
+                                    ...hydratedProject.fxData,
+                                    ...prev.fxData,
+                                    rates: hasCurrentFxRates ? prev.fxData.rates : hydratedProject.fxData.rates
+                                }
+                            };
+                        });
+                        void performSync(hydratedProject);
+                    })
+                    .catch((error) => {
+                        console.error('Failed to hydrate SQLite heavy payload', error);
+                        void performSync(data);
+                    })
+                    .finally(() => {
+                        setIsHydratingProject(false);
+                    });
+            } else {
+                setIsHydratingProject(false);
+                void performSync(data);
+            }
 
         } catch (err: unknown) {
             if (err && typeof err === 'object' && 'name' in err && (err as { name?: string }).name === 'AbortError') {
@@ -152,30 +267,34 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
             const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
             console.error('Failed to open project:', err);
-            alert('Fehler beim Öffnen der Datei: ' + message);
+            alert('Fehler beim Oeffnen der Datei: ' + message);
         }
-    }, [performSync]);
+    }, [performSync, setSqliteSession]);
 
     const saveProjectAs = useCallback(async () => {
         if (!project) return;
         try {
             // @ts-expect-error File System Access API types might need polyfill
             const handle = await window.showSaveFilePicker({
-                types: [{
-                    description: 'OpenParqet Portfolio',
-                    accept: { 'application/json': ['.json'] }
-                }],
-                suggestedName: fileName || 'Portfolio.json'
+                types: [
+                    {
+                        description: 'OpenParqet SQLite',
+                        accept: { 'application/vnd.sqlite3': ['.sqlite'] }
+                    },
+                    {
+                        description: 'OpenParqet JSON',
+                        accept: { 'application/json': ['.json'] }
+                    }
+                ],
+                suggestedName: fileName || 'Portfolio.sqlite'
             });
 
-            const writable = await handle.createWritable();
             const projectToSave = {
                 ...project,
                 modified: new Date().toISOString()
             };
 
-            await writable.write(JSON.stringify(projectToSave, null, 2));
-            await writable.close();
+            await writeToHandle(handle, projectToSave);
 
             setFileHandle(handle);
             setFileName(handle.name);
@@ -189,7 +308,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             console.error('Failed to save project:', err);
             alert('Fehler beim Speichern: ' + message);
         }
-    }, [project, fileName]);
+    }, [project, fileName, writeToHandle]);
 
     const saveProject = useCallback(async () => {
         if (!project) return;
@@ -199,13 +318,11 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         }
 
         try {
-            const writable = await fileHandle.createWritable();
             const projectToSave = {
                 ...project,
                 modified: new Date().toISOString()
             };
-            await writable.write(JSON.stringify(projectToSave, null, 2));
-            await writable.close();
+            await writeToHandle(fileHandle, projectToSave);
 
             setProject(projectToSave);
             setIsModified(false);
@@ -214,11 +331,11 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             // Fallback to Save As if permission lost
             saveProjectAs();
         }
-    }, [project, fileHandle, saveProjectAs]);
+    }, [project, fileHandle, saveProjectAs, writeToHandle]);
 
     const closeProject = useCallback(() => {
         if (isModified) {
-            if (!confirm('Ungespeicherte Änderungen gehen verloren. Wirklich schließen?')) {
+            if (!confirm('Ungespeicherte Aenderungen gehen verloren. Wirklich schliessen?')) {
                 return;
             }
         }
@@ -226,10 +343,12 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         setFileHandle(null);
         setFileName(null);
         setIsModified(false);
-    }, [isModified]);
+        setIsHydratingProject(false);
+        setSqliteSession(null);
+    }, [isModified, setSqliteSession]);
 
     const updateProject = useCallback((updater: (prev: ProjectData) => ProjectData) => {
-        setProject(prev => {
+        setProject((prev) => {
             if (!prev) return null;
             const newData = updater(prev);
             return newData;
@@ -242,7 +361,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         if (project) {
             await performSync(project);
         } else {
-            console.warn("Could not sync FX: No project loaded.");
+            console.warn('Could not sync FX: No project loaded.');
         }
     }, [project, performSync]);
 
@@ -251,13 +370,13 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         if (target) {
             await performMarketSync(target, force, Boolean(options?.full));
         } else {
-            console.warn("Could not sync market data: No project loaded.");
+            console.warn('Could not sync market data: No project loaded.');
         }
     }, [project, performMarketSync]);
 
     const syncAll = useCallback(async (forceMarket: boolean = false) => {
         if (!project) {
-            console.warn("Could not sync: No project loaded.");
+            console.warn('Could not sync: No project loaded.');
             return;
         }
         await Promise.all([
@@ -273,6 +392,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             isModified,
             fileName,
             marketSyncProgress,
+            isHydratingProject,
             newProject,
             openProject,
             saveProject,
