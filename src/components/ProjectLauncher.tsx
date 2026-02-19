@@ -1,11 +1,80 @@
 "use client";
 
-import React from 'react';
-import { FolderOpen, Plus, TrendingUp } from 'lucide-react';
+import React, { useCallback, useRef, useState } from 'react';
+import { FolderOpen, Lock, Plus, TrendingUp, X } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
+
+type PasswordReason = 'required' | 'invalid';
 
 export const ProjectLauncher = () => {
   const { newProject, openProject } = useProject();
+
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('Mein Portfolio');
+  const [projectPassword, setProjectPassword] = useState('');
+  const [projectPasswordConfirm, setProjectPasswordConfirm] = useState('');
+
+  const [passwordPromptReason, setPasswordPromptReason] = useState<PasswordReason | null>(null);
+  const [openPasswordInput, setOpenPasswordInput] = useState('');
+  const passwordResolverRef = useRef<((value: string | null) => void) | null>(null);
+
+  const openCreateModal = () => {
+    setNewProjectName('Mein Portfolio');
+    setProjectPassword('');
+    setProjectPasswordConfirm('');
+    setIsCreateModalOpen(true);
+  };
+
+  const closeCreateModal = () => {
+    setIsCreateModalOpen(false);
+  };
+
+  const submitCreateModal = () => {
+    const trimmedName = newProjectName.trim() || 'Mein Portfolio';
+    const password = projectPassword;
+    const passwordConfirm = projectPasswordConfirm;
+
+    if (password.length > 0 || passwordConfirm.length > 0) {
+      if (!password) {
+        alert('Bitte ein Passwort eingeben.');
+        return;
+      }
+      if (password !== passwordConfirm) {
+        alert('Die Passwoerter stimmen nicht ueberein.');
+        return;
+      }
+
+      void newProject({ name: trimmedName, password });
+      closeCreateModal();
+      return;
+    }
+
+    void newProject({ name: trimmedName });
+    closeCreateModal();
+  };
+
+  const requestPassword = useCallback((reason: PasswordReason): Promise<string | null> => {
+    setPasswordPromptReason(reason);
+    setOpenPasswordInput('');
+
+    return new Promise((resolve) => {
+      passwordResolverRef.current = resolve;
+    });
+  }, []);
+
+  const resolvePasswordPrompt = (value: string | null) => {
+    const resolver = passwordResolverRef.current;
+    passwordResolverRef.current = null;
+    setPasswordPromptReason(null);
+    setOpenPasswordInput('');
+    if (resolver) {
+      resolver(value);
+    }
+  };
+
+  const handleOpenProject = () => {
+    void openProject({ requestPassword });
+  };
 
   return (
     <div
@@ -82,7 +151,7 @@ export const ProjectLauncher = () => {
           <div className="grid gap-3 text-left">
             <button
               type="button"
-              onClick={newProject}
+              onClick={openCreateModal}
               className="md3-list-item flex items-center gap-4 p-4 transition-all hover:-translate-y-0.5"
             >
               <span
@@ -96,13 +165,12 @@ export const ProjectLauncher = () => {
               </span>
               <span className="space-y-1">
                 <span className="block text-sm font-semibold md3-text-main">Neues Portfolio erstellen</span>
-                <span className="block text-xs md3-text-muted">Starte mit einer leeren Datenbank</span>
               </span>
             </button>
 
             <button
               type="button"
-              onClick={openProject}
+              onClick={handleOpenProject}
               className="md3-list-item flex items-center gap-4 p-4 transition-all hover:-translate-y-0.5"
             >
               <span
@@ -116,7 +184,6 @@ export const ProjectLauncher = () => {
               </span>
               <span className="space-y-1">
                 <span className="block text-sm font-semibold md3-text-main">Portfolio oeffnen</span>
-                <span className="block text-xs md3-text-muted">Lade eine existierende .sqlite oder .json Datei</span>
               </span>
             </button>
           </div>
@@ -128,6 +195,134 @@ export const ProjectLauncher = () => {
           </p>
         </div>
       </div>
+
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] p-4">
+          <div className="md3-card w-full max-w-md rounded-3xl p-6 border" style={{ borderColor: 'var(--md3-outline)' }}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold md3-text-main">Neues Portfolio</h3>
+              </div>
+              <button type="button" onClick={closeCreateModal} className="md3-icon-btn" aria-label="Schliessen">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider md3-text-muted">Projektname</label>
+                <input
+                  type="text"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      submitCreateModal();
+                    }
+                  }}
+                  className="md3-field w-full px-3 py-2 text-sm outline-none"
+                  placeholder="Mein Portfolio"
+                />
+              </div>
+
+              <div
+                className="rounded-2xl border p-3"
+                style={{
+                  background: 'var(--md3-surface-container-high)',
+                  borderColor: 'color-mix(in srgb, var(--md3-outline) 22%, transparent 78%)'
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className="flex h-8 w-8 items-center justify-center rounded-xl"
+                    style={{
+                      background: 'var(--md3-primary-container)',
+                      color: 'var(--md3-on-primary-container)'
+                    }}
+                  >
+                    <Lock size={14} />
+                  </span>
+                  <div>
+                    <div className="text-sm font-semibold md3-text-main">Passwortschutz</div>
+                  </div>
+                </div>
+                <div className="mt-3 space-y-2">
+                  <input
+                    type="password"
+                    value={projectPassword}
+                    onChange={(e) => setProjectPassword(e.target.value)}
+                    className="md3-field w-full px-3 py-2 text-sm outline-none"
+                    placeholder="Passwort (optional)"
+                  />
+                  <input
+                    type="password"
+                    value={projectPasswordConfirm}
+                    onChange={(e) => setProjectPasswordConfirm(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        submitCreateModal();
+                      }
+                    }}
+                    className="md3-field w-full px-3 py-2 text-sm outline-none"
+                    placeholder="Passwort bestaetigen (optional)"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={closeCreateModal} className="md3-text-muted px-3 py-2 text-sm font-semibold">Abbrechen</button>
+              <button type="button" onClick={submitCreateModal} className="md3-filled-btn px-4 py-2 text-sm font-semibold">Erstellen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {passwordPromptReason && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] p-4">
+          <div className="md3-card w-full max-w-md rounded-3xl p-6 border" style={{ borderColor: 'var(--md3-outline)' }}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold md3-text-main">Passwort eingeben</h3>
+                <p className="text-xs md3-text-muted">
+                  {passwordPromptReason === 'invalid'
+                    ? 'Falsches Passwort. Bitte erneut versuchen.'
+                    : 'Dieses Projekt ist passwortgeschuetzt.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => resolvePasswordPrompt(null)}
+                className="md3-icon-btn"
+                aria-label="Schliessen"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <input
+                type="password"
+                value={openPasswordInput}
+                onChange={(e) => setOpenPasswordInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    resolvePasswordPrompt(openPasswordInput);
+                  }
+                }}
+                autoFocus
+                className="md3-field w-full px-3 py-2 text-sm outline-none"
+                placeholder="Passwort"
+              />
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => resolvePasswordPrompt(null)} className="md3-text-muted px-3 py-2 text-sm font-semibold">Abbrechen</button>
+              <button type="button" onClick={() => resolvePasswordPrompt(openPasswordInput)} className="md3-filled-btn px-4 py-2 text-sm font-semibold">Oeffnen</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

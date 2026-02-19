@@ -4,7 +4,14 @@ import React, { createContext, useContext, useState, ReactNode, useCallback, use
 import { ProjectData, createEmptyProject } from '@/types/domain';
 import { CurrencyService } from '@/lib/currencyService';
 import { syncProjectQuotes, type MarketSyncProgress } from '@/lib/marketDataService';
-import { openProjectFile, serializeProjectForFile, type SqliteProjectSession } from '@/lib/projectPersistence';
+import {
+    createPasswordConfig,
+    isSqliteFileName,
+    openProjectFile,
+    serializeProjectForFile,
+    type ProjectPasswordConfig,
+    type SqliteProjectSession
+} from '@/lib/projectPersistence';
 
 const ensurePortfoliosFromData = (project: ProjectData): ProjectData => {
     if ((project.portfolios || []).length > 0) {
@@ -47,8 +54,10 @@ interface ProjectContextType {
     isHydratingProject: boolean;
 
     // Actions
-    newProject: () => void;
-    openProject: () => Promise<void>;
+    newProject: (options?: { name?: string; password?: string }) => Promise<void>;
+    openProject: (options?: {
+        requestPassword?: (reason: 'required' | 'invalid') => Promise<string | null>;
+    }) => Promise<void>;
     saveProject: () => Promise<void>;
     saveProjectAs: () => Promise<void>;
     closeProject: () => void;
@@ -85,6 +94,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [isHydratingProject, setIsHydratingProject] = useState(false);
 
     const sqliteSessionRef = useRef<SqliteProjectSession | null>(null);
+    const projectPasswordConfigRef = useRef<ProjectPasswordConfig | null>(null);
 
     const setSqliteSession = useCallback((nextSession: SqliteProjectSession | null) => {
         if (sqliteSessionRef.current === nextSession) return;
@@ -94,11 +104,25 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         sqliteSessionRef.current = nextSession;
     }, []);
 
+    const setProjectPasswordConfig = useCallback((nextConfig: ProjectPasswordConfig | null) => {
+        projectPasswordConfigRef.current = nextConfig;
+    }, []);
+
     const writeToHandle = useCallback(async (handle: FileSystemFileHandle, data: ProjectData) => {
+        if (projectPasswordConfigRef.current && !isSqliteFileName(handle.name)) {
+            throw new Error('Passwortgeschuetzte Projekte koennen nur als .openfolio/.sqlite gespeichert werden.');
+        }
+
         const writable = await handle.createWritable();
-        const serialized = await serializeProjectForFile(handle.name, data, sqliteSessionRef.current);
+        const serialized = await serializeProjectForFile(
+            handle.name,
+            data,
+            sqliteSessionRef.current,
+            projectPasswordConfigRef.current
+        );
 
         setSqliteSession(serialized.sqliteSession);
+        setProjectPasswordConfig(serialized.passwordConfig);
 
         if (typeof serialized.data === 'string') {
             await writable.write(serialized.data);
@@ -109,7 +133,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         }
 
         await writable.close();
-    }, [setSqliteSession]);
+    }, [setProjectPasswordConfig, setSqliteSession]);
 
     // Helper to perform sync on a given project data state
     const performSync = useCallback(async (currentProject: ProjectData) => {
@@ -164,36 +188,72 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
-    const newProject = useCallback(() => {
-        const created = createEmptyProject();
+    const newProject = useCallback(async (options?: { name?: string; password?: string }) => {
+        const created = createEmptyProject(options?.name || 'Mein Portfolio');
         setProject(created);
         setFileHandle(null);
-        setFileName('Unbenannt.sqlite');
+        setFileName('Unbenannt.openfolio');
         setIsModified(true);
         setIsHydratingProject(false);
         setSqliteSession(null);
-        void performSync(created);
-    }, [performSync, setSqliteSession]);
 
-    const openProject = useCallback(async () => {
+        const password = options?.password?.trim();
+        if (password) {
+            const passwordConfig = await createPasswordConfig(password);
+            setProjectPasswordConfig(passwordConfig);
+        } else {
+            setProjectPasswordConfig(null);
+        }
+
+        void performSync(created);
+    }, [performSync, setProjectPasswordConfig, setSqliteSession]);
+
+    const openProject = useCallback(async (options?: {
+        requestPassword?: (reason: 'required' | 'invalid') => Promise<string | null>;
+    }) => {
         try {
             // @ts-expect-error File System Access API types might need polyfill
             const [handle] = await window.showOpenFilePicker({
                 types: [
                     {
-                        description: 'OpenParqet SQLite',
-                        accept: { 'application/vnd.sqlite3': ['.sqlite', '.sqlite3', '.db'] }
-                    },
-                    {
-                        description: 'OpenParqet JSON',
-                        accept: { 'application/json': ['.json', '.parqet'] }
+                        description: 'OpenFolio Projekt',
+                        accept: { 'application/x-openfolio-project': ['.openfolio'] }
                     }
                 ],
+                excludeAcceptAllOption: true,
                 multiple: false
             });
 
             const file = await handle.getFile();
-            const opened = await openProjectFile(file);
+
+            let opened;
+            let passwordAttempt: string | undefined;
+
+            while (true) {
+                try {
+                    opened = await openProjectFile(file, passwordAttempt);
+                    break;
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : '';
+                    if (message === 'PASSWORD_REQUIRED' || message === 'INVALID_PASSWORD') {
+                        const reason: 'required' | 'invalid' = message === 'INVALID_PASSWORD' ? 'invalid' : 'required';
+                        const next = options?.requestPassword
+                            ? await options.requestPassword(reason)
+                            : window.prompt(
+                                reason === 'invalid'
+                                    ? 'Falsches Passwort. Bitte erneut eingeben:'
+                                    : 'Dieses Portfolio ist passwortgeschuetzt. Passwort eingeben:'
+                            );
+                        if (next === null) {
+                            return;
+                        }
+                        passwordAttempt = next;
+                        continue;
+                    }
+                    throw error;
+                }
+            }
+
             const data = ensurePortfoliosFromData(opened.project);
 
             // Basic validation
@@ -202,6 +262,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
 
             setSqliteSession(opened.sqliteSession);
+            setProjectPasswordConfig(opened.passwordConfig);
             setProject(data);
             setFileHandle(handle);
             setFileName(file.name);
@@ -269,7 +330,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             console.error('Failed to open project:', err);
             alert('Fehler beim Oeffnen der Datei: ' + message);
         }
-    }, [performSync, setSqliteSession]);
+    }, [performSync, setProjectPasswordConfig, setSqliteSession]);
 
     const saveProjectAs = useCallback(async () => {
         if (!project) return;
@@ -278,15 +339,12 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             const handle = await window.showSaveFilePicker({
                 types: [
                     {
-                        description: 'OpenParqet SQLite',
-                        accept: { 'application/vnd.sqlite3': ['.sqlite'] }
-                    },
-                    {
-                        description: 'OpenParqet JSON',
-                        accept: { 'application/json': ['.json'] }
+                        description: 'OpenFolio Projekt',
+                        accept: { 'application/x-openfolio-project': ['.openfolio'] }
                     }
                 ],
-                suggestedName: fileName || 'Portfolio.sqlite'
+                excludeAcceptAllOption: true,
+                suggestedName: fileName || 'Portfolio.openfolio'
             });
 
             const projectToSave = {
@@ -345,7 +403,8 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         setIsModified(false);
         setIsHydratingProject(false);
         setSqliteSession(null);
-    }, [isModified, setSqliteSession]);
+        setProjectPasswordConfig(null);
+    }, [isModified, setProjectPasswordConfig, setSqliteSession]);
 
     const updateProject = useCallback((updater: (prev: ProjectData) => ProjectData) => {
         setProject((prev) => {
