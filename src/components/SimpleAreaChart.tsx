@@ -67,12 +67,26 @@ export const SimpleAreaChart = ({
         if (isPercentage) {
             return `${val > 0 ? '+' : ''}${val.toFixed(2)}%`;
         }
-        const formattedVal = new Intl.NumberFormat('de-DE', {
-            minimumFractionDigits: val >= 1000 ? 0 : 2,
-            maximumFractionDigits: val >= 1000 ? 0 : 2,
-        }).format(val);
+
+        let formattedVal = val.toString();
+        let suffix = '';
+
+        if (Math.abs(val) >= 1_000_000) {
+            formattedVal = (val / 1_000_000).toFixed(1);
+            suffix = 'M';
+        } else if (Math.abs(val) >= 1_000) {
+            formattedVal = (val / 1_000).toFixed(1);
+            suffix = 'k';
+        } else {
+            formattedVal = val.toFixed(0);
+        }
+
+        // Add ' as thousand separator if needed (e.g., if > 1000 without k abbreviation, though handled above)
+        // Just in case we format normally, here's how to enforce ' separator:
+        // formattedVal = formattedVal.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+
         const currencySymbol = currency === 'EUR' ? '€' : currency === 'USD' ? '$' : currency;
-        return `${formattedVal} ${currencySymbol}`;
+        return `${formattedVal}${suffix} ${currencySymbol}`;
     };
 
     // Calculate Zero Offset for split coloring
