@@ -67,10 +67,12 @@ export const SimpleAreaChart = ({
         if (isPercentage) {
             return `${val > 0 ? '+' : ''}${val.toFixed(2)}%`;
         }
+        const formattedVal = new Intl.NumberFormat('de-DE', {
+            minimumFractionDigits: val >= 1000 ? 0 : 2,
+            maximumFractionDigits: val >= 1000 ? 0 : 2,
+        }).format(val);
         const currencySymbol = currency === 'EUR' ? '€' : currency === 'USD' ? '$' : currency;
-        if (val >= 1000) return `${currencySymbol}${Math.round(val)}`;
-        if (val >= 10) return `${currencySymbol}${val.toFixed(0)}`;
-        return `${currencySymbol}${val.toFixed(2)}`;
+        return `${formattedVal} ${currencySymbol}`;
     };
 
     // Calculate Zero Offset for split coloring
@@ -121,7 +123,7 @@ export const SimpleAreaChart = ({
                         tickFormatter={formatYAxis}
                         axisLine={false}
                         tickLine={false}
-                        width={62}
+                        width={isPercentage ? 50 : 80}
                         tickCount={isPercentage ? 7 : 6}
                     />
                     <Tooltip
@@ -134,12 +136,16 @@ export const SimpleAreaChart = ({
                         }}
                         itemStyle={{ color: isPercentage ? (Number(data[0]?.value) > 0 ? '#18a957' : '#c73a59') : color }}
                         labelStyle={{ color: 'var(--md3-on-surface-variant)' }}
-                        formatter={(value: number | string) => [
-                            isPercentage ? `${Number(value) > 0 ? '+' : ''}${Number(value).toFixed(2)}%` : `${Number(value).toFixed(2)}`,
-                            isPercentage ? (tooltipLabel || 'Performance') : (tooltipLabel || 'Kurs')
-                        ]}
-                        labelFormatter={(label: string) => {
-                            const d = parseDateOnlyUTC(label);
+                        formatter={(value: number | string | undefined) => {
+                            if (value === undefined) return ['', ''];
+                            return [
+                                isPercentage ? `${Number(value) > 0 ? '+' : ''}${Number(value).toFixed(2)}%` : `${Number(value).toFixed(2)}`,
+                                isPercentage ? (tooltipLabel || 'Performance') : (tooltipLabel || 'Kurs')
+                            ];
+                        }}
+                        labelFormatter={(label: any) => {
+                            if (!label) return '';
+                            const d = parseDateOnlyUTC(String(label));
                             return d.toLocaleDateString('de-DE', { timeZone: 'UTC' });
                         }}
                     />
