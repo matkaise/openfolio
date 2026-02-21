@@ -152,43 +152,39 @@ export const ProjectLauncher = () => {
             </div>
           </div>
 
-          <div className="grid gap-3 text-left">
+          <div className="grid gap-4 text-left">
             <button
               type="button"
               onClick={openCreateModal}
-              className="md3-list-item flex items-center gap-4 p-4 transition-all hover:-translate-y-0.5"
+              className="md3-list-item flex items-center gap-5 p-5 rounded-[28px]! transition-transform active:scale-[0.98]"
             >
               <span
-                className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
                 style={{
                   background: 'var(--md3-primary-container)',
                   color: 'var(--md3-on-primary-container)'
                 }}
               >
-                <Plus size={22} />
+                <Plus size={24} />
               </span>
-              <span className="space-y-1">
-                <span className="block text-sm font-semibold md3-text-main">Neues Portfolio erstellen</span>
-              </span>
+              <span className="text-base font-bold md3-text-main">Neues Portfolio erstellen</span>
             </button>
 
             <button
               type="button"
               onClick={handleOpenProject}
-              className="md3-list-item flex items-center gap-4 p-4 transition-all hover:-translate-y-0.5"
+              className="md3-list-item flex items-center gap-5 p-5 rounded-[28px]! transition-transform active:scale-[0.98]"
             >
               <span
-                className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
                 style={{
                   background: 'var(--md3-secondary-container)',
                   color: 'var(--md3-on-secondary-container)'
                 }}
               >
-                <FolderOpen size={22} />
+                <FolderOpen size={24} />
               </span>
-              <span className="space-y-1">
-                <span className="block text-sm font-semibold md3-text-main">Portfolio oeffnen</span>
-              </span>
+              <span className="text-base font-bold md3-text-main">Portfolio oeffnen</span>
             </button>
           </div>
 
