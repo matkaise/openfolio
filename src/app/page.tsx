@@ -50,6 +50,16 @@ const NAV_ITEMS = [
 type NavKey = (typeof NAV_ITEMS)[number]['key'];
 type TabKey = NavKey | 'Import' | 'Einstellungen';
 
+const TAB_PRELOAD_SEQUENCE: TabKey[] = [
+  'Portfolio',
+  'Analyse',
+  'Dividenden',
+  'Transaktionen',
+  'Datenquellen',
+  'Einstellungen',
+  'Import'
+];
+
 type ThemeTones = {
   bg: string;
   onBg: string;
@@ -356,6 +366,51 @@ export default function PortfolioApp() {
     lastMarketAutoSyncRef.current = 0;
     setShowStartupSyncModal(false);
   }, [project]);
+
+  useEffect(() => {
+    if (!isLoaded || !project?.id) return;
+
+    const idleWindow = window as typeof window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    let cancelled = false;
+    let timeoutHandle: number | null = null;
+    let idleHandle: number | null = null;
+    const queue = [...TAB_PRELOAD_SEQUENCE];
+
+    // Preload tabs in small idle slices so project open stays responsive.
+    const preloadNext = () => {
+      if (cancelled || queue.length === 0) return;
+      const nextTab = queue.shift();
+      if (!nextTab) return;
+
+      setVisitedTabs((prev) => (prev.includes(nextTab) ? prev : [...prev, nextTab]));
+
+      const schedule = idleWindow.requestIdleCallback
+        ? () => {
+          idleHandle = idleWindow.requestIdleCallback?.(preloadNext, { timeout: 250 }) ?? null;
+        }
+        : () => {
+          timeoutHandle = window.setTimeout(preloadNext, 80);
+        };
+
+      schedule();
+    };
+
+    timeoutHandle = window.setTimeout(preloadNext, 120);
+
+    return () => {
+      cancelled = true;
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle);
+      }
+      if (idleHandle !== null && idleWindow.cancelIdleCallback) {
+        idleWindow.cancelIdleCallback(idleHandle);
+      }
+    };
+  }, [isLoaded, project?.id]);
 
   // Sync Market Data on load and auto-repair missing securities.
   useEffect(() => {
