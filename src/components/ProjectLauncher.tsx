@@ -108,14 +108,18 @@ export const ProjectLauncher = () => {
         } as React.CSSProperties
       }
     >
-      <div className="pointer-events-none absolute inset-0">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
-          className="absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full opacity-70 blur-3xl"
-          style={{ background: 'var(--md3-gradient-a)' }}
+          className="absolute -top-[15%] -left-[10%] w-[70vw] h-[70vw] rounded-full opacity-80 blur-[100px] md3-blob-anim max-w-[800px] max-h-[800px]"
+          style={{ background: 'var(--md3-orb-a)' }}
         />
         <div
-          className="absolute -bottom-28 right-[12%] h-80 w-80 rounded-full opacity-60 blur-3xl"
-          style={{ background: 'var(--md3-gradient-b)' }}
+          className="absolute top-[10%] -right-[15%] w-[60vw] h-[60vw] rounded-full opacity-80 blur-[120px] md3-blob-anim-alt max-w-[700px] max-h-[700px]"
+          style={{ background: 'var(--md3-orb-b)' }}
+        />
+        <div
+          className="absolute -bottom-[20%] left-[15%] w-[80vw] h-[80vw] rounded-full opacity-60 blur-[140px] md3-blob-anim max-w-[900px] max-h-[900px]"
+          style={{ background: 'var(--md3-gradient-a)', animationDelay: '-12s', animationDuration: '24s' }}
         />
       </div>
 
