@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import {
   LayoutDashboard,
   Activity,
@@ -321,6 +321,7 @@ const MOBILE_NAV_ITEMS = NAV_ITEMS.slice(0, 4);
 export default function PortfolioApp() {
   const { isLoaded, closeProject, saveProject, project, isModified, updateProject, syncAll, syncMarket, isSyncing, isMarketSyncing, marketSyncProgress, isHydratingProject } = useProject();
   const [activeTab, setActiveTab] = useState<TabKey>('Dashboard');
+  const [visitedTabs, setVisitedTabs] = useState<TabKey[]>(['Dashboard']);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [timeRange, setTimeRange] = useState('1M');
@@ -331,6 +332,7 @@ export default function PortfolioApp() {
   const [activeThemeId, setActiveThemeId] = useState<keyof typeof MATERIAL_THEMES>('baseline');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showStartupSyncModal, setShowStartupSyncModal] = useState(false);
+  const [, startTransition] = useTransition();
   const lastMarketAutoSyncRef = useRef(0);
   const performanceMethod = project?.settings?.performanceMethod || 'MWR';
   const performanceSmoothing = project?.settings?.performanceSmoothing || '1d';
@@ -403,10 +405,23 @@ export default function PortfolioApp() {
     setIsSidebarOpen(false);
   }, []);
 
-  const handleNavClick = useCallback((key: NavKey) => {
-    setActiveTab(key);
+  const handleTabChange = useCallback((key: TabKey) => {
+    setVisitedTabs((prev) => (prev.includes(key) ? prev : [...prev, key]));
+    startTransition(() => {
+      setActiveTab(key);
+    });
     closeSidebar();
-  }, [closeSidebar]);
+  }, [closeSidebar, startTransition]);
+
+  const handleNavClick = useCallback((key: NavKey) => {
+    handleTabChange(key);
+  }, [handleTabChange]);
+
+  const handleCloseProject = useCallback(() => {
+    setActiveTab('Dashboard');
+    setVisitedTabs(['Dashboard']);
+    closeProject();
+  }, [closeProject]);
 
   const currentTheme = MATERIAL_THEMES[activeThemeId] ?? MATERIAL_THEMES.baseline;
   const tones = isDarkMode ? currentTheme.dark : currentTheme.light;
@@ -449,8 +464,8 @@ export default function PortfolioApp() {
     return <ProjectLauncher />;
   }
 
-  const renderContent = () => {
-    switch (activeTab) {
+  const renderContent = (tab: TabKey) => {
+    switch (tab) {
       case 'Dashboard':
         return (
           <DashboardContent
@@ -458,7 +473,7 @@ export default function PortfolioApp() {
             setTimeRange={setTimeRange}
             selectedPortfolioIds={selectedPortfolioIds}
             onSelectSecurity={(isin, currency) => setSelectedSecurity({ isin, currency })}
-            onShowPortfolio={() => setActiveTab('Portfolio')}
+            onShowPortfolio={() => handleTabChange('Portfolio')}
             includeDividends={includeDividendsInPerformance}
             onToggleDividends={() => setIncludeDividendsInPerformance((v) => !v)}
           />
@@ -706,8 +721,7 @@ export default function PortfolioApp() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('Import');
-                closeSidebar();
+                handleTabChange('Import');
               }}
               className="md3-fab mb-5 flex items-center justify-center gap-2 px-4 text-sm font-semibold"
             >
@@ -731,8 +745,7 @@ export default function PortfolioApp() {
               <button
                 type="button"
                 onClick={() => {
-                  setActiveTab('Einstellungen');
-                  closeSidebar();
+                  handleTabChange('Einstellungen');
                 }}
                 className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 transition"
                 style={{ color: 'var(--md3-on-surface-variant)' }}
@@ -755,7 +768,7 @@ export default function PortfolioApp() {
 
               <button
                 type="button"
-                onClick={closeProject}
+                onClick={handleCloseProject}
                 className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition hover:bg-rose-500/10"
                 style={{ color: 'var(--md3-on-surface-variant)' }}
               >
@@ -855,7 +868,15 @@ export default function PortfolioApp() {
 
           <div className="flex-1 overflow-y-auto px-4 pb-[calc(6.8rem+env(safe-area-inset-bottom))] pt-6 md:px-8 md:pb-10 custom-scrollbar">
             <div className="mx-auto w-full max-w-none space-y-6">
-              {renderContent()}
+              {visitedTabs.map((tab) => (
+                <section
+                  key={tab}
+                  aria-hidden={activeTab !== tab}
+                  className={activeTab === tab ? '' : 'hidden'}
+                >
+                  {renderContent(tab)}
+                </section>
+              ))}
             </div>
           </div>
 
@@ -912,7 +933,7 @@ export default function PortfolioApp() {
       <div className="fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] right-4 z-30 md:hidden">
         <button
           type="button"
-          onClick={() => setActiveTab('Import')}
+          onClick={() => handleTabChange('Import')}
           className="md3-fab flex h-14 w-14 items-center justify-center rounded-[18px]"
           aria-label="Import"
         >

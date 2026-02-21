@@ -9,7 +9,46 @@ import { useProject } from '@/contexts/ProjectContext';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { AllocationChart } from '@/components/AllocationChart';
 import { Card } from '@/components/ui/Card';
+import { parseDateOnlyUTC } from '@/lib/dateUtils';
 import { type DividendHistoryEntry, type EventEntry, type TransactionLike, type UpcomingDividendEntry } from '@/types/portfolioView';
+
+const sliceHistoryByRange = (
+  history: { date: string; value: number; invested: number; dividend: number }[],
+  range: string
+) => {
+  if (!history.length || range === 'MAX') return history;
+
+  const endDate = parseDateOnlyUTC(history[history.length - 1].date);
+  let startDate = new Date(endDate);
+
+  switch (range) {
+    case '1M':
+      startDate.setUTCMonth(startDate.getUTCMonth() - 1);
+      break;
+    case '6M':
+      startDate.setUTCMonth(startDate.getUTCMonth() - 6);
+      break;
+    case 'YTD':
+      startDate = new Date(Date.UTC(endDate.getUTCFullYear(), 0, 1));
+      break;
+    case '1J':
+      startDate.setUTCFullYear(startDate.getUTCFullYear() - 1);
+      break;
+    case '3J':
+      startDate.setUTCFullYear(startDate.getUTCFullYear() - 3);
+      break;
+    case '5J':
+      startDate.setUTCFullYear(startDate.getUTCFullYear() - 5);
+      break;
+    default:
+      return history;
+  }
+
+  const startMs = startDate.getTime();
+  const startIndex = history.findIndex((point) => parseDateOnlyUTC(point.date).getTime() >= startMs);
+  if (startIndex <= 0) return history;
+  return history.slice(startIndex);
+};
 
 export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectSecurity, onShowPortfolio, includeDividends, onToggleDividends }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioIds: string[], onSelectSecurity: (isin: string, currency?: string) => void, onShowPortfolio: () => void, includeDividends: boolean, onToggleDividends: () => void }) => {
   const { project, updateProject } = useProject();
@@ -33,22 +72,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     return calculateProjectHoldings(project, filteredTransactions);
   }, [project, filteredTransactions]);
 
-  // Calculate portfolio history for chart
-  const historyData = useMemo(() => {
-    if (!project) return [];
-
-    return calculatePortfolioHistory(
-      filteredTransactions,
-      Object.values(project.securities || {}),
-      project.fxData.rates,
-      filteredCashAccounts,
-      project.settings.baseCurrency,
-      timeRange,
-      'daily'
-    );
-  }, [project, filteredTransactions, filteredCashAccounts, timeRange]);
-
-  const kpiHistoryData = useMemo(() => {
+  const maxHistoryData = useMemo(() => {
     if (!project) return [];
 
     return calculatePortfolioHistory(
@@ -62,19 +86,16 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     );
   }, [project, filteredTransactions, filteredCashAccounts]);
 
-  const dailyHistoryData = useMemo(() => {
-    if (!project) return [];
+  // Calculate portfolio history for chart by slicing MAX history.
+  const historyData = useMemo(() => (
+    sliceHistoryByRange(maxHistoryData, timeRange)
+  ), [maxHistoryData, timeRange]);
 
-    return calculatePortfolioHistory(
-      filteredTransactions,
-      Object.values(project.securities || {}),
-      project.fxData.rates,
-      filteredCashAccounts,
-      project.settings.baseCurrency,
-      '1M',
-      'daily'
-    );
-  }, [project, filteredTransactions, filteredCashAccounts]);
+  const kpiHistoryData = maxHistoryData;
+
+  const dailyHistoryData = useMemo(() => {
+    return sliceHistoryByRange(maxHistoryData, '1M');
+  }, [maxHistoryData]);
 
   const kpiHistoryForPerformance = useMemo(() => {
     if (!project) return kpiHistoryData;
@@ -185,7 +206,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
   const convertedStoredGoal = (project && typeof storedGoal === 'number' && Number.isFinite(storedGoal) && storedGoal > 0)
     ? convertCurrency(project.fxData, storedGoal, storedGoalCurrency, baseCurrency)
     : undefined;
-  const normalizedConvertedGoal = Number.isFinite(convertedStoredGoal) && convertedStoredGoal > 0
+  const normalizedConvertedGoal = typeof convertedStoredGoal === 'number' && Number.isFinite(convertedStoredGoal) && convertedStoredGoal > 0
     ? convertedStoredGoal
     : undefined;
   const suggestedGoal = Math.max(100000, Math.ceil(currentMaketValue / wealthGoalStep) * wealthGoalStep);

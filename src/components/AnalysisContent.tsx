@@ -177,6 +177,44 @@ const RiskMetricModal = ({
   );
 };
 
+const sliceHistoryByRange = (
+  history: HistoryPoint[],
+  range: '1M' | '6M' | 'YTD' | '1J' | '3J' | '5J' | 'MAX'
+) => {
+  if (!history.length || range === 'MAX') return history;
+
+  const endDate = parseDateOnlyUTC(history[history.length - 1].date);
+  let startDate = new Date(endDate);
+
+  switch (range) {
+    case '1M':
+      startDate.setUTCMonth(startDate.getUTCMonth() - 1);
+      break;
+    case '6M':
+      startDate.setUTCMonth(startDate.getUTCMonth() - 6);
+      break;
+    case 'YTD':
+      startDate = new Date(Date.UTC(endDate.getUTCFullYear(), 0, 1));
+      break;
+    case '1J':
+      startDate.setUTCFullYear(startDate.getUTCFullYear() - 1);
+      break;
+    case '3J':
+      startDate.setUTCFullYear(startDate.getUTCFullYear() - 3);
+      break;
+    case '5J':
+      startDate.setUTCFullYear(startDate.getUTCFullYear() - 5);
+      break;
+    default:
+      return history;
+  }
+
+  const startMs = startDate.getTime();
+  const startIndex = history.findIndex((point) => parseDateOnlyUTC(point.date).getTime() >= startMs);
+  if (startIndex <= 0) return history;
+  return history.slice(startIndex);
+};
+
 
 export const AnalysisContent = ({
   selectedPortfolioIds,
@@ -534,7 +572,16 @@ export const AnalysisContent = ({
 
   // Get monthly returns for selected year
   const displayedMonthlyReturns = useMemo(() => {
-    if (!Object.keys(monthlyReturnsMap).length) return analysisMetrics.monthlyReturns || [];
+    if (!Object.keys(monthlyReturnsMap).length) {
+      return (analysisMetrics.monthlyReturns || []).map((entry) => {
+        const hasData = Number.isFinite(entry.return);
+        return {
+          month: entry.month,
+          return: hasData ? entry.return : null,
+          hasData
+        };
+      });
+    }
 
     const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
     const result: { month: string; return: number | null; hasData: boolean }[] = [];
@@ -670,28 +717,9 @@ export const AnalysisContent = ({
     });
   };
 
-  const performanceHistoryData = useMemo(() => {
-    if (!project) return [];
-    if (performanceRange === 'MAX') return historyData;
-
-    const raw = calculatePortfolioHistory(
-      filteredTransactions,
-      Object.values(project.securities || {}),
-      project.fxData.rates,
-      filteredCashAccounts,
-      project.settings.baseCurrency,
-      performanceRange,
-      'daily'
-    );
-
-    return normalizeInvestedForExplicitCash(
-      raw,
-      filteredTransactions,
-      filteredCashAccounts,
-      project.fxData,
-      baseCurrency
-    );
-  }, [project, filteredTransactions, filteredCashAccounts, baseCurrency, performanceRange, historyData]);
+  const performanceHistoryData = useMemo(() => (
+    sliceHistoryByRange(historyData, performanceRange)
+  ), [historyData, performanceRange]);
 
   const performanceRangeDates = useMemo(() => {
     if (!performanceHistoryData.length) return { start: '', end: '' };
