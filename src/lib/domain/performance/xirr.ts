@@ -1,5 +1,7 @@
 // Money-weighted return (internal rate of return for irregular dates), annualized.
 
+import { isNear } from '../math';
+
 export type CashFlow = { date: string; amount: number }; // investor view: deposit < 0, payout > 0
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -23,7 +25,7 @@ export const xirr = (flows: CashFlow[]): number | null => {
         if (!Number.isFinite(value) || !Number.isFinite(slope) || slope === 0) break;
         const next = rate - value / slope;
         if (!Number.isFinite(next) || next <= -0.9999) break;
-        if (Math.abs(next - rate) < 1e-10) return next;
+        if (isNear(next, rate, 1e-10)) return next;
         rate = next;
     }
 
@@ -35,7 +37,7 @@ export const xirr = (flows: CashFlow[]): number | null => {
     for (let i = 0; i < 200; i += 1) {
         const mid = (low + high) / 2;
         const fMid = npv(mid);
-        if (Math.abs(fMid) < 1e-9 || high - low < 1e-10) return mid;
+        if (isNear(fMid, 0, 1e-9) || high - low < 1e-10) return mid;
         if (fLow * fMid < 0) {
             high = mid;
         } else {
@@ -64,7 +66,7 @@ export const annualizedReturnFromHistory = (
     const flows: CashFlow[] = [{ date: first.date, amount: -first.invested }];
     for (let i = 1; i < history.length; i += 1) {
         const delta = history[i].invested - history[i - 1].invested;
-        if (Math.abs(delta) > 1e-9) flows.push({ date: history[i].date, amount: -delta });
+        if (!isNear(delta, 0, 1e-9)) flows.push({ date: history[i].date, amount: -delta });
     }
     flows.push({ date: last.date, amount: last.value });
     return xirr(flows);

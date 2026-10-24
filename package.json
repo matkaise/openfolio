@@ -34,6 +34,7 @@
     "@types/sql.js": "^1.4.9",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "fast-check": "3.23.2",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"
