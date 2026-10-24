@@ -82,34 +82,5 @@ export const CurrencyService = {
             console.error('[CurrencyService] Sync failed:', error);
             throw error;
         }
-    },
-
-    /**
-     * Helper to get rate for a specific date. 
-     * If exact date missing, falls back to previous available date (simple).
-     */
-    getRate: (fxData: FxData, currency: string, date: string): number => {
-        if (currency === 'EUR' || currency === fxData.baseCurrency) return 1;
-
-        const history = fxData.rates[currency];
-        if (!history) return 0; // or 1? Warning?
-
-        // 1. Exact match
-        if (history[date]) return history[date];
-
-        // 2. Fallback: Find closest previous date
-        // Naive approach: sort keys and find. Performance hit if called often.
-        // Optimization: Cache sorted keys?
-        const dates = Object.keys(history).sort(); // Ascending 
-
-        // Binary search or reverse iteration
-        for (let i = dates.length - 1; i >= 0; i--) {
-            if (dates[i] <= date) {
-                return history[dates[i]];
-            }
-        }
-
-        // 3. If date is before first record? Return first record? 
-        return history[dates[0]] || 1;
     }
 };

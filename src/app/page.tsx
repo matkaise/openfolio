@@ -30,6 +30,7 @@ import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { TransactionModal } from '@/components/TransactionModal';
 import { SecurityDetailModal } from '@/components/SecurityDetailModal';
 import { repairProjectSecurities } from '@/lib/marketDataService';
+import { findMissingFxCurrencies } from '@/lib/domain/fx/rates';
 import { normalizeWealthGoalSettings } from '@/lib/wealthGoalUtils';
 import { type AnalysisCache } from '@/types/portfolioView';
 import { SidebarItem } from '@/components/ui/SidebarItem';
@@ -352,6 +353,12 @@ export default function PortfolioApp() {
     if (value && value in MATERIAL_THEMES) return value as keyof typeof MATERIAL_THEMES;
     return 'baseline';
   }, []);
+
+  // Only meaningful once FX data is loaded (lazy hydration or the first sync may still be running).
+  const missingFxCurrencies = useMemo(() => {
+    if (!project || isHydratingProject || Object.keys(project.fxData?.rates || {}).length === 0) return [];
+    return findMissingFxCurrencies(project);
+  }, [project, isHydratingProject]);
 
   const activeThemeId = resolveThemeId(project?.settings?.themeId);
   const isDarkMode = Boolean(project?.settings?.isDarkMode);
@@ -916,6 +923,15 @@ export default function PortfolioApp() {
 
               </div>
             </div>
+            {missingFxCurrencies.length > 0 && (
+              <div className="md3-warning-soft mt-3 flex items-start gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
+                <ShieldAlert size={18} className="mt-0.5 shrink-0" />
+                <span>
+                  Kurs fehlt: Für {missingFxCurrencies.join(', ')} gibt es keinen Wechselkurs.
+                  Beträge in {missingFxCurrencies.length === 1 ? 'dieser Währung' : 'diesen Währungen'} sind in den Summen nicht enthalten.
+                </span>
+              </div>
+            )}
             {encryptionStatus === 'legacy-unencrypted' && (
               <div className="md3-warning-soft mt-3 flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
                 <ShieldAlert size={18} className="shrink-0" />
