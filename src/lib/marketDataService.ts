@@ -110,6 +110,32 @@ const hasMissingDividendData = (sec: Security): boolean => {
     return hasDividendSignal && emptyDividendHistory;
 };
 
+const HOURS = 1000 * 60 * 60;
+// How long to wait before syncing a security again, and before retrying an unknown symbol.
+const RESYNC_AFTER_HOURS = 24;
+const RETRY_UNRESOLVED_AFTER_HOURS = 24;
+
+/**
+ * Whether a security should be fetched now. The single source for the sync itself, the
+ * startup check and the data sources page. Unknown symbols are retried once a day only;
+ * otherwise every app start would re-run the sync (and mark the project as changed).
+ */
+export const securityNeedsSync = (sec: Security, now: Date, options?: { force?: boolean }): boolean => {
+    if (sec.ignoreMarketData || sec.symbolStatus === 'ignored') return false;
+    if (!(sec.symbol || sec.isin)) return false;
+    if (options?.force) return true;
+
+    if (sec.symbolStatus === 'unresolved') {
+        const lastTried = sec.symbolLastTried ? Date.parse(sec.symbolLastTried) : NaN;
+        return !Number.isFinite(lastTried) || (now.getTime() - lastTried) / HOURS >= RETRY_UNRESOLVED_AFTER_HOURS;
+    }
+
+    if (!sec.lastSync) return true;
+    const hoursSinceSync = (now.getTime() - new Date(sec.lastSync).getTime()) / HOURS;
+    const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
+    return hoursSinceSync > RESYNC_AFTER_HOURS || missingHistory || hasMissingDividendData(sec);
+};
+
 export const buildManualPriceHistory = (transactions: Transaction[], isin: string): Record<string, number> => {
     const history: Record<string, number> = {};
     transactions
@@ -248,15 +274,7 @@ export const syncSecurityPatches = async (
 
     const shouldSyncIsins = Object.keys(securities).filter((isin) => {
         const sec = securities[isin];
-        if (!sec) return false;
-        if (sec.ignoreMarketData || sec.symbolStatus === 'ignored') return false;
-        const symbol = sec.symbol || sec.isin;
-        if (!symbol) return false;
-        if (!sec.lastSync) return true;
-        const diffHours = (now.getTime() - new Date(sec.lastSync).getTime()) / (1000 * 60 * 60);
-        const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
-        const missingDividends = hasMissingDividendData(sec);
-        return force || diffHours > 24 || missingHistory || missingDividends;
+        return Boolean(sec) && securityNeedsSync(sec, now, { force });
     });
 
     const effectiveMaxPerRun = Number.isFinite(maxPerRun) && maxPerRun > 0 ? maxPerRun : Number.POSITIVE_INFINITY;
@@ -302,23 +320,17 @@ export const syncSecurityPatches = async (
             return;
         }
 
-        const lastSync = sec.lastSync ? new Date(sec.lastSync) : new Date(0);
-        const diffHours = (now.getTime() - lastSync.getTime()) / (1000 * 60 * 60);
-        const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
-        const missingDividends = hasMissingDividendData(sec);
-
-        const shouldSync = force || diffHours > 24 || missingHistory || missingDividends;
-        if (!shouldSync) {
+        if (!securityNeedsSync(sec, now, { force })) {
             processedCount += 1;
             onProgress?.({ current: processedCount, total: targetIsins.length, symbol: fallbackSymbol, stage: 'skip' });
             return;
         }
 
         let symbolToFetch = sec.symbol || sec.isin;
+        // securityNeedsSync already limits retries of unknown symbols to once a day
         const shouldResolve = !sec.symbol || sec.symbol === sec.isin || sec.symbolStatus === 'unresolved';
-        const canRetryResolve = force || sec.symbolStatus !== 'unresolved';
 
-        if (shouldResolve && canRetryResolve) {
+        if (shouldResolve) {
             onProgress?.({ current: processedCount, total: targetIsins.length, symbol: symbolToFetch || fallbackSymbol, stage: 'resolve' });
             const resolveResult = await resolveSecuritySymbol(symbolToFetch || '', sec.currency, sec.isin, sec.name);
             if (resolveResult?.status === 'resolved' && resolveResult.symbol) {

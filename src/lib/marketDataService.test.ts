@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applySecurityPatches, buildManualPriceHistory, mergeDividendHistory, removeLegacySplitTransactions, syncProjectQuotes, syncSecurityPatches } from '@/lib/marketDataService';
+import { applySecurityPatches, buildManualPriceHistory, mergeDividendHistory, removeLegacySplitTransactions, securityNeedsSync, syncProjectQuotes, syncSecurityPatches } from '@/lib/marketDataService';
 import { createEmptyProject, type ProjectData, type Transaction } from '@/types/domain';
 
 const originalFetch = globalThis.fetch;
@@ -383,5 +383,40 @@ describe('legacy split cleanup', () => {
       { id: '2', date: '2024-01-01', type: 'Buy', isin: 'X', shares: 1, amount: -1, currency: 'USD', broker: 'Manual' }
     ];
     expect(removeLegacySplitTransactions(project).transactions.map((t) => t.id)).toEqual(['2']);
+  });
+});
+
+describe('securityNeedsSync (B18)', () => {
+  const now = new Date('2026-10-24T12:00:00Z');
+  const hoursAgo = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
+  const base = { isin: 'XX0000000001', name: 'X', currency: 'USD' };
+
+  it('does not retry an unresolvable symbol within 24 hours', () => {
+    expect(securityNeedsSync({ ...base, symbolStatus: 'unresolved', symbolLastTried: hoursAgo(1) }, now)).toBe(false);
+  });
+
+  it('retries an unresolvable symbol after 24 hours', () => {
+    expect(securityNeedsSync({ ...base, symbolStatus: 'unresolved', symbolLastTried: hoursAgo(25) }, now)).toBe(true);
+  });
+
+  it('syncs resolved securities without history or older than a day', () => {
+    expect(securityNeedsSync({ ...base, symbol: 'X', symbolStatus: 'resolved' }, now)).toBe(true);
+    expect(securityNeedsSync({
+      ...base, symbol: 'X', symbolStatus: 'resolved', priceHistory: { '2026-10-23': 1 },
+      dividendHistory: [], upcomingDividends: [], dividendHistorySynced: true, lastSync: hoursAgo(2)
+    }, now)).toBe(false);
+    expect(securityNeedsSync({
+      ...base, symbol: 'X', symbolStatus: 'resolved', priceHistory: { '2026-10-23': 1 },
+      dividendHistory: [], upcomingDividends: [], dividendHistorySynced: true, lastSync: hoursAgo(30)
+    }, now)).toBe(true);
+  });
+
+  it('never syncs ignored securities', () => {
+    expect(securityNeedsSync({ ...base, symbolStatus: 'ignored' }, now)).toBe(false);
+    expect(securityNeedsSync({ ...base, ignoreMarketData: true }, now)).toBe(false);
+  });
+
+  it('lets a forced sync retry anything that is not ignored', () => {
+    expect(securityNeedsSync({ ...base, symbolStatus: 'unresolved', symbolLastTried: hoursAgo(1) }, now, { force: true })).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { ProjectData, createEmptyProject } from '@/types/domain';
 import { CurrencyService } from '@/lib/currencyService';
 import {
@@ -10,6 +10,7 @@ import {
     type MarketSyncProgress
 } from '@/lib/marketDataService';
 import { createRevisionTracker } from '@/lib/state/revisionTracker';
+import { createBeforeUnloadHandler } from '@/lib/state/unloadGuard';
 import {
     isSqliteFileName,
     openProjectFile,
@@ -107,6 +108,15 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const encryptionKeyRef = useRef<ProjectEncryptionKey | null>(null);
     // Counts changes so a save that overlaps an edit does not mark the project as saved.
     const revisionsRef = useRef(createRevisionTracker());
+
+    // Ask before closing the tab with unsaved changes. No autosave draft in browser storage:
+    // it would keep a plain-text copy of encrypted projects.
+    useEffect(() => {
+        if (!isModified) return;
+        const handler = createBeforeUnloadHandler(() => true);
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [isModified]);
 
     const markChanged = useCallback(() => {
         revisionsRef.current.bump();

@@ -29,7 +29,7 @@ import { ImportContent } from '@/components/ImportContent';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { TransactionModal } from '@/components/TransactionModal';
 import { SecurityDetailModal } from '@/components/SecurityDetailModal';
-import { repairProjectSecurities } from '@/lib/marketDataService';
+import { repairProjectSecurities, securityNeedsSync } from '@/lib/marketDataService';
 import { findMissingFxCurrencies } from '@/lib/domain/fx/rates';
 import { normalizeWealthGoalSettings } from '@/lib/wealthGoalUtils';
 import { type AnalysisCache } from '@/types/portfolioView';
@@ -418,26 +418,14 @@ export default function PortfolioApp() {
   useEffect(() => {
     if (!isLoaded || !project || isMarketSyncing || isHydratingProject) return;
 
-    const repaired = repairProjectSecurities(project);
-    const needsRepairUpdate = repaired !== project;
-
-    const now = new Date();
-    const needsSync = Object.values(repaired.securities || {}).some((sec) => {
-      if (sec.ignoreMarketData || sec.symbolStatus === 'ignored') return false;
-      const symbol = sec.symbol || sec.isin;
-      if (!symbol) return false;
-      if (!sec.lastSync) return true;
-      const diffHours = (now.getTime() - new Date(sec.lastSync).getTime()) / (1000 * 60 * 60);
-      const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
-      const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
-      return diffHours > 24 || missingHistory || missingDividends;
-    });
-
-    if (needsRepairUpdate) {
-      updateProject(() => repaired);
+    if (repairProjectSecurities(project) !== project) {
+      // Apply to the latest state, not to this render's snapshot
+      updateProject((prev) => repairProjectSecurities(prev));
       return;
     }
 
+    const now = new Date();
+    const needsSync = Object.values(project.securities || {}).some((sec) => securityNeedsSync(sec, now));
     if (!needsSync) {
       return;
     }
