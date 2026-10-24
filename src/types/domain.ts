@@ -83,10 +83,10 @@ export interface FxData {
     lastUpdated: string; // ISO Date of last sync
 }
 
-/** A source the app reads automatically: a folder with DEGIRO exports or an IBKR Flex query. */
+/** A source the app reads automatically: DEGIRO export folder, IBKR Flex query or Trading 212 API. */
 export interface BrokerConnection {
     id: string;
-    kind: 'degiro-folder' | 'ibkr-flex';
+    kind: 'degiro-folder' | 'ibkr-flex' | 'trading212';
     label: string; // e.g. the folder name
     portfolioId: string; // where imports go
     createdAt: string;
@@ -96,6 +96,9 @@ export interface BrokerConnection {
     lastResult?: { added: number; duplicates: number; files: string[] };
     queryId?: string; // IBKR Flex query id
     token?: string; // IBKR Flex token; only stored in encrypted project files
+    environment?: 'live' | 'demo'; // Trading 212
+    apiKey?: string; // Trading 212; only stored in encrypted project files
+    apiSecret?: string; // Trading 212; only stored in encrypted project files
 }
 
 export interface ProjectSettings {

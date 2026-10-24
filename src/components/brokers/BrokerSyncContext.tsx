@@ -22,6 +22,7 @@ import {
 } from '@/lib/brokers/handleStore';
 import { reconcilePositions } from '@/lib/brokers/reconcile';
 import { parseIbkrFlexXml } from '@/lib/importers/ibkrFlex';
+import { parseTrading212Data, type Trading212Data } from '@/lib/importers/trading212';
 import { applyImportBatch, type ImportBatch, type ImportSummary } from '@/lib/importers/importBatch';
 import type { BrokerConnection, ProjectData } from '@/types/domain';
 
@@ -45,14 +46,25 @@ export type PendingImport = {
 
 type PortfolioTarget = { portfolioId: string; portfolioName: string; isNew: boolean };
 
+/** Credentials of API connections: IBKR uses `token`, Trading 212 `apiKey` + `apiSecret`. */
+export type ConnectionSecrets = { token?: string; apiKey?: string; apiSecret?: string };
+
+const hasSecrets = (connection: BrokerConnection, secrets: ConnectionSecrets) => (
+    connection.kind === 'trading212' ? Boolean(secrets.apiKey && secrets.apiSecret) : Boolean(secrets.token)
+);
+
 interface BrokerSyncContextType {
     /** Folder access (DEGIRO watcher) is available in this browser. */
     supported: boolean;
     statuses: Record<string, ConnectionStatus>;
     connectDegiroFolder: (target: PortfolioTarget) => Promise<void>;
     connectIbkrFlex: (target: PortfolioTarget, credentials: { token: string; queryId: string; remember: boolean }) => void;
-    /** Token for this session (or stored, in encrypted projects) when it was not saved. */
-    provideToken: (connection: BrokerConnection, token: string, remember: boolean) => void;
+    connectTrading212: (
+        target: PortfolioTarget,
+        credentials: { apiKey: string; apiSecret: string; environment: 'live' | 'demo'; remember: boolean }
+    ) => void;
+    /** Credentials for this session (or stored, in encrypted projects) when they were not saved. */
+    provideSecrets: (connection: BrokerConnection, secrets: ConnectionSecrets, remember: boolean) => void;
     canStoreTokens: boolean;
     checkConnection: (connection: BrokerConnection) => Promise<void>;
     removeConnection: (connection: BrokerConnection) => Promise<void>;
@@ -82,6 +94,24 @@ const addPortfolioIfNew = (project: ProjectData, target: PortfolioTarget): Proje
         : project
 );
 
+const fetchTrading212 = async (secrets: ConnectionSecrets, environment: 'live' | 'demo', since?: string): Promise<Trading212Data> => {
+    const res = await fetch('/api/brokers/trading212', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: secrets.apiKey, apiSecret: secrets.apiSecret, environment, since })
+    });
+    const data = await res.json().catch(() => ({})) as { data?: Trading212Data; error?: string };
+    if (!res.ok || !data.data) throw new Error(data.error || `Abruf fehlgeschlagen (HTTP ${res.status}).`);
+    return data.data;
+};
+
+/** Re-read a week before the last check, so late bookings are not missed (duplicates are skipped). */
+const sinceDate = (lastCheckedAt?: string) => {
+    if (!lastCheckedAt) return undefined;
+    const date = new Date(Date.parse(lastCheckedAt) - 7 * 24 * 3600_000);
+    return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : undefined;
+};
+
 const fetchIbkrStatement = async (token: string, queryId: string): Promise<string> => {
     const res = await fetch('/api/brokers/ibkr-flex', {
         method: 'POST',
@@ -101,8 +131,16 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
     const [supported] = useState(() => supportsFolderAccess());
     const autoCheckedProjectRef = useRef<string | null>(null);
     const projectRef = useRef(project);
-    // IBKR tokens that may not be written to the file (project not encrypted). Memory only.
-    const sessionTokensRef = useRef<Record<string, string>>({});
+    // API credentials that may not be written to the file (project not encrypted). Memory only.
+    const sessionSecretsRef = useRef<Record<string, ConnectionSecrets>>({});
+    const secretsOf = useCallback((connection: BrokerConnection): ConnectionSecrets => {
+        const session = sessionSecretsRef.current[connection.id] || {};
+        return {
+            token: connection.token || session.token,
+            apiKey: connection.apiKey || session.apiKey,
+            apiSecret: connection.apiSecret || session.apiSecret
+        };
+    }, []);
     const canStoreTokens = encryptionStatus === 'encrypted';
 
     useEffect(() => {
@@ -156,8 +194,19 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         if (!current) return;
         setStatus(connection.id, { state: 'checking' });
         try {
+            if (connection.kind === 'trading212') {
+                const secrets = secretsOf(connection);
+                if (!hasSecrets(connection, secrets)) {
+                    setStatus(connection.id, { state: 'needs-token' });
+                    return;
+                }
+                const parsed = parseTrading212Data(await fetchTrading212(secrets, connection.environment || 'live', sinceDate(connection.lastCheckedAt)));
+                handleBatch(projectRef.current || current, connection, parsed.batch, { files: ['Trading 212 API'], newestModified: 0 }, parsed.positions);
+                return;
+            }
+
             if (connection.kind === 'ibkr-flex') {
-                const token = connection.token || sessionTokensRef.current[connection.id];
+                const { token } = secretsOf(connection);
                 if (!token || !connection.queryId) {
                     setStatus(connection.id, { state: 'needs-token' });
                     return;
@@ -184,7 +233,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
             setStatus(connection.id, { state: 'error', message });
         }
-    }, [handleBatch, setStatus]);
+    }, [handleBatch, secretsOf, setStatus]);
 
     // Check every connection once per opened project (after lazy data is loaded)
     useEffect(() => {
@@ -193,7 +242,8 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         autoCheckedProjectRef.current = project.id;
         getBrokerConnections(project).forEach((connection) => {
             if (connection.kind === 'degiro-folder' && !supported) return;
-            if (connection.kind === 'ibkr-flex' && !connection.token) return; // no token without user input
+            // API connections only run on open when their credentials are stored
+            if (connection.kind !== 'degiro-folder' && !hasSecrets(connection, connection)) return;
             void runCheck(connection, false);
         });
     }, [project, isHydratingProject, supported, runCheck]);
@@ -201,7 +251,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         if (!project) {
             autoCheckedProjectRef.current = null;
-            sessionTokensRef.current = {};
+            sessionSecretsRef.current = {};
         }
     }, [project]);
 
@@ -250,27 +300,48 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             queryId: credentials.queryId.trim(),
             ...(store ? { token: credentials.token.trim() } : {})
         };
-        if (!store) sessionTokensRef.current[connection.id] = credentials.token.trim();
+        if (!store) sessionSecretsRef.current[connection.id] = { token: credentials.token.trim() };
         updateProject((prev) => addBrokerConnection(addPortfolioIfNew(prev, target), connection));
         setTimeout(() => void runCheck(connection, true), 0);
     }, [canStoreTokens, runCheck, updateProject]);
 
-    const provideToken = useCallback((connection: BrokerConnection, token: string, remember: boolean) => {
-        const trimmed = token.trim();
-        if (!trimmed) return;
+    const connectTrading212 = useCallback((
+        target: PortfolioTarget,
+        credentials: { apiKey: string; apiSecret: string; environment: 'live' | 'demo'; remember: boolean }
+    ) => {
+        const store = credentials.remember && canStoreTokens;
+        const secrets = { apiKey: credentials.apiKey.trim(), apiSecret: credentials.apiSecret.trim() };
+        const connection: BrokerConnection = {
+            id: crypto.randomUUID(),
+            kind: 'trading212',
+            label: credentials.environment === 'demo' ? 'Trading 212 (Demo)' : 'Trading 212',
+            portfolioId: target.portfolioId,
+            createdAt: new Date().toISOString(),
+            environment: credentials.environment,
+            ...(store ? secrets : {})
+        };
+        if (!store) sessionSecretsRef.current[connection.id] = secrets;
+        updateProject((prev) => addBrokerConnection(addPortfolioIfNew(prev, target), connection));
+        setTimeout(() => void runCheck(connection, true), 0);
+    }, [canStoreTokens, runCheck, updateProject]);
+
+    const provideSecrets = useCallback((connection: BrokerConnection, secrets: ConnectionSecrets, remember: boolean) => {
+        const cleaned: ConnectionSecrets = Object.fromEntries(
+            Object.entries(secrets).map(([key, value]) => [key, (value || '').trim()]).filter(([, value]) => value)
+        );
+        if (!hasSecrets(connection, cleaned)) return;
         if (remember && canStoreTokens) {
-            const updated = { ...connection, token: trimmed };
-            updateProject((prev) => updateBrokerConnection(prev, connection.id, { token: trimmed }));
-            void runCheck(updated, true);
+            updateProject((prev) => updateBrokerConnection(prev, connection.id, cleaned));
+            void runCheck({ ...connection, ...cleaned }, true);
         } else {
-            sessionTokensRef.current[connection.id] = trimmed;
+            sessionSecretsRef.current[connection.id] = cleaned;
             void runCheck(connection, true);
         }
     }, [canStoreTokens, runCheck, updateProject]);
 
     const removeConnection = useCallback(async (connection: BrokerConnection) => {
         if (connection.kind === 'degiro-folder') await deleteFolderHandle(connection.id);
-        delete sessionTokensRef.current[connection.id];
+        delete sessionSecretsRef.current[connection.id];
         updateProject((prev) => removeBrokerConnection(prev, connection.id));
         setStatuses((prev) => {
             const next = { ...prev };
@@ -289,7 +360,8 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             canStoreTokens,
             connectDegiroFolder,
             connectIbkrFlex,
-            provideToken,
+            connectTrading212,
+            provideSecrets,
             checkConnection,
             removeConnection,
             confirmPending,
