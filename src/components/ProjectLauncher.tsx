@@ -243,7 +243,8 @@ export const ProjectLauncher = () => {
                     <Lock size={14} />
                   </span>
                   <div>
-                    <div className="text-sm font-semibold md3-text-main">Passwortschutz</div>
+                    <div className="text-sm font-semibold md3-text-main">Verschlüsselung</div>
+                    <div className="text-xs md3-text-muted">AES-256. Ohne Passwort lässt sich die Datei nicht wiederherstellen.</div>
                   </div>
                 </div>
                 <div className="mt-3 space-y-2">
@@ -287,7 +288,7 @@ export const ProjectLauncher = () => {
                 <p className="text-xs md3-text-muted">
                   {passwordPromptReason === 'invalid'
                     ? 'Falsches Passwort. Bitte erneut versuchen.'
-                    : 'Dieses Projekt ist passwortgeschuetzt.'}
+                    : 'Dieses Projekt braucht ein Passwort.'}
                 </p>
               </div>
               <button

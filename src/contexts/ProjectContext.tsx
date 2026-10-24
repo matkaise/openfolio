@@ -5,13 +5,13 @@ import { ProjectData, createEmptyProject } from '@/types/domain';
 import { CurrencyService } from '@/lib/currencyService';
 import { syncProjectQuotes, type MarketSyncProgress } from '@/lib/marketDataService';
 import {
-    createPasswordConfig,
     isSqliteFileName,
     openProjectFile,
     serializeProjectForFile,
-    type ProjectPasswordConfig,
+    type ProjectEncryptionStatus,
     type SqliteProjectSession
 } from '@/lib/projectPersistence';
+import { createProjectKey, type ProjectEncryptionKey } from '@/lib/projectCrypto';
 
 const ensurePortfoliosFromData = (project: ProjectData): ProjectData => {
     if ((project.portfolios || []).length > 0) {
@@ -52,6 +52,8 @@ interface ProjectContextType {
     fileName: string | null;
     marketSyncProgress: MarketSyncProgress | null;
     isHydratingProject: boolean;
+    /** 'legacy-unencrypted' means the file on disk is still plain text until the next save. */
+    encryptionStatus: ProjectEncryptionStatus;
 
     // Actions
     newProject: (options?: { name?: string; password?: string }) => Promise<void>;
@@ -92,9 +94,11 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [isMarketSyncing, setIsMarketSyncing] = useState(false);
     const [marketSyncProgress, setMarketSyncProgress] = useState<MarketSyncProgress | null>(null);
     const [isHydratingProject, setIsHydratingProject] = useState(false);
+    const [encryptionStatus, setEncryptionStatus] = useState<ProjectEncryptionStatus>('none');
 
     const sqliteSessionRef = useRef<SqliteProjectSession | null>(null);
-    const projectPasswordConfigRef = useRef<ProjectPasswordConfig | null>(null);
+    // Derived AES key (non-extractable). The password itself is never kept.
+    const encryptionKeyRef = useRef<ProjectEncryptionKey | null>(null);
 
     const setSqliteSession = useCallback((nextSession: SqliteProjectSession | null) => {
         if (sqliteSessionRef.current === nextSession) return;
@@ -104,13 +108,13 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         sqliteSessionRef.current = nextSession;
     }, []);
 
-    const setProjectPasswordConfig = useCallback((nextConfig: ProjectPasswordConfig | null) => {
-        projectPasswordConfigRef.current = nextConfig;
+    const setEncryptionKey = useCallback((nextKey: ProjectEncryptionKey | null) => {
+        encryptionKeyRef.current = nextKey;
     }, []);
 
     const writeToHandle = useCallback(async (handle: FileSystemFileHandle, data: ProjectData) => {
-        if (projectPasswordConfigRef.current && !isSqliteFileName(handle.name)) {
-            throw new Error('Passwortgeschuetzte Projekte koennen nur als .openfolio/.sqlite gespeichert werden.');
+        if (encryptionKeyRef.current && !isSqliteFileName(handle.name)) {
+            throw new Error('Verschluesselte Projekte koennen nur als .openfolio/.sqlite gespeichert werden.');
         }
 
         const writable = await handle.createWritable();
@@ -118,11 +122,10 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             handle.name,
             data,
             sqliteSessionRef.current,
-            projectPasswordConfigRef.current
+            encryptionKeyRef.current
         );
 
         setSqliteSession(serialized.sqliteSession);
-        setProjectPasswordConfig(serialized.passwordConfig);
 
         if (typeof serialized.data === 'string') {
             await writable.write(serialized.data);
@@ -133,7 +136,8 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         }
 
         await writable.close();
-    }, [setProjectPasswordConfig, setSqliteSession]);
+        setEncryptionStatus(encryptionKeyRef.current ? 'encrypted' : 'none');
+    }, [setSqliteSession]);
 
     // Helper to perform sync on a given project data state
     const performSync = useCallback(async (currentProject: ProjectData) => {
@@ -198,15 +202,11 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         setSqliteSession(null);
 
         const password = options?.password?.trim();
-        if (password) {
-            const passwordConfig = await createPasswordConfig(password);
-            setProjectPasswordConfig(passwordConfig);
-        } else {
-            setProjectPasswordConfig(null);
-        }
+        setEncryptionKey(password ? await createProjectKey(password) : null);
+        setEncryptionStatus(password ? 'encrypted' : 'none');
 
         void performSync(created);
-    }, [performSync, setProjectPasswordConfig, setSqliteSession]);
+    }, [performSync, setEncryptionKey, setSqliteSession]);
 
     const openProject = useCallback(async (options?: {
         requestPassword?: (reason: 'required' | 'invalid') => Promise<string | null>;
@@ -242,7 +242,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                             : window.prompt(
                                 reason === 'invalid'
                                     ? 'Falsches Passwort. Bitte erneut eingeben:'
-                                    : 'Dieses Portfolio ist passwortgeschuetzt. Passwort eingeben:'
+                                    : 'Dieses Projekt braucht ein Passwort. Passwort eingeben:'
                             );
                         if (next === null) {
                             return;
@@ -262,11 +262,13 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
 
             setSqliteSession(opened.sqliteSession);
-            setProjectPasswordConfig(opened.passwordConfig);
+            setEncryptionKey(opened.encryptionKey);
+            setEncryptionStatus(opened.encryption);
             setProject(data);
             setFileHandle(handle);
             setFileName(file.name);
-            setIsModified(false);
+            // A legacy file is still plain text on disk; flag it so the user saves (= encrypts) it.
+            setIsModified(opened.encryption === 'legacy-unencrypted');
 
             if (opened.hasLazyPayload && opened.sqliteSession) {
                 setIsHydratingProject(true);
@@ -330,7 +332,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             console.error('Failed to open project:', err);
             alert('Fehler beim Oeffnen der Datei: ' + message);
         }
-    }, [performSync, setProjectPasswordConfig, setSqliteSession]);
+    }, [performSync, setEncryptionKey, setSqliteSession]);
 
     const saveProjectAs = useCallback(async () => {
         if (!project) return;
@@ -403,8 +405,9 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         setIsModified(false);
         setIsHydratingProject(false);
         setSqliteSession(null);
-        setProjectPasswordConfig(null);
-    }, [isModified, setProjectPasswordConfig, setSqliteSession]);
+        setEncryptionKey(null);
+        setEncryptionStatus('none');
+    }, [isModified, setEncryptionKey, setSqliteSession]);
 
     const updateProject = useCallback((updater: (prev: ProjectData) => ProjectData) => {
         setProject((prev) => {
@@ -452,6 +455,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             fileName,
             marketSyncProgress,
             isHydratingProject,
+            encryptionStatus,
             newProject,
             openProject,
             saveProject,
