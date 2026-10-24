@@ -225,23 +225,16 @@ export function calculateHoldings(
         return trimmed ? trimmed : undefined;
     };
 
-    const getTradeCurrency = (txs: Transaction[] | undefined): string | undefined => {
-        if (!txs || txs.length === 0) return undefined;
-        for (const tx of txs) {
-            if (!isBuyType(tx.type) && tx.type !== 'Sell') continue;
-            const normalized = normalizeCurrency(tx.currency);
-            if (normalized) return normalized;
-        }
-        return undefined;
-    };
-
+    // One position per ISIN, whatever the trading currency (buying in USD on Nasdaq and
+    // selling in EUR on Xetra is the same position). Cost basis is kept in the base currency;
+    // the display currency is the security's own currency.
     const holdingsMap: Record<string, {
         quantity: number;
-        invested: number; // Total amount spent (in base currency)
-        investedOriginal: number;
+        invested: number; // cost basis in base currency
+        investedInDisplayCurrency: number; // cost basis in the display currency (for avg. price)
         realizedPnL: number;
         isin: string;
-        currency: string;
+        currency: string; // display currency
     }> = {};
 
     // A missing rate converts to 0 instead of silently using 1; the holding is flagged.
@@ -259,7 +252,6 @@ export function calculateHoldings(
     let globalRealizedPnL = 0;
     const sortedTx = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    // Group transactions by ISIN for easier processing
     const txByIsin: Record<string, Transaction[]> = {};
     sortedTx.forEach(tx => {
         if (!tx.isin) return;
@@ -267,92 +259,48 @@ export function calculateHoldings(
         txByIsin[tx.isin].push(tx);
     });
 
-    const buildHoldingKey = (isin: string, currency: string) => `${isin}__${currency}`;
-    const parseHoldingKey = (key: string) => {
-        const idx = key.lastIndexOf('__');
-        if (idx === -1) return { isin: key, currency: baseCurrency };
-        return { isin: key.slice(0, idx), currency: key.slice(idx + 2) };
-    };
-
-    const txByHoldingKey: Record<string, Transaction[]> = {};
-    sortedTx.forEach(tx => {
-        if (!tx.isin) return;
-        const txCurrency = normalizeCurrency(tx.currency) || baseCurrency;
-        const key = buildHoldingKey(tx.isin, txCurrency);
-        if (!txByHoldingKey[key]) txByHoldingKey[key] = [];
-        txByHoldingKey[key].push(tx);
-    });
-
-    const latestTxPriceByKey: Record<string, { price: number; currency: string; date: string }> = {};
-    Object.entries(txByHoldingKey).forEach(([key, txs]) => {
-        txs.forEach(tx => {
-            const shares = Math.abs(tx.shares || 0);
-            if (!shares) return;
-            let price = 0;
-            if (tx.originalData && typeof tx.originalData === 'object') {
-                const maybePrice = (tx.originalData as { pricePerShare?: number }).pricePerShare;
-                if (typeof maybePrice === 'number' && Number.isFinite(maybePrice) && maybePrice > 0) {
-                    price = maybePrice;
-                }
-            }
-            if (!price) {
-                const amount = Math.abs(tx.amount || 0);
-                price = amount / shares;
-            }
-            if (!Number.isFinite(price) || price <= 0) return;
-            latestTxPriceByKey[key] = {
-                price,
-                currency: normalizeCurrency(tx.currency) || baseCurrency,
-                date: tx.date
-            };
-        });
-    });
-
+    const securityByIsin: Record<string, Security> = {};
     const splitsByIsin: Record<string, Record<string, number>> = {};
     securities.forEach(sec => {
+        securityByIsin[sec.isin] = sec;
         if (sec.splits) {
             splitsByIsin[sec.isin] = sec.splits;
         }
     });
-    const securityByIsin: Record<string, Security> = {};
-    securities.forEach(sec => {
-        securityByIsin[sec.isin] = sec;
-    });
     const splitIgnoreDates = buildSplitIgnoreDates(txByIsin, splitsByIsin, securityByIsin);
 
-    // Process each security
-    const allKeys = new Set([...Object.keys(txByHoldingKey), ...Object.keys(holdingsMap)]);
+    const tradePrice = (tx: Transaction): number => {
+        const shares = Math.abs(tx.shares || 0);
+        if (!shares) return 0;
+        const maybePrice = tx.originalData && typeof tx.originalData === 'object'
+            ? (tx.originalData as { pricePerShare?: number }).pricePerShare
+            : undefined;
+        if (typeof maybePrice === 'number' && Number.isFinite(maybePrice) && maybePrice > 0) return maybePrice;
+        const price = Math.abs(tx.amount || 0) / shares;
+        return Number.isFinite(price) && price > 0 ? price : 0;
+    };
 
-    const fxMissingByKey: Record<string, boolean> = {};
+    const fxMissingByIsin: Record<string, boolean> = {};
+    const fallbackPriceByIsin: Record<string, number> = {};
 
-    allKeys.forEach(key => {
+    Object.entries(txByIsin).forEach(([isin, txs]) => {
         missingFxForCurrentHolding = false;
-        const { isin, currency } = parseHoldingKey(key);
-        // Initialize if needed
-        if (!holdingsMap[key]) {
-            const firstTx = txByHoldingKey[key]?.[0];
-            const sec = securities.find(s => s.isin === isin);
-            const tradeCurrency = getTradeCurrency(txByHoldingKey[key]);
-            const fallbackCurrency = normalizeCurrency(firstTx?.currency) || normalizeCurrency(sec?.currency) || baseCurrency;
-            holdingsMap[key] = {
-                quantity: 0,
-                invested: 0,
-                investedOriginal: 0,
-                realizedPnL: 0,
-                isin,
-                currency: tradeCurrency || currency || fallbackCurrency
-            };
-        }
-        const h = holdingsMap[key];
-        const sec = securities.find(s => s.isin === isin);
+        const sec = securityByIsin[isin];
+        const firstTradeCurrency = txs.find(tx => isBuyType(tx.type) || tx.type === 'Sell')?.currency;
+        const displayCurrency = normalizeCurrency(sec?.currency) || normalizeCurrency(firstTradeCurrency) || baseCurrency;
+        const h = {
+            quantity: 0,
+            invested: 0,
+            investedInDisplayCurrency: 0,
+            realizedPnL: 0,
+            isin,
+            currency: displayCurrency
+        };
+        holdingsMap[isin] = h;
 
         // Build Timeline: Transactions + Splits
         const events: { date: string, type: 'Tx' | 'Split', data?: Transaction, ratio?: number }[] = [];
-
-        // Add Transactions
-        if (txByHoldingKey[key]) {
-            txByHoldingKey[key].forEach(tx => events.push({ date: tx.date, type: 'Tx', data: tx }));
-        }
+        txs.forEach(tx => events.push({ date: tx.date, type: 'Tx', data: tx }));
 
         // Add Splits from Security (skip split days already represented in transactions)
         if (sec && sec.splits) {
@@ -379,7 +327,6 @@ export function calculateHoldings(
             return txOrder(a) - txOrder(b);
         });
 
-        // Process Timeline
         for (const event of events) {
             if (event.type === 'Split') {
                 const ratio = event.ratio || 1;
@@ -388,80 +335,57 @@ export function calculateHoldings(
                 }
             } else if (event.type === 'Tx' && event.data) {
                 const tx = event.data;
+                if (!isBuyType(tx.type) && tx.type !== 'Sell') continue;
+
                 const shares = Math.abs(tx.shares || 0);
                 const amountOriginal = Math.abs(tx.amount);
-                const txCurrency = normalizeCurrency(tx.currency) || h.currency || baseCurrency;
+                const txCurrency = normalizeCurrency(tx.currency) || displayCurrency;
                 const amountBase = convert(amountOriginal, txCurrency, baseCurrency, tx.date);
                 const fees = getTradeFeeCost(tx);
                 const feesBase = fees.cost ? convert(fees.cost, fees.currency, baseCurrency, tx.date) : 0;
 
+                const price = tradePrice(tx);
+                if (price) fallbackPriceByIsin[isin] = convert(price, txCurrency, displayCurrency, tx.date);
+
                 if (isBuyType(tx.type)) {
-                    if (h.quantity <= 0.000001) {
-                        h.currency = txCurrency;
-                    }
                     h.quantity += shares;
                     h.invested += amountBase + feesBase;
-                    h.investedOriginal += amountOriginal + (fees.cost ? convert(fees.cost, fees.currency, txCurrency, tx.date) : 0);
-                } else if (tx.type === 'Sell') {
-                    const avgCost = h.quantity > 0 ? h.invested / h.quantity : 0;
-                    const costBasis = shares * avgCost;
+                    h.investedInDisplayCurrency += convert(amountOriginal, txCurrency, displayCurrency, tx.date)
+                        + (fees.cost ? convert(fees.cost, fees.currency, displayCurrency, tx.date) : 0);
+                } else {
+                    const share = h.quantity > 0 ? Math.min(1, shares / h.quantity) : 0;
+                    const costBasis = h.invested * share;
                     const pnl = amountBase - feesBase - costBasis;
                     h.realizedPnL += pnl;
                     globalRealizedPnL += pnl;
                     h.invested -= costBasis;
+                    h.investedInDisplayCurrency -= h.investedInDisplayCurrency * share;
                     h.quantity -= shares;
-                    if (h.quantity < 0.000001) { h.quantity = 0; h.invested = 0; h.investedOriginal = 0; }
+                    if (h.quantity < 0.000001) { h.quantity = 0; h.invested = 0; h.investedInDisplayCurrency = 0; }
                 }
             }
         }
-        fxMissingByKey[key] = missingFxForCurrentHolding;
+        fxMissingByIsin[isin] = missingFxForCurrentHolding;
     });
 
     const result: Holding[] = [];
 
-    for (const key in holdingsMap) {
-        const h = holdingsMap[key];
+    for (const isin in holdingsMap) {
+        const h = holdingsMap[isin];
         if (h.quantity <= 0.000001) continue;
-        missingFxForCurrentHolding = fxMissingByKey[key] || false;
+        missingFxForCurrentHolding = fxMissingByIsin[isin] || false;
 
-        // Resolve Security
-        const sec = securities.find(s => s.isin === h.isin) || { isin: h.isin, name: h.isin, currency: h.currency };
+        const sec = securityByIsin[isin] || { isin, name: isin, currency: h.currency };
 
-        // Current Price in Security Currency (e.g., USD from Yahoo)
-        let currentPriceInSecurityCurrency = quotes ? quotes[h.isin] : 0;
-
-        // Fallback Price if no quote available
-        if (!currentPriceInSecurityCurrency) {
-            const fallback = latestTxPriceByKey[key];
-            const securityCurrency = sec.currency || h.currency;
-            if (fallback) {
-                currentPriceInSecurityCurrency = convert(
-                    fallback.price,
-                    fallback.currency,
-                    securityCurrency,
-                    fallback.date
-                );
-            } else {
-                // Estimate from average buy price in transaction currency
-                const avgPriceInTransactionCurrency = (h.quantity > 0) ? h.investedOriginal / h.quantity : 0;
-                currentPriceInSecurityCurrency = convert(avgPriceInTransactionCurrency, h.currency, securityCurrency);
-            }
+        // Current price in the security currency (= display currency), e.g. USD from Yahoo
+        let currentPrice = quotes ? quotes[isin] : 0;
+        if (!currentPrice) {
+            // No quote: last trade price, else the average buy price
+            currentPrice = fallbackPriceByIsin[isin] || (h.quantity > 0 ? h.investedInDisplayCurrency / h.quantity : 0);
         }
 
-        // Convert current price to transaction currency for display
-        // Security might be in USD, but transaction was in EUR
-        const securityCurrency = sec.currency || h.currency;
-        const currentPriceInTransactionCurrency = convert(
-            currentPriceInSecurityCurrency,
-            securityCurrency,
-            h.currency
-        );
-
-        // Convert Current Value to Base Currency
-        const valueOriginal = h.quantity * currentPriceInSecurityCurrency;
-        const valueBase = convert(valueOriginal, securityCurrency, baseCurrency);
-
-        const invested = h.invested; // Already in Base
+        const valueBase = convert(h.quantity * currentPrice, h.currency, baseCurrency);
+        const invested = h.invested;
         const totalReturn = valueBase - invested;
         const totalReturnPercent = invested > 0 ? (totalReturn / invested) * 100 : 0;
 
@@ -477,12 +401,12 @@ export function calculateHoldings(
             },
             quantity: h.quantity,
             averageBuyPrice: invested / h.quantity, // Base
-            averageBuyPriceInOriginalCurrency: h.investedOriginal / h.quantity, // Transaction currency
-            currentPriceInOriginalCurrency: currentPriceInTransactionCurrency, // Transaction currency
+            averageBuyPriceInOriginalCurrency: h.investedInDisplayCurrency / h.quantity, // Security currency
+            currentPriceInOriginalCurrency: currentPrice, // Security currency
             value: valueBase,
             totalReturn,
             totalReturnPercent,
-            currency: h.currency, // Transaction currency for display
+            currency: h.currency, // Security currency for display
             ...(missingFxForCurrentHolding ? { fxMissing: true } : {})
         });
     }
