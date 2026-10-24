@@ -26,9 +26,11 @@ export const PendingImportDialog = () => {
                     </div>
                     <div className="min-w-0 flex-1">
                         <div id="pending-import-title" className="text-sm font-semibold md3-text-main">
-                            Neue DEGIRO-Exporte in „{pending.connection.label}“
+                            {pending.connection.kind === 'ibkr-flex'
+                                ? `Neue Buchungen von Interactive Brokers (${pending.connection.label})`
+                                : `Neue DEGIRO-Exporte in „${pending.connection.label}“`}
                         </div>
-                        <div className="mt-0.5 text-xs md3-text-muted">{pending.scan.files.join(', ')}</div>
+                        <div className="mt-0.5 text-xs md3-text-muted">{pending.source.files.join(', ')}</div>
                     </div>
                     <button type="button" onClick={() => dismissPending()} className="md3-icon-btn" aria-label="Später">
                         <X size={18} />
@@ -41,6 +43,15 @@ export const PendingImportDialog = () => {
                         {pending.summary.duplicateTransactions + pending.summary.duplicateMovements} bereits vorhanden (werden übersprungen)
                     </li>
                 </ul>
+                {pending.warnings.length > 0 && (
+                    <div className="mt-3 rounded-2xl px-3 py-2 text-xs md3-warning-soft">
+                        <div className="font-semibold">Bestand weicht vom Broker ab:</div>
+                        <ul className="mt-1 space-y-0.5">
+                            {pending.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+                        </ul>
+                        <div className="mt-1">Meist fehlen Buchungen vor dem Abfragezeitraum. Ein Export über einen längeren Zeitraum behebt das.</div>
+                    </div>
+                )}
                 <div className="mt-5 flex justify-end gap-2">
                     <button type="button" onClick={() => dismissPending()} className="md3-text-muted px-3 py-2 text-sm font-semibold">
                         Später
