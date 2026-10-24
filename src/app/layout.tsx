@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist_Mono, Manrope } from "next/font/google";
 import "./globals.css";
 import { ProjectProvider } from '@/contexts/ProjectContext';
+import { BrokerSyncProvider } from '@/components/brokers/BrokerSyncContext';
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -30,7 +31,9 @@ export default function RootLayout({
         className={`${manrope.variable} ${geistMono.variable} antialiased`}
       >
         <ProjectProvider>
-          {children}
+          <BrokerSyncProvider>
+            {children}
+          </BrokerSyncProvider>
         </ProjectProvider>
       </body>
     </html>

@@ -83,6 +83,19 @@ export interface FxData {
     lastUpdated: string; // ISO Date of last sync
 }
 
+/** A source the app reads automatically (currently: a folder with DEGIRO exports). */
+export interface BrokerConnection {
+    id: string;
+    kind: 'degiro-folder';
+    label: string; // e.g. the folder name
+    portfolioId: string; // where imports go
+    createdAt: string;
+    lastCheckedAt?: string;
+    lastImportAt?: string;
+    lastFileModified?: number; // newest export already read (ms)
+    lastResult?: { added: number; duplicates: number; files: string[] };
+}
+
 export interface ProjectSettings {
     baseCurrency: Currency; // Portfolio display currency (e.g. EUR)
     performanceMethod?: 'MWR' | 'TWR';
@@ -93,6 +106,7 @@ export interface ProjectSettings {
     wealthGoals?: Record<Currency, number>; // Legacy: only for migration of old project files
     themeId?: string;
     isDarkMode?: boolean;
+    brokerConnections?: BrokerConnection[]; // folder handles live in IndexedDB, keyed by connection id
 }
 
 export interface Portfolio {
