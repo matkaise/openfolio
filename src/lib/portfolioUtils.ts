@@ -1,4 +1,5 @@
 import { Transaction, Security, CurrencyHistory, CashAccount } from '../types/domain';
+import { getFxTable } from './domain/fx/rates';
 
 export interface Holding {
     security: {
@@ -18,6 +19,7 @@ export interface Holding {
     totalReturn: number; // value - invested
     totalReturnPercent: number;
     currency: string; // Original currency
+    fxMissing?: boolean; // A needed exchange rate is missing; value/return exclude the unconvertible part
 }
 
 const isBuyType = (type: Transaction['type']) => {
@@ -246,54 +248,16 @@ export function calculateHoldings(
         currency: string;
     }> = {};
 
-    // Helper to get rate relative to EUR
-    // FxRates are EUR based. e.g. EURUSD = 1.10
-    const getEurRate = (currency: string, date?: string): number => {
-        if (currency === 'EUR') return 1;
-        const history = fxRates[currency];
-        if (!history) return 1; // Fallback
-
-        if (date) {
-            // Look up historical rate for the specific date
-            // If exact date not found, find the closest earlier date
-            const targetDate = new Date(date).getTime();
-            const availableDates = Object.keys(history).sort();
-
-            // Find the closest date that is <= targetDate
-            let closestDate = availableDates[0];
-            for (const d of availableDates) {
-                const dTime = new Date(d).getTime();
-                if (dTime <= targetDate) {
-                    closestDate = d;
-                } else {
-                    break;
-                }
-            }
-
-            return history[closestDate] || 1;
-        }
-
-        // No date provided, use latest rate
-        const dates = Object.keys(history).sort();
-        const latest = dates[dates.length - 1];
-        return history[latest] || 1;
-    };
-
+    // A missing rate converts to 0 instead of silently using 1; the holding is flagged.
+    const fx = getFxTable(fxRates);
+    let missingFxForCurrentHolding = false;
     const convert = (amount: number, from: string, to: string, date?: string): number => {
-        if (from === to) return amount;
-
-        // 1. Convert From -> EUR
-        // Rate EUR->From = X. So 1 EUR = X From. 1 From = 1/X EUR.
-        // Amount(From) / Rate(EURFrom) = Amount(EUR)
-        const rateFrom = getEurRate(from, date);
-        const amountEur = amount / rateFrom;
-
-        // 2. Convert EUR -> To
-        // Rate EUR->To = Y. 1 EUR = Y To.
-        // Amount(EUR) * Rate(EURTo) = Amount(To)
-        if (to === 'EUR') return amountEur;
-        const rateTo = getEurRate(to, date);
-        return amountEur * rateTo;
+        const converted = fx.convert(amount, from, to, date);
+        if (converted === null) {
+            missingFxForCurrentHolding = true;
+            return 0;
+        }
+        return converted;
     };
 
     let globalRealizedPnL = 0;
@@ -363,7 +327,10 @@ export function calculateHoldings(
     // Process each security
     const allKeys = new Set([...Object.keys(txByHoldingKey), ...Object.keys(holdingsMap)]);
 
+    const fxMissingByKey: Record<string, boolean> = {};
+
     allKeys.forEach(key => {
+        missingFxForCurrentHolding = false;
         const { isin, currency } = parseHoldingKey(key);
         // Initialize if needed
         if (!holdingsMap[key]) {
@@ -451,6 +418,7 @@ export function calculateHoldings(
                 }
             }
         }
+        fxMissingByKey[key] = missingFxForCurrentHolding;
     });
 
     const result: Holding[] = [];
@@ -458,6 +426,7 @@ export function calculateHoldings(
     for (const key in holdingsMap) {
         const h = holdingsMap[key];
         if (h.quantity <= 0.000001) continue;
+        missingFxForCurrentHolding = fxMissingByKey[key] || false;
 
         // Resolve Security
         const sec = securities.find(s => s.isin === h.isin) || { isin: h.isin, name: h.isin, currency: h.currency };
@@ -517,7 +486,8 @@ export function calculateHoldings(
             value: valueBase,
             totalReturn,
             totalReturnPercent,
-            currency: h.currency // Transaction currency for display
+            currency: h.currency, // Transaction currency for display
+            ...(missingFxForCurrentHolding ? { fxMissing: true } : {})
         });
     }
 
@@ -649,7 +619,6 @@ export function calculatePortfolioHistory(
 
     const priceTimelineCache: Record<string, { dates: string[]; times: number[]; idx: number }> = {};
     const txPriceTimelineCache: Record<string, { dates: string[]; times: number[]; prices: number[]; idx: number }> = {};
-    const fxTimelineCache: Record<string, { dates: string[]; times: number[]; idx: number }> = {};
     const cashTimelineCache: Record<string, { dates: string[]; times: number[]; idx: number }> = {};
 
     // Helper function to get price at a specific date
@@ -793,40 +762,12 @@ export function calculatePortfolioHistory(
         return rawPrice * adjustmentFactor;
     };
 
-    // Helper to get FX rate at date (reuse logic from calculateHoldings)
-    const getEurRateAtTime = (currency: string, targetTime?: number): number => {
-        if (currency === 'EUR') return 1;
-        const history = fxRates[currency];
-        if (!history) return 1;
-
-        let timeline = fxTimelineCache[currency];
-        if (!timeline) {
-            const dates = Object.keys(history).sort();
-            const times = dates.map(d => dateKeyToUtcMs(d));
-            timeline = { dates, times, idx: 0 };
-            fxTimelineCache[currency] = timeline;
-        }
-
-        if (timeline.dates.length === 0) return 1;
-
-        if (targetTime !== undefined) {
-            while (timeline.idx + 1 < timeline.times.length && timeline.times[timeline.idx + 1] <= targetTime) {
-                timeline.idx++;
-            }
-            return history[timeline.dates[timeline.idx]] || 1;
-        }
-
-        return history[timeline.dates[timeline.dates.length - 1]] || 1;
-    };
-
-    const convert = (amount: number, from: string, to: string, targetTime?: number): number => {
-        if (from === to) return amount;
-        const rateFrom = getEurRateAtTime(from, targetTime);
-        const amountEur = amount / rateFrom;
-        if (to === 'EUR') return amountEur;
-        const rateTo = getEurRateAtTime(to, targetTime);
-        return amountEur * rateTo;
-    };
+    // Stateless lookups: trade prices are converted at their own (older) dates while the
+    // chart walks forward, so a forward-only cursor would return later rates (B9).
+    const fx = getFxTable(fxRates);
+    const convert = (amount: number, from: string, to: string, targetTime?: number): number => (
+        fx.convert(amount, from, to, targetTime) ?? 0
+    );
 
     const getCashAccountBalanceAtTime = (account: CashAccount, targetTime: number): number => {
         if (!account.balanceHistory) return 0;
