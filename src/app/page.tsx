@@ -20,7 +20,8 @@ import {
   Loader2,
   Sparkles,
   Settings,
-  ShieldAlert
+  ShieldAlert,
+  FolderSync
 } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { ProjectLauncher } from '@/components/ProjectLauncher';
@@ -39,6 +40,8 @@ import { AnalysisContent } from '@/components/AnalysisContent';
 import { DividendenContent } from '@/components/DividendenContent';
 import { TransactionsContent } from '@/components/TransactionsContent';
 import { PortfolioList } from '@/components/PortfolioList';
+import { BrokersContent } from '@/components/brokers/BrokersContent';
+import { PendingImportDialog } from '@/components/brokers/PendingImportDialog';
 
 const NAV_ITEMS = [
   { key: 'Dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -46,7 +49,8 @@ const NAV_ITEMS = [
   { key: 'Analyse', label: 'Analyse', icon: PieChart },
   { key: 'Dividenden', label: 'Dividenden', icon: Calendar },
   { key: 'Transaktionen', label: 'Transaktionen', icon: FileText },
-  { key: 'Datenquellen', label: 'Datenquellen', icon: Database }
+  { key: 'Datenquellen', label: 'Datenquellen', icon: Database },
+  { key: 'Broker', label: 'Broker', icon: FolderSync }
 ] as const;
 
 type NavKey = (typeof NAV_ITEMS)[number]['key'];
@@ -58,6 +62,7 @@ const TAB_PRELOAD_SEQUENCE: TabKey[] = [
   'Dividenden',
   'Transaktionen',
   'Datenquellen',
+  'Broker',
   'Einstellungen',
   'Import'
 ];
@@ -545,6 +550,8 @@ export default function PortfolioApp() {
         return <TransactionsContent selectedPortfolioIds={selectedPortfolioIds} />;
       case 'Datenquellen':
         return <DataSourcesContent />;
+      case 'Broker':
+        return <BrokersContent />;
       case 'Einstellungen':
         return (
           <div className="space-y-6">
@@ -1008,6 +1015,8 @@ export default function PortfolioApp() {
           <Plus size={24} />
         </button>
       </div>
+
+      <PendingImportDialog />
 
       {startupSyncModalVisible && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] p-4">
