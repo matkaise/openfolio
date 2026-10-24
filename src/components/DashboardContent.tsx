@@ -2,7 +2,7 @@
 import { ArrowDownRight, ArrowUpRight, Check, ChevronRight, PenLine, PieChart, Wallet, X } from 'lucide-react';
 import { calculatePortfolioHistory, calculateTWRSeries } from '@/lib/portfolioUtils';
 import { buildMwrSeries, normalizeInvestedForExplicitCash, smoothPerformanceSeries } from '@/lib/performanceUtils';
-import { filterTransactionsByPortfolio, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
+import { selectCalculationTransactions, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency } from '@/lib/fxUtils';
 import { resolveWealthGoalSource } from '@/lib/wealthGoalUtils';
 import { useProject } from '@/contexts/ProjectContext';
@@ -62,7 +62,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
 
   // Filter transactions based on selected Portfolio
   const filteredTransactions = useMemo(() => (
-    filterTransactionsByPortfolio(project, selectedPortfolioIds)
+    selectCalculationTransactions(project, selectedPortfolioIds)
   ), [project, selectedPortfolioIds]);
   const filteredCashAccounts = useMemo(() => (
     filterCashAccountsByPortfolio(project, selectedPortfolioIds)
@@ -159,7 +159,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     ? latestKpiHistoryPoint.value
     : holdings.reduce((sum, h) => sum + h.value, 0);
 
-  const cashFlowTypes = useMemo(() => new Set(['Deposit', 'Withdrawal', 'Dividend', 'Tax', 'Fee']), []);
+  const cashFlowTypes = useMemo(() => new Set(['Deposit', 'Withdrawal', 'Dividend', 'Tax', 'Fee', 'Interest']), []);
 
   const cashBalance = useMemo(() => {
     if (!project) return 0;

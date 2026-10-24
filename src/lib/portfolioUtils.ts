@@ -39,21 +39,17 @@ const getAbsoluteAmount = (amount: number | undefined) => {
     return Math.abs(amount || 0);
 };
 
+// Cash flow types: the amount carries its sign from the source (refunds and reversals included).
+const CASH_FLOW_TYPES = new Set<Transaction['type']>(['Deposit', 'Withdrawal', 'Dividend', 'Tax', 'Fee', 'Interest']);
+
 const getCashDeltaForTransaction = (tx: Transaction, includeTrades: boolean): number => {
-    const amount = getAbsoluteAmount(tx.amount);
-
     // Only explicit cash-related transactions should affect cash balance.
-    if (tx.type === 'Fee' || tx.type === 'Tax' || tx.type === 'Withdrawal') {
-        return -amount;
+    if (CASH_FLOW_TYPES.has(tx.type)) {
+        return tx.amount || 0;
     }
 
-    if (tx.type === 'Dividend' || tx.type === 'Deposit') {
-        return amount;
-    }
-
-    if (includeTrades) {
-        if (isBuyType(tx.type)) return -amount;
-        if (tx.type === 'Sell') return amount;
+    if (includeTrades && (isBuyType(tx.type) || tx.type === 'Sell')) {
+        return tx.amount || 0;
     }
 
     return 0;
@@ -852,7 +848,7 @@ export function calculatePortfolioHistory(
     const cashFlowOrder = (tx: Transaction): number => {
         if (tx.type === 'Deposit' || tx.type === 'Dividend' || tx.type === 'Sell') return 0;
         if (tx.type === 'Buy' || tx.type === 'Sparplan_Buy') return 2;
-        if (tx.type === 'Withdrawal' || tx.type === 'Fee' || tx.type === 'Tax') return 3;
+        if (tx.type === 'Withdrawal' || tx.type === 'Fee' || tx.type === 'Tax' || tx.type === 'Interest') return 3;
         return 1;
     };
     const sortedTransactions = [...transactions].sort((a, b) => {
@@ -861,8 +857,7 @@ export function calculatePortfolioHistory(
         return cashFlowOrder(a) - cashFlowOrder(b);
     });
     const hasExplicitCashBalances = cashAccounts.some(a => !!a.balanceHistory && Object.keys(a.balanceHistory).length > 0);
-    const cashFlowTypes = new Set(['Deposit', 'Withdrawal', 'Dividend', 'Tax', 'Fee']);
-    const hasExplicitCashFlows = transactions.some((tx) => cashFlowTypes.has(tx.type));
+    const hasExplicitCashFlows = transactions.some((tx) => CASH_FLOW_TYPES.has(tx.type));
     const hasCashFundingTransactions = transactions.some((tx) => tx.type === 'Deposit' || tx.type === 'Withdrawal');
     const useImplicitFunding = false;
     const useTradeFlowsForInvested = !hasExplicitCashBalances && !hasCashFundingTransactions;
@@ -960,12 +955,11 @@ export function calculatePortfolioHistory(
                 }
             }
 
-            if (tx.type === 'Deposit') {
-                totalExternalInvested += convert(amountAbs, txCurrency, baseCurrency, txTime);
-            } else if (tx.type === 'Withdrawal') {
-                totalExternalInvested -= convert(amountAbs, txCurrency, baseCurrency, txTime);
+            // Signed amounts: a withdrawal is negative, a dividend reversal reduces the total.
+            if (tx.type === 'Deposit' || tx.type === 'Withdrawal') {
+                totalExternalInvested += convert(tx.amount || 0, txCurrency, baseCurrency, txTime);
             } else if (tx.type === 'Dividend') {
-                totalDividend += convert(amountAbs, txCurrency, baseCurrency, txTime);
+                totalDividend += convert(tx.amount || 0, txCurrency, baseCurrency, txTime);
             }
 
             transactionIndex++;

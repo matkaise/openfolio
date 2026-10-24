@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Activity, BarChart3, CalendarCheck, Coins, PiggyBank, Timer, TrendingUp, Wallet, X } from 'lucide-react';
-import { filterTransactionsByPortfolio, calculateProjectHoldings } from '@/lib/portfolioSelectors';
+import { selectCalculationTransactions, calculateProjectHoldings } from '@/lib/portfolioSelectors';
 import { buildSplitIgnoreDates } from '@/lib/portfolioUtils';
 import { convertCurrency } from '@/lib/fxUtils';
 import { toDateKeyLocal } from '@/lib/dateUtils';
@@ -93,7 +93,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
 
   // 1. Filter Transactions (same logic as other tabs)
   const filteredTransactions = useMemo(() => (
-    filterTransactionsByPortfolio(project, selectedPortfolioIds)
+    selectCalculationTransactions(project, selectedPortfolioIds)
   ), [project, selectedPortfolioIds]);
 
   // 2. Calculate Holdings (for Yield Calculation)

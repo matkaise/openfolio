@@ -4,7 +4,7 @@ export type ISIN = string;
 export interface Transaction {
     id: string;
     date: string; // ISO 8601
-    type: 'Buy' | 'Sell' | 'Sparplan_Buy' | 'Dividend' | 'Tax' | 'Fee' | 'Deposit' | 'Withdrawal' | 'Split';
+    type: 'Buy' | 'Sell' | 'Sparplan_Buy' | 'Dividend' | 'Tax' | 'Fee' | 'Interest' | 'Deposit' | 'Withdrawal' | 'Split';
     isin?: ISIN;
     name?: string; // Optional, might be filled from Security
     shares?: number;
@@ -116,6 +116,8 @@ export interface CashMovement {
     amount: number; // Positive = inflow, negative = outflow (account perspective)
     currency: Currency;
     description?: string;
+    isin?: ISIN; // Security the booking belongs to (dividends, withholding tax)
+    name?: string;
     broker: string;
     portfolioId?: string;
     isInternal?: boolean;

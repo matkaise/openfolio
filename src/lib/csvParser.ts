@@ -14,6 +14,8 @@ export type CashMovementImportEntry = {
     amount: number;
     currency: string;
     description: string;
+    isin?: string;
+    name?: string;
     isInternal?: boolean;
     sourceKey?: string;
     originalData?: unknown;
@@ -178,74 +180,8 @@ export const parseFlatexCsv = (text: string): Transaction[] => {
             });
         }
     }
-    // Strategy 2: "Account.csv" (Dividends, Cash)
-    // Header: Datum,Uhrze,Valutadatum,Produkt,ISIN,Beschreibung...
-    else if (header.includes('Valutadatum') && header.includes('Beschreibung')) {
-        for (let i = 1; i < rows.length; i++) {
-            const row = rows[i];
-            if (row.length < 6) continue;
-
-            const description = row[5];
-            const isin = row[4];
-
-            // Interest
-            if (description.includes('Zinsen') || description.includes('Interest')) {
-                // Not strictly a transaction for portfolio perf unless we track Cash? 
-                // Let's skip for now or add as 'Fee'/'Dividend'?
-                // User goal is dividends mostly.
-                // Line 5: Zinsen, Line 6: Flatex Interest Income
-                // We'll treat Interest as a specialized Dividend? Or just ignore?
-                // Use 'Dividend' type for now but name it Interest.
-                const amount = parseNumber(row[7] || row[9]); // Col 7 or 9? 
-
-                // Account.csv dividend row layout:
-                // Col 0: Datum
-                // Col 3: Product
-                // Col 4: ISIN
-                // Col 5: Desc ("Dividende")
-                // Col 6: FX (empty)
-                // Col 7: Currency (USD)
-                // Col 8: Amount (2962.49)
-
-                const type: Transaction['type'] = 'Dividend';
-                const date = parseDate(row[0]);
-
-                transactions.push({
-                    id: crypto.randomUUID(),
-                    date,
-                    type,
-                    isin,
-                    name: row[3] || 'Zinsen',
-                    amount: parseNumber(row[8]),
-                    currency: row[7],
-                    broker: 'Flatex',
-                    originalData: row
-                });
-            }
-
-            // Dividend
-            else if (description.includes('Dividende')) {
-                const type: Transaction['type'] = 'Dividend';
-                const date = parseDate(row[0]);
-                const amount = parseNumber(row[8]);
-                const currency = row[7];
-                const isin = row[4];
-                const name = row[3];
-
-                transactions.push({
-                    id: crypto.randomUUID(),
-                    date,
-                    type,
-                    isin,
-                    name,
-                    amount,
-                    currency,
-                    broker: 'Flatex',
-                    originalData: row
-                });
-            }
-        }
-    }
+    // Account.csv rows (dividends, taxes, interest, deposits, ...) are not transactions:
+    // they are imported as cash movements by parseFlatexCashMovementsCsv.
 
     return transactions;
 };
@@ -370,6 +306,144 @@ export const parseFlatexCashBalancesCsv = (text: string): CashBalanceImportPoint
         });
 };
 
+const parseAccountDate = (value: string): string | null => {
+    const raw = (value || '').trim();
+    if (!raw) return null;
+
+    const dmy = /^(\d{2})-(\d{2})-(\d{4})$/.exec(raw);
+    if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+
+    const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+    if (ymd) return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
+
+    return null;
+};
+
+const normalizeAccountCurrency = (value: string): string => {
+    const currency = (value || '').trim().toUpperCase();
+    return /^[A-Z]{3}$/.test(currency) ? currency : '';
+};
+
+const foldText = (value: string): string => {
+    return (value || '')
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/ã¤|ä/g, 'a')
+        .replace(/ã¶|ö/g, 'o')
+        .replace(/ã¼|ü/g, 'u')
+        .replace(/ãŸ|ß/g, 'ss')
+        .replace(/â€™|’/g, "'");
+};
+
+/**
+ * Classifies a DEGIRO Account.csv description. Order matters: "Dividendensteuer" must be
+ * checked before "Dividende", and "Zinsen" (often negative debit interest) is interest.
+ * Returns null for trade rows, which come from Transactions.csv.
+ */
+export const classifyDegiroAccountDescription = (
+    description: string
+): { type: CashMovementImportEntry['type']; isInternal?: boolean } | null => {
+    const normalized = foldText(description.trim());
+    if (!normalized) return null;
+
+    if (normalized.startsWith('kauf ') || normalized.startsWith('verkauf ')) {
+        return null;
+    }
+    if (normalized.includes('wahrungswechsel')) {
+        return { type: 'Transfer', isInternal: true };
+    }
+    if (
+        normalized.includes('cash sweep transfer')
+        || normalized.includes('uberweisung auf ihr geldkonto')
+        || normalized.includes('geldmarktfonds')
+        || normalized.includes('reservation ideal')
+    ) {
+        return { type: 'Transfer', isInternal: true };
+    }
+    if (normalized.includes('einzahlung')) {
+        return { type: 'Deposit' };
+    }
+    if (normalized.includes('auszahlung von ihrem geldkonto')) {
+        return { type: 'Withdrawal' };
+    }
+    if (normalized.includes('dividendensteuer') || normalized.includes('steuer')) {
+        return { type: 'Tax' };
+    }
+    if (
+        normalized.includes('transaktionsgebuhren')
+        || normalized.includes('weitergabegebuhr')
+        || normalized.includes('zahlungsgebuhr')
+        || normalized.includes('handelsmodalitaten')
+        || normalized.startsWith('gebuhr')
+    ) {
+        return { type: 'Fee' };
+    }
+    if (normalized.includes('zinsen') || normalized.includes('interest')) {
+        return { type: 'Interest' };
+    }
+    if (normalized.includes('dividende') || normalized.includes('kapitalruckzahlung')) {
+        return { type: 'Dividend' };
+    }
+
+    return { type: 'Adjustment' };
+};
+
+type ParsedAccountRow = {
+    date: string;
+    time: string;
+    description: string;
+    isin?: string;
+    name?: string;
+    amount: number;
+    currency: string;
+};
+
+const parseAccountRowWith = (row: string[], num: (value: string) => number): ParsedAccountRow | null => {
+    if (row.length < 11) return null;
+
+    const description = (row[5] || '').trim();
+    const bookingDate = parseAccountDate(row[0]);
+    const valueDate = parseAccountDate(row[2]);
+    const date = valueDate || bookingDate;
+    if (!date) return null;
+
+    const currency = normalizeAccountCurrency(row[7]) || normalizeAccountCurrency(row[9]);
+    const shiftedCurrency = normalizeAccountCurrency(row[8]);
+    const normalizedCurrency = currency || shiftedCurrency;
+    if (!normalizedCurrency) return null;
+
+    let amount = num(row[8]);
+    if (!Number.isFinite(amount) || (row[8] || '').trim() === '') {
+        // Withdrawals and transfers leave the amount column empty and name it in the text
+        const matches = description.match(/[-+]?\d[\d'’.,]*/g);
+        const fromDescription = matches ? num(matches[matches.length - 1]) : NaN;
+        if (Number.isFinite(fromDescription)) {
+            amount = fromDescription;
+        } else if (shiftedCurrency) {
+            amount = num(row[9]);
+        }
+    }
+    if (!Number.isFinite(amount)) return null;
+
+    const isin = (row[4] || '').trim();
+    const name = (row[3] || '').trim();
+    return {
+        date,
+        time: row[1] || '',
+        description,
+        ...(isin ? { isin } : {}),
+        ...(name ? { name } : {}),
+        amount,
+        currency: normalizedCurrency
+    };
+};
+
+/** Parses one Account.csv row without file context (rows stored by older versions). */
+export const parseDegiroAccountRow = (row: string[]): ParsedAccountRow | null => (
+    parseAccountRowWith(row, parseNumber)
+);
+
 export const parseFlatexCashMovementsCsv = (text: string): CashMovementImportEntry[] => {
     const rows = parseCsvRows(text);
     if (!rows.length) return [];
@@ -381,139 +455,40 @@ export const parseFlatexCashMovementsCsv = (text: string): CashMovementImportEnt
     const decimal = detectDecimalSeparator(collectCells(rows, [6, 8, 10]));
     const num = (value: string) => parseNumberWithSeparator(value, decimal);
 
-    const parseDateOnly = (value: string): string | null => {
-        const raw = (value || '').trim();
-        if (!raw) return null;
-
-        const dmy = /^(\d{2})-(\d{2})-(\d{4})$/.exec(raw);
-        if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
-
-        const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
-        if (ymd) return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
-
-        return null;
-    };
-
-    const normalizeCurrency = (value: string): string => {
-        const currency = (value || '').trim().toUpperCase();
-        return /^[A-Z]{3}$/.test(currency) ? currency : '';
-    };
-
-    const foldText = (value: string): string => {
-        return (value || '')
-            .toLowerCase()
-            .normalize('NFKD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/ã¤|ä/g, 'a')
-            .replace(/ã¶|ö/g, 'o')
-            .replace(/ã¼|ü/g, 'u')
-            .replace(/ãŸ|ß/g, 'ss')
-            .replace(/â€™|’/g, "'");
-    };
-
-    const extractAmountFromDescription = (description: string): number | null => {
-        const matches = description.match(/[-+]?\d[\d'’.,]*/g);
-        if (!matches || matches.length === 0) return null;
-        const lastMatch = matches[matches.length - 1];
-        const parsed = num(lastMatch);
-        return Number.isFinite(parsed) ? parsed : null;
-    };
-
-    const classify = (
-        description: string
-    ): { type: CashMovementImportEntry['type']; isInternal?: boolean } | null => {
-        const normalized = foldText(description.trim());
-        if (!normalized) return null;
-
-        if (normalized.startsWith('kauf ') || normalized.startsWith('verkauf ')) {
-            return null;
-        }
-        if (normalized.includes('wahrungswechsel')) {
-            return { type: 'Transfer', isInternal: true };
-        }
-        if (normalized.includes('cash sweep transfer') || normalized.includes('uberweisung auf ihr geldkonto')) {
-            return { type: 'Transfer', isInternal: true };
-        }
-        if (normalized.includes('einzahlung')) {
-            return { type: 'Deposit' };
-        }
-        if (normalized.includes('auszahlung von ihrem geldkonto')) {
-            return { type: 'Withdrawal' };
-        }
-        if (normalized.includes('dividendensteuer') || normalized.includes('steuer')) {
-            return { type: 'Tax' };
-        }
-        if (
-            normalized.includes('transaktionsgebuhren')
-            || normalized.includes('weitergabegebuhr')
-            || normalized.includes('zahlungsgebuhr')
-            || normalized.startsWith('gebuhr')
-        ) {
-            return { type: 'Fee' };
-        }
-        if (normalized.includes('zinsen') || normalized.includes('interest')) {
-            return { type: 'Interest' };
-        }
-        if (normalized.includes('dividende') || normalized.includes('kapitalruckzahlung')) {
-            return { type: 'Dividend' };
-        }
-        if (normalized.includes('reservation ideal')) {
-            return { type: 'Transfer', isInternal: true };
-        }
-
-        return { type: 'Adjustment' };
-    };
-
     const parsedMovements: CashMovementImportEntry[] = [];
 
     for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
-        if (row.length < 11) continue;
+        const parsed = parseAccountRowWith(row, num);
+        if (!parsed) continue;
 
-        const description = (row[5] || '').trim();
-        const classification = classify(description);
+        const classification = classifyDegiroAccountDescription(parsed.description);
         if (!classification) continue;
 
-        const bookingDate = parseDateOnly(row[0]);
-        const valueDate = parseDateOnly(row[2]);
-        const date = valueDate || bookingDate;
-        if (!date) continue;
+        let amount = parsed.amount;
+        if (Math.abs(amount) < 0.0000001) continue;
 
-        const currency = normalizeCurrency(row[7]) || normalizeCurrency(row[9]);
-        const shiftedCurrency = normalizeCurrency(row[8]);
-        const normalizedCurrency = currency || shiftedCurrency;
-        if (!normalizedCurrency) continue;
-
-        let amount = num(row[8]);
-        if (!Number.isFinite(amount) || (row[8] || '').trim() === '') {
-            const parsedFromDescription = extractAmountFromDescription(description);
-            if (parsedFromDescription !== null) {
-                amount = parsedFromDescription;
-            } else if (shiftedCurrency) {
-                amount = num(row[9]);
-            }
-        }
-        if (!Number.isFinite(amount) || Math.abs(amount) < 0.0000001) continue;
-
+        // Rows without an amount column carry an unsigned amount in the text
         if (classification.type === 'Withdrawal' && amount > 0) amount = -amount;
-        if (classification.type === 'Deposit' && amount < 0) amount = Math.abs(amount);
-        if ((classification.type === 'Tax' || classification.type === 'Fee') && amount > 0) amount = -amount;
+        if (classification.type === 'Deposit' && amount < 0) amount = -amount;
 
         const sourceParts = [
-            date,
-            row[1] || '',
-            normalizedCurrency,
+            parsed.date,
+            parsed.time,
+            parsed.currency,
             amount.toFixed(8),
-            description,
+            parsed.description,
             row[11] || ''
         ];
 
         parsedMovements.push({
-            date,
+            date: parsed.date,
             type: classification.type,
             amount,
-            currency: normalizedCurrency,
-            description,
+            currency: parsed.currency,
+            description: parsed.description,
+            ...(parsed.isin ? { isin: parsed.isin } : {}),
+            ...(parsed.name ? { name: parsed.name } : {}),
             isInternal: classification.isInternal,
             sourceKey: sourceParts.join('|'),
             originalData: row
