@@ -3,11 +3,13 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { FolderOpen, Lock, Plus, TrendingUp, X } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
+import { useNotifications } from '@/components/ui/notifications';
 
 type PasswordReason = 'required' | 'invalid';
 
 export const ProjectLauncher = () => {
   const { newProject, openProject } = useProject();
+  const { notify } = useNotifications();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('Mein Portfolio');
@@ -36,11 +38,11 @@ export const ProjectLauncher = () => {
 
     if (password.length > 0 || passwordConfirm.length > 0) {
       if (!password) {
-        alert('Bitte ein Passwort eingeben.');
+        notify({ tone: 'error', title: 'Bitte ein Passwort eingeben.' });
         return;
       }
       if (password !== passwordConfirm) {
-        alert('Die Passwoerter stimmen nicht ueberein.');
+        notify({ tone: 'error', title: 'Die Passwörter stimmen nicht überein.' });
         return;
       }
 

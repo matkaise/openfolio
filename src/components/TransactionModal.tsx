@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase, Check, ChevronDown } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
+import { useNotifications } from '@/components/ui/notifications';
 import { Transaction, type Security, type Portfolio } from '@/types/domain';
 import { parseFlatexCashBalancesCsv, parseFlatexCashMovementsCsv, parseFlatexCsv, type CashBalanceImportPoint, type CashMovementImportEntry } from '@/lib/csvParser';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
@@ -50,6 +51,7 @@ type CsvImportSummary = {
 
 export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: TransactionModalProps) => {
     const { project, updateProject, syncMarket, isMarketSyncing, marketSyncProgress } = useProject();
+    const { notify } = useNotifications();
 
     // Tab State
     const [activeTab, setActiveTab] = useState<Tab>('import');
@@ -147,7 +149,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 setParsedCashMovements(cashMovements);
                 setImportStatus('ready');
             } else {
-                alert("Keine Daten gefunden. Bitte CSV pruefen.");
+                notify({ tone: 'error', title: 'Keine Daten gefunden', message: 'Die Datei enthält keine erkennbaren DEGIRO-Buchungen. Bitte Export prüfen.' });
                 setParsedTx([]);
                 setParsedCashBalances([]);
                 setParsedCashMovements([]);
@@ -155,7 +157,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             }
         } catch (err) {
             console.error(err);
-            alert("Fehler beim Lesen der Datei.");
+            notify({ tone: 'error', title: 'Die Datei konnte nicht gelesen werden.' });
             setParsedTx([]);
             setParsedCashBalances([]);
             setParsedCashMovements([]);

@@ -4,6 +4,7 @@ import "./globals.css";
 import { ProjectProvider } from '@/contexts/ProjectContext';
 import { BrokerSyncProvider } from '@/components/brokers/BrokerSyncContext';
 import { THEME_BOOT_SCRIPT } from '@/lib/theme';
+import { NotificationsProvider } from '@/components/ui/notifications';
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -35,11 +36,13 @@ export default function RootLayout({
       <body
         className={`${manrope.variable} ${geistMono.variable} antialiased`}
       >
-        <ProjectProvider>
-          <BrokerSyncProvider>
-            {children}
-          </BrokerSyncProvider>
-        </ProjectProvider>
+        <NotificationsProvider>
+          <ProjectProvider>
+            <BrokerSyncProvider>
+              {children}
+            </BrokerSyncProvider>
+          </ProjectProvider>
+        </NotificationsProvider>
       </body>
     </html>
   );

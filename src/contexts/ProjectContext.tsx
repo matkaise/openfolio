@@ -20,6 +20,7 @@ import {
 } from '@/lib/projectPersistence';
 import { createProjectKey, type ProjectEncryptionKey } from '@/lib/projectCrypto';
 import { downloadFile, pickFileWithInput, supportsFileSystemAccess } from '@/lib/fileAccess';
+import { useNotifications } from '@/components/ui/notifications';
 
 const ensurePortfoliosFromData = (project: ProjectData): ProjectData => {
     if ((project.portfolios || []).length > 0) {
@@ -72,7 +73,8 @@ interface ProjectContextType {
     }) => Promise<void>;
     saveProject: () => Promise<void>;
     saveProjectAs: () => Promise<void>;
-    closeProject: () => void;
+    /** Resolves false if the user kept the project open. */
+    closeProject: () => Promise<boolean>;
 
     // Data Mutation
     updateProject: (updater: (prev: ProjectData) => ProjectData) => void;
@@ -96,6 +98,7 @@ export const useProject = () => {
 };
 
 export const ProjectProvider = ({ children }: { children: ReactNode }) => {
+    const { notify, confirm } = useNotifications();
     const [project, setProject] = useState<ProjectData | null>(null);
     const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(null);
     const [fileName, setFileName] = useState<string | null>(null);
@@ -286,13 +289,8 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                     const message = error instanceof Error ? error.message : '';
                     if (message === 'PASSWORD_REQUIRED' || message === 'INVALID_PASSWORD') {
                         const reason: 'required' | 'invalid' = message === 'INVALID_PASSWORD' ? 'invalid' : 'required';
-                        const next = options?.requestPassword
-                            ? await options.requestPassword(reason)
-                            : window.prompt(
-                                reason === 'invalid'
-                                    ? 'Falsches Passwort. Bitte erneut eingeben:'
-                                    : 'Dieses Projekt braucht ein Passwort. Passwort eingeben:'
-                            );
+                        if (!options?.requestPassword) throw new Error('Dieses Projekt braucht ein Passwort.');
+                        const next = await options.requestPassword(reason);
                         if (next === null) {
                             return;
                         }
@@ -381,9 +379,9 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
             const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
             console.error('Failed to open project:', err);
-            alert('Fehler beim Oeffnen der Datei: ' + message);
+            notify({ tone: 'error', title: 'Datei konnte nicht geöffnet werden', message });
         }
-    }, [performSync, setEncryptionKey, setSqliteSession]);
+    }, [notify, performSync, setEncryptionKey, setSqliteSession]);
 
     const saveProjectAs = useCallback(async () => {
         if (!project) return;
@@ -431,9 +429,9 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
             const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
             console.error('Failed to save project:', err);
-            alert('Fehler beim Speichern: ' + message);
+            notify({ tone: 'error', title: 'Speichern fehlgeschlagen', message });
         }
-    }, [project, fileName, writeToHandle, serializeForSave]);
+    }, [notify, project, fileName, writeToHandle, serializeForSave]);
 
     const saveProject = useCallback(async () => {
         if (!project) return;
@@ -458,15 +456,19 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
             const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
-            alert('Fehler beim Speichern: ' + message);
+            notify({ tone: 'error', title: 'Speichern fehlgeschlagen', message });
         }
-    }, [project, fileHandle, saveProjectAs, writeToHandle]);
+    }, [notify, project, fileHandle, saveProjectAs, writeToHandle]);
 
-    const closeProject = useCallback(() => {
+    const closeProject = useCallback(async () => {
         if (isModified) {
-            if (!confirm('Ungespeicherte Aenderungen gehen verloren. Wirklich schliessen?')) {
-                return;
-            }
+            const ok = await confirm({
+                title: 'Projekt schließen?',
+                message: 'Es gibt ungespeicherte Änderungen. Sie gehen beim Schließen verloren.',
+                confirmLabel: 'Ohne Speichern schließen',
+                tone: 'danger'
+            });
+            if (!ok) return false;
         }
         setProject(null);
         setFileHandle(null);
@@ -476,7 +478,8 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         setSqliteSession(null);
         setEncryptionKey(null);
         setEncryptionStatus('none');
-    }, [isModified, setEncryptionKey, setSqliteSession]);
+        return true;
+    }, [confirm, isModified, setEncryptionKey, setSqliteSession]);
 
     const updateProject = useCallback((updater: (prev: ProjectData) => ProjectData) => {
         setProject((prev) => {
