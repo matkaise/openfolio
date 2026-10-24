@@ -30,7 +30,11 @@ describe('mergeImportedTransactions (B3)', () => {
   });
 
   it('recognises trades imported by older versions without externalId', () => {
-    const legacy = trades().map(({ externalId: _ignored, ...tx }) => ({ ...tx, portfolioId: 'p1' }) as Transaction);
+    const legacy = trades().map((tx): Transaction => {
+      const copy = { ...tx, portfolioId: 'p1' };
+      delete copy.externalId;
+      return copy;
+    });
     const result = mergeImportedTransactions(legacy, trades(), 'p1');
 
     expect(result.added).toHaveLength(0);
