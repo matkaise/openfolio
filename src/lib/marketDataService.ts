@@ -34,6 +34,41 @@ const isBuyType = (type: Transaction['type']) => type === 'Buy' || type === 'Spa
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Backoff before each retry of a transient Yahoo error (rate limit, 5xx).
+const DEFAULT_RETRY_DELAYS_MS = [1000, 3000];
+
+const isTransientStatus = (status: number) => status === 429 || status >= 500;
+
+/**
+ * Calls /api/yahoo and retries transient failures. Returns the last response;
+ * `transient` tells the caller whether a failure says anything about the symbol.
+ */
+const fetchYahooWithRetry = async (
+    body: { symbol: string; from: string },
+    retryDelaysMs: number[]
+): Promise<{ res: Response; transient: boolean }> => {
+    for (let attempt = 0; ; attempt += 1) {
+        const res = await fetch('/api/yahoo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (res.ok) return { res, transient: false };
+
+        let transient = isTransientStatus(res.status);
+        try {
+            const payload = await res.clone().json() as { transient?: boolean };
+            if (typeof payload?.transient === 'boolean') transient = payload.transient;
+        } catch {
+            // Non-JSON error body: rely on the status code
+        }
+
+        if (!transient || attempt >= retryDelaysMs.length) return { res, transient };
+        console.warn(`[MarketData] Yahoo busy for ${body.symbol} (HTTP ${res.status}), retrying...`);
+        await delay(retryDelaysMs[attempt]);
+    }
+};
+
 type DividendHistoryItem = { date: string; amount: number };
 
 const mergeDividendHistory = (
@@ -129,8 +164,10 @@ export const syncProjectQuotes = async (
         maxTimeMs?: number;
         delayMs?: number;
         concurrency?: number;
+        retryDelaysMs?: number[];
     }
 ): Promise<ProjectData> => {
+    const retryDelaysMs = options?.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
     const now = new Date();
     const securities = { ...project.securities };
     let hasChanges = false;
@@ -289,11 +326,7 @@ export const syncProjectQuotes = async (
             const requiresFullHistory = !secForFetch.lastSync || fetchMissingHistory || fetchMissingDividends;
             const from = requiresFullHistory || !secForFetch.lastSync ? '1970-01-01' : secForFetch.lastSync.split('T')[0];
 
-            const res = await fetch('/api/yahoo', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ symbol: symbolToFetch, from })
-            });
+            const { res, transient } = await fetchYahooWithRetry({ symbol: symbolToFetch, from }, retryDelaysMs);
 
             if (res.ok) {
                 const data = await res.json();
@@ -337,6 +370,9 @@ export const syncProjectQuotes = async (
                     syncedCount += 1;
                     console.log(`[MarketData] Updated ${symbolToFetch}`);
                 }
+            } else if (transient) {
+                // Yahoo is busy or down: the symbol is fine, try again on the next sync.
+                console.warn(`[MarketData] Yahoo unavailable for ${symbolToFetch} (HTTP ${res.status}), keeping status.`);
             } else {
                 securities[isin] = {
                     ...secForFetch,

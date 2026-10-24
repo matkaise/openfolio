@@ -221,4 +221,75 @@ describe('syncProjectQuotes', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(updated.securities[isin].dividendHistory).toEqual([{ date: '2024-03-15', amount: 2.5 }]);
   });
+
+  describe('Yahoo errors (B7)', () => {
+    const isin = 'IE0000000009';
+    const makeProject = (): ProjectData => ({
+      ...createEmptyProject(),
+      securities: {
+        [isin]: {
+          isin,
+          name: 'Some ETC',
+          symbol: 'ETC1',
+          symbolStatus: 'resolved',
+          currency: 'USD',
+          priceHistory: { '2025-01-10': 50 },
+          dividendHistory: [],
+          upcomingDividends: [],
+          dividendHistorySynced: true,
+          lastSync: '2025-01-10T15:30:00.000Z'
+        }
+      }
+    });
+    const okResponse = {
+      ok: true,
+      status: 200,
+      json: async () => ({ history: { '2025-01-11': 51 }, splits: {}, currency: 'USD', symbol: 'ETC1', dividendHistory: [], upcomingDividends: [] })
+    } as Response;
+    const errorResponse = (status: number, transient: boolean) => ({
+      ok: false,
+      status,
+      statusText: 'error',
+      json: async () => ({ error: 'error', transient })
+    } as Response);
+    const syncOptions = { maxPerRun: 0, maxTimeMs: 0, delayMs: 0, retryDelaysMs: [0, 0] };
+
+    it('retries a transient error and then uses the data', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(errorResponse(503, true))
+        .mockResolvedValueOnce(errorResponse(503, true))
+        .mockResolvedValueOnce(okResponse);
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const updated = await syncProjectQuotes(makeProject(), true, undefined, syncOptions);
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(updated.securities[isin].priceHistory?.['2025-01-11']).toBe(51);
+    });
+
+    it('keeps the symbol status when Yahoo stays unavailable', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const fetchMock = vi.fn().mockResolvedValue(errorResponse(503, true));
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const project = makeProject();
+      const updated = await syncProjectQuotes(project, true, undefined, syncOptions);
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(updated.securities[isin].symbolStatus).toBe('resolved');
+      expect(updated.securities[isin].lastSync).toBe('2025-01-10T15:30:00.000Z');
+    });
+
+    it('marks the symbol unresolved when Yahoo does not know it', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const fetchMock = vi.fn().mockResolvedValue(errorResponse(404, false));
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const updated = await syncProjectQuotes(makeProject(), true, undefined, syncOptions);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(updated.securities[isin].symbolStatus).toBe('unresolved');
+    });
+  });
 });
