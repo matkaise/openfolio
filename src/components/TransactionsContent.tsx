@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, FileText, Search, Wallet, X } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
+import { useNotifications } from '@/components/ui/notifications';
 import { filterTransactionsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency, getCurrencyOptions } from '@/lib/fxUtils';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
@@ -25,6 +26,7 @@ const TransactionEditModal = ({
   onSave: (updated: TransactionLike) => void;
   onDelete: (target: TransactionLike) => void;
 }) => {
+  const { confirm } = useNotifications();
   const [type, setType] = useState(() => transaction?.type || 'Buy');
   const [date, setDate] = useState(() => transaction?.date || new Date().toISOString().split('T')[0]);
   const [shares, setShares] = useState(() => {
@@ -169,7 +171,14 @@ const TransactionEditModal = ({
             type="button"
             onClick={() => {
               if (!transaction) return;
-              if (window.confirm('Transaktion wirklich loeschen?')) onDelete(transaction);
+              void confirm({
+                title: 'Transaktion löschen?',
+                message: 'Die Buchung wird aus dem Projekt entfernt.',
+                confirmLabel: 'Löschen',
+                tone: 'danger'
+              }).then((ok) => {
+                if (ok) onDelete(transaction);
+              });
             }}
             className="md3-negative-soft rounded-2xl px-4 py-2 text-sm font-semibold transition hover:brightness-105"
           >

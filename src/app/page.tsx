@@ -207,10 +207,10 @@ export default function PortfolioApp() {
     });
   }, [startTransition]);
 
-  const handleCloseProject = useCallback(() => {
+  const handleCloseProject = useCallback(async () => {
+    if (!(await closeProject())) return;
     setActiveTab('Dashboard');
     setVisitedTabs(['Dashboard']);
-    closeProject();
   }, [closeProject]);
 
 
