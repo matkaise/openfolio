@@ -182,3 +182,14 @@ describe('files without a project id (B19)', () => {
     expect(legacyProjectId({ created: '2024-01-01', name: 'A' })).not.toBe(legacyProjectId({ created: '2024-01-01', name: 'B' }));
   });
 });
+
+describe('damaged project files', () => {
+  it('reports broken JSON and wrong field types in German instead of crashing later', async () => {
+    const notJson = new File([new TextEncoder().encode('{"id": "x", ')], 'broken.json');
+    await expect(openProjectFile(notJson)).rejects.toThrow(/beschädigt.*kein gültiges JSON/);
+
+    const project = { ...createEmptyProject(), transactions: [{ id: 't', date: '2024-01-01', type: 'Buy', amount: null, currency: 'EUR', broker: 'X' }] };
+    const wrongType = new File([new TextEncoder().encode(JSON.stringify(project))], 'wrong.json');
+    await expect(openProjectFile(wrongType)).rejects.toThrow(/transactions\.0\.amount: Zahl erwartet/);
+  });
+});

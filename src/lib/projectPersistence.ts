@@ -1,5 +1,6 @@
 import initSqlJs from 'sql.js';
 import { normalizeProjectWealthGoal } from '@/lib/wealthGoalUtils';
+import { parseNumberRecordMap, parseProjectData, ProjectFormatError } from '@/lib/schemas/project';
 import {
   InvalidPasswordError,
   createProjectKey,
@@ -450,7 +451,7 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
       }
     };
 
-    return normalizeProjectWealthGoal(project);
+    return normalizeProjectWealthGoal(parseProjectData(project));
   }
 
   async hydrateHeavyData(baseProject: ProjectData): Promise<ProjectData> {
@@ -458,8 +459,8 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
       return baseProject;
     }
 
-    const securityPriceHistory = this.readSection<Record<ISIN, Record<string, number>>>('security_price_history', {});
-    const fxRates = this.readSection<FxData['rates']>('fx_rates', {});
+    const securityPriceHistory = parseNumberRecordMap(this.readSection<unknown>('security_price_history', {}));
+    const fxRates = parseNumberRecordMap(this.readSection<unknown>('fx_rates', {}));
 
     this.heavyDataHydrated = true;
 
@@ -613,8 +614,13 @@ export const openProjectFile = async (
   }
 
   const text = new TextDecoder().decode(bytes);
-  const parsed = JSON.parse(text) as ProjectData;
-  const project = normalizeProjectWealthGoal(parsed);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new ProjectFormatError('kein gültiges JSON');
+  }
+  const project = normalizeProjectWealthGoal(parseProjectData(parsed));
 
   return {
     project,
