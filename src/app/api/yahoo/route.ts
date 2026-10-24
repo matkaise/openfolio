@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('YahooAPI');
 
 type Interval = '1d';
 
@@ -97,7 +100,7 @@ const normalizeDividendYield = (summaryYield: number | undefined, quoteYield: nu
 
 export async function POST(req: NextRequest) {
     try {
-        console.error('[YahooAPI] Starting request...');
+        log.debug('Starting request...');
         let yahooFinance: YahooFinanceLike;
         try {
             const pkg = await import('yahoo-finance2');
@@ -106,16 +109,15 @@ export async function POST(req: NextRequest) {
             // Check if it's a class/function and instantiate
             if (typeof exported === 'function') {
                 yahooFinance = new (exported as new () => YahooFinanceLike)();
-                console.error('[YahooAPI] Instantiated new YahooFinance class');
+                log.debug('Instantiated new YahooFinance class');
             } else {
                 yahooFinance = exported as YahooFinanceLike;
-                console.error('[YahooAPI] Using existing instance');
+                log.debug('Using existing instance');
             }
         } catch (err: unknown) {
-            console.error('[YahooAPI] Import failed:', err);
+            log.error('Import failed:', err);
             throw err;
         }
-        // console.log('[YahooAPI] Keys:', Object.keys(yahooFinance || {}));
 
         const body: { symbol?: string; interval?: Interval; from?: string } = await req.json();
         const { symbol } = body;
@@ -131,11 +133,11 @@ export async function POST(req: NextRequest) {
         };
 
         if (!yahooFinance.chart) {
-            console.error('[YahooAPI] Critical: .chart() method missing on instance!');
+            log.error('Critical: .chart() method missing on instance!');
             throw new Error('Library instance missing chart method');
         }
 
-        console.log(`[YahooAPI] Fetching chart for ${symbol}`, JSON.stringify(queryOptions));
+        log.debug(`Fetching chart for ${symbol}`, JSON.stringify(queryOptions));
 
         // Only the chart is required. Many ETFs, ETCs and funds have no fundamentals
         // (e.g. no "earnings" module), which must not hide a perfectly valid price history.
@@ -148,14 +150,14 @@ export async function POST(req: NextRequest) {
         if (chartSettled.status === 'rejected') {
             const transient = isTransientYahooError(chartSettled.reason);
             const message = chartSettled.reason instanceof Error ? chartSettled.reason.message : String(chartSettled.reason);
-            console.error(`[YahooAPI] Chart failed for ${symbol} (${transient ? 'transient' : 'not found'}):`, message);
+            log.warn(`Chart failed for ${symbol} (${transient ? 'transient' : 'not found'}):`, message);
             return NextResponse.json({ error: message, transient }, { status: transient ? 503 : 404 });
         }
         if (quoteSettled.status === 'rejected') {
-            console.log(`[YahooAPI] quote() failed for ${symbol}, continuing without it`);
+            log.info(`quote() failed for ${symbol}, continuing without it`);
         }
         if (summarySettled.status === 'rejected') {
-            console.log(`[YahooAPI] quoteSummary() failed for ${symbol}, continuing without it`);
+            log.info(`quoteSummary() failed for ${symbol}, continuing without it`);
         }
 
         const result = chartSettled.value;
@@ -262,7 +264,7 @@ export async function POST(req: NextRequest) {
 
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Failed to fetch data';
-        console.error('Yahoo API Error:', error);
+        log.error('Request failed:', error);
         return NextResponse.json({ error: message, transient: isTransientYahooError(error) }, { status: 500 });
     }
 }

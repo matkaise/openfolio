@@ -5,6 +5,12 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    // Use createLogger from src/lib/logger.ts (levels, masks secrets)
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/lib/logger.ts", "src/**/__tests__/**"],
+    rules: { "no-console": "error" },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

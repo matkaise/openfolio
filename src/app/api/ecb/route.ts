@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseEcbXml } from '@/lib/ecbXml';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ECB Proxy');
 
 const ECB_URLS = {
     daily: 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml',
@@ -18,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     try {
         const url = ECB_URLS[mode];
-        console.log(`[ECB Proxy] Fetching ${mode} data from ${url}`);
+        log.debug(`Fetching ${mode} data from ${url}`);
 
         const response = await fetch(url, { headers: { 'User-Agent': 'Openfolio/1.0' } });
 
@@ -36,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'ECB Proxy Error';
-        console.error("ECB Proxy Error:", error);
+        log.error('Request failed:', error);
         return NextResponse.json({ success: false, error: message }, { status: 500 });
     }
 }

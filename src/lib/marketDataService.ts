@@ -1,5 +1,8 @@
 import { ProjectData, type Security, type Transaction } from '@/types/domain';
 import { parseYahooQuoteResponse, type YahooQuoteResponse } from '@/lib/schemas/api';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('MarketData');
 
 type ResolveTickerResult = {
     status: 'resolved' | 'unresolved' | 'error';
@@ -65,7 +68,7 @@ const fetchYahooWithRetry = async (
         }
 
         if (!transient || attempt >= retryDelaysMs.length) return { res, transient };
-        console.warn(`[MarketData] Yahoo busy for ${body.symbol} (HTTP ${res.status}), retrying...`);
+        log.warn(`Yahoo busy for ${body.symbol} (HTTP ${res.status}), retrying...`);
         await delay(retryDelaysMs[attempt]);
     }
 };
@@ -177,7 +180,7 @@ const resolveSecuritySymbol = async (input: string, currency?: string, isin?: st
         if (!res.ok) return null;
         return res.json();
     } catch (e) {
-        console.warn('[MarketData] Resolve ticker failed', e);
+        log.warn('Resolve ticker failed', e);
         return null;
     }
 };
@@ -291,7 +294,7 @@ export const syncSecurityPatches = async (
     const notifyLimitReached = () => {
         if (limitNotified) return;
         limitNotified = true;
-        console.log(`[MarketData] Sync time budget reached (${maxTimeMs}ms). Stopping early.`);
+        log.info(`Sync time budget reached (${maxTimeMs}ms). Stopping early.`);
         onProgress?.({ current: processedCount, total: targetIsins.length, stage: 'limit' });
     };
 
@@ -389,7 +392,7 @@ export const syncSecurityPatches = async (
                 try {
                     data = parseYahooQuoteResponse(await res.json());
                 } catch (error) {
-                    console.warn(`[MarketData] Unexpected answer for ${symbolToFetch}:`, error instanceof Error ? error.message : error);
+                    log.warn(`Unexpected answer for ${symbolToFetch}:`, error instanceof Error ? error.message : error);
                 }
                 if (data) {
                     const incomingDividendHistory = Array.isArray(data.dividendHistory) ? data.dividendHistory : [];
@@ -429,11 +432,11 @@ export const syncSecurityPatches = async (
                     };
                     hasChanges = true;
                     syncedCount += 1;
-                    console.log(`[MarketData] Updated ${symbolToFetch}`);
+                    log.debug(`Updated ${symbolToFetch}`);
                 }
             } else if (transient) {
                 // Yahoo is busy or down: the symbol is fine, try again on the next sync.
-                console.warn(`[MarketData] Yahoo unavailable for ${symbolToFetch} (HTTP ${res.status}), keeping status.`);
+                log.warn(`Yahoo unavailable for ${symbolToFetch} (HTTP ${res.status}), keeping status.`);
             } else {
                 securities[isin] = {
                     ...secForFetch,
@@ -441,10 +444,10 @@ export const syncSecurityPatches = async (
                     symbolLastTried: now.toISOString()
                 };
                 hasChanges = true;
-                console.warn(`[MarketData] Failed to fetch ${symbolToFetch}:`, res.statusText);
+                log.warn(`Failed to fetch ${symbolToFetch}:`, res.statusText);
             }
         } catch (e) {
-            console.error(`[MarketData] Error syncing ${symbolToFetch}`, e);
+            log.error(`Error syncing ${symbolToFetch}`, e);
         } finally {
             if (Number.isFinite(delayMs) && delayMs > 0) {
                 await delay(delayMs);
@@ -478,7 +481,7 @@ export const syncSecurityPatches = async (
     }
 
     if (syncedCount > 0 || attemptedCount > 0) {
-        console.log(`[MarketData] Synced ${syncedCount} securities (attempted ${attemptedCount}).`);
+        log.info(`Synced ${syncedCount} securities (attempted ${attemptedCount}).`);
     }
 
     const patches: SecurityPatches = {};
@@ -510,7 +513,7 @@ export const repairProjectSecurities = (project: ProjectData): ProjectData => {
 
     project.transactions.forEach(tx => {
         if (tx.isin && !securities[tx.isin]) {
-            console.log(`[Repair] Backfilling security for ${tx.isin}`);
+            log.debug(`Repair: backfilling security for ${tx.isin}`);
             securities[tx.isin] = {
                 isin: tx.isin,
                 symbol: tx.isin, // Default fallback

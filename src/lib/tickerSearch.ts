@@ -1,3 +1,7 @@
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('TickerSearch');
+
 export type CompanyMatch = {
     symbol: string;
     name?: string;
@@ -29,7 +33,7 @@ export const searchCompanyMatches = async (query: string): Promise<CompanyMatch[
         const data = await res.json();
         return Array.isArray(data?.matches) ? data.matches : [];
     } catch (e) {
-        console.warn('[TickerSearch] Failed to search company matches', e);
+        log.warn('Failed to search company matches', e);
         return [];
     }
 };
@@ -50,7 +54,7 @@ export const resolveTicker = async (input: string, options?: { currency?: string
         if (!res.ok) return null;
         return res.json();
     } catch (e) {
-        console.warn('[TickerSearch] Failed to resolve ticker', e);
+        log.warn('Failed to resolve ticker', e);
         return null;
     }
 };
