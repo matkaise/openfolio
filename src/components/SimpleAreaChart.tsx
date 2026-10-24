@@ -157,7 +157,7 @@ export const SimpleAreaChart = ({
                                 isPercentage ? (tooltipLabel || 'Performance') : (tooltipLabel || 'Kurs')
                             ];
                         }}
-                        labelFormatter={(label: any) => {
+                        labelFormatter={(label: unknown) => {
                             if (!label) return '';
                             const d = parseDateOnlyUTC(String(label));
                             return d.toLocaleDateString('de-DE', { timeZone: 'UTC' });

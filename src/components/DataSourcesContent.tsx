@@ -18,6 +18,15 @@ import { SimpleAreaChart } from './SimpleAreaChart';
 import { Security, type ProjectData } from '@/types/domain';
 import { resolveTicker, searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
 
+const isSecurityPending = (sec: Security, nowMs: number) => {
+    if (sec.ignoreMarketData || sec.symbolStatus === 'ignored') return false;
+    if (!sec.lastSync) return true;
+    const diffHours = (nowMs - new Date(sec.lastSync).getTime()) / (1000 * 60 * 60);
+    const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
+    const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
+    return diffHours > 24 || missingHistory || missingDividends;
+};
+
 export const DataSourcesContent = () => {
     const { project, syncFx, syncMarket, isSyncing, isMarketSyncing, marketSyncProgress, updateProject } = useProject();
     const [selectedCurrency, setSelectedCurrency] = useState('USD');
@@ -106,9 +115,10 @@ export const DataSourcesContent = () => {
     };
 
     // Derived Stats
+    const projectSecurities = project?.securities;
     const marketStats = useMemo(() => {
-        if (!project?.securities) return { count: 0, lastSync: null, securities: [] };
-        const secs = Object.values(project.securities);
+        if (!projectSecurities) return { count: 0, lastSync: null, securities: [] };
+        const secs = Object.values(projectSecurities);
         const count = secs.length;
         const lastSyncTimes = secs.map(s => s.lastSync ? new Date(s.lastSync).getTime() : 0);
         const maxTime = Math.max(...lastSyncTimes);
@@ -117,7 +127,7 @@ export const DataSourcesContent = () => {
             lastSync: maxTime > 0 ? new Date(maxTime).toISOString().split('T')[0] : 'Nie',
             securities: secs.sort((a, b) => a.name.localeCompare(b.name))
         };
-    }, [project?.securities]);
+    }, [projectSecurities]);
 
     const unresolvedSecurities = useMemo(() => {
         return marketStats.securities.filter(sec => sec.symbolStatus === 'unresolved');
@@ -298,18 +308,11 @@ export const DataSourcesContent = () => {
         closeCompanySearch();
     };
 
-    const isSecurityPending = (sec: Security) => {
-        if (sec.ignoreMarketData || sec.symbolStatus === 'ignored') return false;
-        if (!sec.lastSync) return true;
-        const diffHours = (Date.now() - new Date(sec.lastSync).getTime()) / (1000 * 60 * 60);
-        const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
-        const missingDividends = !sec.dividendHistorySynced || sec.dividendHistory === undefined || sec.upcomingDividends === undefined;
-        return diffHours > 24 || missingHistory || missingDividends;
-    };
-
+    // Reference time for "stale" checks; taken once per mount to keep rendering pure.
+    const [nowMs] = useState(() => Date.now());
     const pendingSecurities = useMemo(() => {
-        return marketStats.securities.filter(isSecurityPending);
-    }, [marketStats.securities]);
+        return marketStats.securities.filter(sec => isSecurityPending(sec, nowMs));
+    }, [marketStats.securities, nowMs]);
 
     const handleQuoteSync = async () => {
         if (!project) return;
@@ -563,8 +566,8 @@ export const DataSourcesContent = () => {
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <div className={`px-2 py-0.5 text-xs font-semibold rounded-full ${isSecurityPending(sec) ? 'md3-segment md3-text-muted' : 'md3-positive-soft'}`}>
-                                                {isSecurityPending(sec) ? 'Ausstehend' : new Date(sec.lastSync!).toLocaleDateString()}
+                                            <div className={`px-2 py-0.5 text-xs font-semibold rounded-full ${isSecurityPending(sec, nowMs) ? 'md3-segment md3-text-muted' : 'md3-positive-soft'}`}>
+                                                {isSecurityPending(sec, nowMs) ? 'Ausstehend' : new Date(sec.lastSync!).toLocaleDateString()}
                                             </div>
                                         </div>
                                     </div>

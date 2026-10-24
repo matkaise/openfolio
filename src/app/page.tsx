@@ -339,8 +339,6 @@ export default function PortfolioApp() {
   const [selectedSecurity, setSelectedSecurity] = useState<{ isin: string; currency?: string } | null>(null);
   const [analysisCache, setAnalysisCache] = useState<AnalysisCache | null>(null);
   const [includeDividendsInPerformance, setIncludeDividendsInPerformance] = useState(false);
-  const [activeThemeId, setActiveThemeId] = useState<keyof typeof MATERIAL_THEMES>('baseline');
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [showStartupSyncModal, setShowStartupSyncModal] = useState(false);
   const [, startTransition] = useTransition();
   const lastMarketAutoSyncRef = useRef(0);
@@ -354,17 +352,13 @@ export default function PortfolioApp() {
     return 'baseline';
   }, []);
 
-  useEffect(() => {
-    if (!project) return;
-    setActiveThemeId(resolveThemeId(project.settings?.themeId));
-    setIsDarkMode(Boolean(project.settings?.isDarkMode));
-  }, [project?.id, project?.settings?.themeId, project?.settings?.isDarkMode, resolveThemeId, project]);
+  const activeThemeId = resolveThemeId(project?.settings?.themeId);
+  const isDarkMode = Boolean(project?.settings?.isDarkMode);
 
   useEffect(() => {
     if (project) return;
     // Reset startup sync cooldown after closing a project so the next opened project syncs immediately.
     lastMarketAutoSyncRef.current = 0;
-    setShowStartupSyncModal(false);
   }, [project]);
 
   useEffect(() => {
@@ -446,10 +440,14 @@ export default function PortfolioApp() {
     }
 
     lastMarketAutoSyncRef.current = Date.now();
-    setShowStartupSyncModal(true);
-    void syncMarket(false, { full: true }).finally(() => {
-      setShowStartupSyncModal(false);
-    });
+    void Promise.resolve()
+      .then(() => {
+        setShowStartupSyncModal(true);
+        return syncMarket(false, { full: true });
+      })
+      .finally(() => {
+        setShowStartupSyncModal(false);
+      });
   }, [isLoaded, project, isMarketSyncing, isHydratingProject, syncMarket, updateProject]);
 
   const handleCacheUpdate = useCallback((data: AnalysisCache) => {
@@ -582,7 +580,6 @@ export default function PortfolioApp() {
                       key={theme.id}
                       onClick={() => {
                         const nextTheme = theme.id as keyof typeof MATERIAL_THEMES;
-                        setActiveThemeId(nextTheme);
                         updateProject((prev) => ({
                           ...prev,
                           settings: {
@@ -891,7 +888,6 @@ export default function PortfolioApp() {
                   type="button"
                   onClick={() => {
                     const next = !isDarkMode;
-                    setIsDarkMode(next);
                     updateProject((prev) => ({
                       ...prev,
                       settings: {

@@ -21,14 +21,15 @@ export const resolveWealthGoalSource = (settings?: ProjectSettings | null): Weal
             : undefined
     );
 
-    if (isValidGoalAmount(settings.wealthGoal)) {
+    const wealthGoal = settings.wealthGoal;
+    if (isValidGoalAmount(wealthGoal)) {
         if (explicitCurrency) {
-            return { amount: settings.wealthGoal, currency: explicitCurrency };
+            return { amount: wealthGoal, currency: explicitCurrency };
         }
 
-        const matchedLegacyEntry = legacyEntries.find(([, amount]) => Math.abs(amount - settings.wealthGoal) < 0.5);
+        const matchedLegacyEntry = legacyEntries.find(([, amount]) => Math.abs(amount - wealthGoal) < 0.5);
         return {
-            amount: settings.wealthGoal,
+            amount: wealthGoal,
             currency: matchedLegacyEntry?.[0] || settings.baseCurrency
         };
     }

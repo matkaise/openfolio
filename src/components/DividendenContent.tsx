@@ -3,6 +3,7 @@ import { Activity, BarChart3, CalendarCheck, Coins, PiggyBank, Timer, TrendingUp
 import { filterTransactionsByPortfolio, calculateProjectHoldings } from '@/lib/portfolioSelectors';
 import { buildSplitIgnoreDates } from '@/lib/portfolioUtils';
 import { convertCurrency } from '@/lib/fxUtils';
+import { toDateKeyLocal } from '@/lib/dateUtils';
 import { useProject } from '@/contexts/ProjectContext';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { Card } from '@/components/ui/Card';
@@ -562,8 +563,8 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
         startDate = new Date(endDate);
         startDate.setMonth(endDate.getMonth() - 1);
         return [
-          { date: toDateKey(startDate), value: valueAt(startDate) },
-          { date: toDateKey(endDate), value: valueAt(endDate) }
+          { date: toDateKeyLocal(startDate), value: valueAt(startDate) },
+          { date: toDateKeyLocal(endDate), value: valueAt(endDate) }
         ];
       case '6M':
         months = 6;
@@ -903,7 +904,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
                     title: 'Zahlungshistorie',
                     items: recentDividends.map(div => ({
                       id: div.id,
-                      name: div.name,
+                      name: div.name || '',
                       date: div.date,
                       amount: div.amount,
                       type: div.type

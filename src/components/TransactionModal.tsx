@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase, Check, ChevronDown } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
-import { Transaction, type CashAccount, type CashMovement, type Portfolio, type ProjectData } from '@/types/domain';
+import { Transaction, type CashAccount, type Security, type CashMovement, type Portfolio, type ProjectData } from '@/types/domain';
 import { parseFlatexCashBalancesCsv, parseFlatexCashMovementsCsv, parseFlatexCsv, type CashBalanceImportPoint, type CashMovementImportEntry } from '@/lib/csvParser';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
 import { getCurrencyOptions } from '@/lib/fxUtils';
@@ -1505,11 +1505,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                     currency: options.resolvedCurrency || existing?.currency || newTransaction.currency,
                     quoteType: existing?.quoteType || 'Stock',
                     priceHistory: manualHistory ? { ...(existing?.priceHistory || {}), ...manualHistory } : (existing?.priceHistory || {}),
-                    symbolStatus: options.ignoreMarketData
+                    symbolStatus: (options.ignoreMarketData
                         ? 'ignored'
                         : options.resolvedSymbol
                             ? 'resolved'
-                            : 'unresolved',
+                            : 'unresolved') as Security['symbolStatus'],
                     symbolSource: options.ignoreMarketData ? 'manual' : (options.resolvedSource || existing?.symbolSource),
                     symbolLastTried: new Date().toISOString(),
                     ignoreMarketData: Boolean(options.ignoreMarketData),
