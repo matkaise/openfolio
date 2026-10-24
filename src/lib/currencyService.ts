@@ -9,15 +9,30 @@ interface EcbResponse {
     }[];
 }
 
+// The 90-day feed covers gaps of up to ~3 months; keep a margin before switching to the full history.
+const MAX_GAP_DAYS_FOR_90D_FEED = 85;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Picks the ECB feed that covers everything since `lastUpdated` (YYYY-MM-DD).
+ * The single-day feed is never enough: a few days offline would leave gaps.
+ */
+export const chooseEcbSyncMode = (lastUpdated: string, today: string): 'hist' | '90d' => {
+    const last = Date.parse(`${(lastUpdated || '').slice(0, 10)}T00:00:00Z`);
+    const now = Date.parse(`${today}T00:00:00Z`);
+    if (!lastUpdated || !Number.isFinite(last) || !Number.isFinite(now)) return 'hist';
+    const gapDays = Math.round((now - last) / MS_PER_DAY);
+    return gapDays > MAX_GAP_DAYS_FOR_90D_FEED ? 'hist' : '90d';
+};
+
 export const CurrencyService = {
     /**
      * Syncs the provided FxData with the latest data from ECB (via our Proxy).
-     * If FxData is empty (no lastUpdated), it fetches full history.
-     * Otherwise it fetches daily updates (last 90 days usually).
+     * Fetches the full history for new projects or long gaps, otherwise the last 90 days.
      */
     syncRates: async (currentFx: FxData): Promise<FxData> => {
-        const isFullSync = !currentFx.lastUpdated;
-        const mode = isFullSync ? 'hist' : 'daily';
+        const today = new Date().toISOString().split('T')[0];
+        const mode = chooseEcbSyncMode(currentFx.lastUpdated, today);
 
         console.log(`[CurrencyService] Starting ${mode} sync...`);
 
