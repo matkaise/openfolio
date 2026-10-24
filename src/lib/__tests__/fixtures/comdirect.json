@@ -1,0 +1,42 @@
+{
+  "depot": { "depotId": "D-UUID-1", "depotDisplayId": "1234567", "defaultSettlementAccountId": "A-UUID-1" },
+  "positions": [
+    { "positionId": "P1", "wkn": "A0ACME", "quantity": { "value": "6", "unit": "XXX" }, "currentValue": { "value": "780.00", "unit": "EUR" },
+      "instrument": { "instrumentId": "I1", "wkn": "A0ACME", "isin": "US0000000001", "name": "ACME CORP", "shortName": "ACME" } },
+    { "positionId": "P2", "wkn": "A0WDGT", "quantity": { "value": "20", "unit": "XXX" },
+      "instrument": { "instrumentId": "I2", "wkn": "A0WDGT", "isin": "DE0000000002", "name": "EUROWIDGET AG", "shortName": "EUROWIDGET" } }
+  ],
+  "depotTransactions": [
+    { "transactionId": "T4", "bookingStatus": "NOTBOOKED", "bookingDate": null, "businessDate": "2024-12-20", "quantity": { "value": "1", "unit": "XXX" },
+      "instrument": { "isin": "US0000000001", "name": "ACME CORP" }, "executionPrice": { "value": "130", "unit": "EUR" }, "transactionValue": { "value": "130", "unit": "EUR" },
+      "transactionDirection": "IN", "transactionType": { "key": "BUY", "text": "Kauf" } },
+    { "transactionId": "T3", "bookingStatus": "BOOKED", "bookingDate": "2024-09-12", "businessDate": "2024-09-10", "quantity": { "value": "4", "unit": "XXX" },
+      "instrument": { "isin": "US0000000001", "name": "ACME CORP" }, "executionPrice": { "value": "115", "unit": "EUR" }, "transactionValue": { "value": "460.00", "unit": "EUR" },
+      "transactionDirection": "OUT", "transactionType": { "key": "SELL", "text": "Verkauf" } },
+    { "transactionId": "T2", "bookingStatus": "BOOKED", "bookingDate": "2024-06-24", "businessDate": "2024-06-20", "quantity": { "value": "20", "unit": "XXX" },
+      "instrument": { "isin": "DE0000000002", "name": "EUROWIDGET AG" }, "executionPrice": { "value": "50", "unit": "EUR" }, "transactionValue": { "value": "1000.00", "unit": "EUR" },
+      "transactionDirection": "IN", "transactionType": { "key": "BUY", "text": "Kauf" } },
+    { "transactionId": "T5", "bookingStatus": "BOOKED", "bookingDate": "2024-04-02", "businessDate": "2024-04-02", "quantity": { "value": "3", "unit": "XXX" },
+      "instrument": { "isin": "US0000000009", "name": "OTHER INC" }, "executionPrice": { "value": "0", "unit": "EUR" }, "transactionValue": { "value": "0", "unit": "EUR" },
+      "transactionDirection": "IN", "transactionType": { "key": "TRANSFER_IN", "text": "Depotübertrag eingehend" } },
+    { "transactionId": "T1", "bookingStatus": "BOOKED", "bookingDate": "2024-03-19", "businessDate": "2024-03-15", "quantity": { "value": "10", "unit": "XXX" },
+      "instrument": { "isin": "US0000000001", "name": "ACME CORP" }, "executionPrice": { "value": "92", "unit": "EUR" }, "transactionValue": { "value": "920.00", "unit": "EUR" },
+      "transactionDirection": "IN", "transactionType": { "key": "BUY", "text": "Kauf" } }
+  ],
+  "accountTransactions": [
+    { "reference": "R1", "bookingStatus": "BOOKED", "bookingDate": "2024-01-05", "amount": { "value": "5000.00", "unit": "EUR" },
+      "transactionType": { "key": "TRANSFER", "text": "Überweisung" }, "remittanceInfo": "01Einzahlung" },
+    { "reference": "R2", "bookingStatus": "BOOKED", "bookingDate": "2024-03-19", "amount": { "value": "-929.90", "unit": "EUR" },
+      "transactionType": { "key": "SECURITIES", "text": "Wertpapier" }, "remittanceInfo": "01WP-KAUF ACME CORP" },
+    { "reference": "R3", "bookingStatus": "BOOKED", "bookingDate": "2024-05-13", "amount": { "value": "3.42", "unit": "EUR" },
+      "transactionType": { "key": "INTEREST_DIVIDENDS", "text": "Zinsen / Dividenden" }, "remittanceInfo": "01Dividendengutschrift ACME CORP 02US0000000001" },
+    { "reference": "R4", "bookingStatus": "BOOKED", "bookingDate": "2024-07-01", "amount": { "value": "0.85", "unit": "EUR" },
+      "transactionType": { "key": "INTEREST_DIVIDENDS", "text": "Zinsen / Dividenden" }, "remittanceInfo": "01Habenzinsen 2. Quartal" },
+    { "reference": "R5", "bookingStatus": "BOOKED", "bookingDate": "2024-07-02", "amount": { "value": "-4.90", "unit": "EUR" },
+      "transactionType": { "key": "BANK_FEES", "text": "Bankgebühren" }, "remittanceInfo": "01Depotgebühr" },
+    { "reference": "R6", "bookingStatus": "BOOKED", "bookingDate": "2024-12-02", "amount": { "value": "-1000.00", "unit": "EUR" },
+      "transactionType": { "key": "TRANSFER", "text": "Überweisung" }, "remittanceInfo": "01Auszahlung" },
+    { "reference": "", "bookingStatus": "NOTBOOKED", "bookingDate": null, "amount": { "value": "-130.00", "unit": "EUR" },
+      "transactionType": { "key": "SECURITIES", "text": "Wertpapier" }, "remittanceInfo": "01WP-KAUF" }
+  ]
+}

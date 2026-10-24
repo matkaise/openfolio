@@ -18,7 +18,11 @@ const StatusLine = ({ status, connection }: { status?: ConnectionStatus; connect
         case 'needs-permission':
             return <span className="flex items-center gap-1.5 md3-warning"><AlertTriangle size={14} /> Ordnerzugriff muss bestätigt werden</span>;
         case 'needs-token':
-            return <span className="flex items-center gap-1.5 md3-warning"><KeyRound size={14} /> Token für diese Sitzung eingeben</span>;
+            return <span className="flex items-center gap-1.5 md3-warning"><KeyRound size={14} /> Zugangsdaten für diese Sitzung eingeben</span>;
+        case 'needs-login':
+            return <span className="flex items-center gap-1.5 md3-text-muted"><KeyRound size={14} /> Zum Abrufen mit PIN und TAN anmelden</span>;
+        case 'awaiting-tan':
+            return <span className="flex items-center gap-1.5 md3-warning"><Loader2 size={14} className="animate-spin" /> Warte auf TAN</span>;
         case 'missing-folder':
             return <span className="flex items-center gap-1.5 md3-negative"><AlertTriangle size={14} /> Ordner in diesem Browser nicht gespeichert – bitte neu verbinden</span>;
         case 'error':
@@ -83,6 +87,10 @@ const CredentialsPrompt = ({ connection }: { connection: BrokerConnection }) => 
     const [apiSecret, setApiSecret] = useState('');
     const [remember, setRemember] = useState(false);
     const isT212 = connection.kind === 'trading212';
+    const isComdirect = connection.kind === 'comdirect';
+    const [clientId, setClientId] = useState('');
+    const [clientSecret, setClientSecret] = useState('');
+    const [username, setUsername] = useState('');
     const field = (label: string, value: string, onChange: (v: string) => void) => (
         <label className="text-xs font-semibold md3-text-muted">
             {label}
@@ -100,13 +108,24 @@ const CredentialsPrompt = ({ connection }: { connection: BrokerConnection }) => 
             className="mt-3 flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
                 e.preventDefault();
-                provideSecrets(connection, isT212 ? { apiKey, apiSecret } : { token }, remember);
+                provideSecrets(
+                    connection,
+                    isComdirect ? { clientId, clientSecret, username } : isT212 ? { apiKey, apiSecret } : { token },
+                    remember
+                );
                 setToken('');
                 setApiKey('');
                 setApiSecret('');
+                setClientSecret('');
             }}
         >
-            {isT212 ? (
+            {isComdirect ? (
+                <>
+                    {field('client_id', clientId, setClientId)}
+                    {field('client_secret', clientSecret, setClientSecret)}
+                    {field('Zugangsnummer', username, setUsername)}
+                </>
+            ) : isT212 ? (
                 <>
                     {field('API-Schlüssel', apiKey, setApiKey)}
                     {field('API-Secret', apiSecret, setApiSecret)}
@@ -118,7 +137,42 @@ const CredentialsPrompt = ({ connection }: { connection: BrokerConnection }) => 
                     in der verschlüsselten Projektdatei speichern
                 </label>
             )}
-            <button type="submit" className="md3-filled-btn px-3 py-2 text-sm font-semibold">Abrufen</button>
+            <button type="submit" className="md3-filled-btn px-3 py-2 text-sm font-semibold">{isComdirect ? 'Weiter' : 'Abrufen'}</button>
+        </form>
+    );
+};
+
+/** comdirect: the PIN is asked for every login and only sent to the local server once. */
+const ComdirectLoginPrompt = ({ connection }: { connection: BrokerConnection }) => {
+    const { startComdirectLogin } = useBrokerSync();
+    const [pin, setPin] = useState('');
+    return (
+        <form
+            className="mt-3 flex flex-wrap items-end gap-2"
+            onSubmit={(e) => {
+                e.preventDefault();
+                const value = pin;
+                setPin('');
+                void startComdirectLogin(connection, value);
+            }}
+        >
+            <label className="text-xs font-semibold md3-text-muted">
+                PIN
+                <input
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                    className="md3-field mt-1 w-40 px-3 py-2 text-sm outline-none"
+                />
+            </label>
+            <button type="submit" disabled={pin.length < 4} className="md3-filled-btn px-3 py-2 text-sm font-semibold disabled:opacity-50">
+                TAN anfordern
+            </button>
+            <span className="w-full text-xs md3-text-muted">
+                Die PIN wird nicht gespeichert. Achtung: Nach fünf angeforderten TANs ohne gültige Eingabe sperrt comdirect den Zugang.
+            </span>
         </form>
     );
 };
@@ -126,16 +180,21 @@ const CredentialsPrompt = ({ connection }: { connection: BrokerConnection }) => 
 const CONNECTION_INFO: Record<BrokerConnection['kind'], { name: string; method: string }> = {
     'degiro-folder': { name: 'DEGIRO', method: 'Datei-Ordner' },
     'ibkr-flex': { name: 'Interactive Brokers', method: 'Flex Web Service' },
-    trading212: { name: 'Trading 212', method: 'Public API' }
+    trading212: { name: 'Trading 212', method: 'Public API' },
+    comdirect: { name: 'comdirect', method: 'REST API mit TAN' }
 };
 
-const hasStoredSecrets = (connection: BrokerConnection) => (
-    connection.kind === 'trading212' ? Boolean(connection.apiKey && connection.apiSecret) : Boolean(connection.token)
-);
+const hasStoredSecrets = (connection: BrokerConnection) => {
+    switch (connection.kind) {
+        case 'trading212': return Boolean(connection.apiKey && connection.apiSecret);
+        case 'comdirect': return Boolean(connection.clientId && connection.clientSecret && connection.username);
+        default: return Boolean(connection.token);
+    }
+};
 
 export const BrokersContent = () => {
     const { project } = useProject();
-    const { supported, statuses, connectDegiroFolder, connectIbkrFlex, connectTrading212, canStoreTokens, checkConnection, removeConnection } = useBrokerSync();
+    const { supported, statuses, connectDegiroFolder, connectIbkrFlex, connectTrading212, connectComdirect, canStoreTokens, checkConnection, removeConnection } = useBrokerSync();
     const [degiroTarget, setDegiroTarget] = useState<string>('new');
     const [degiroName, setDegiroName] = useState('DEGIRO');
     const [ibkrTarget, setIbkrTarget] = useState<string>('new');
@@ -149,6 +208,12 @@ export const BrokersContent = () => {
     const [t212Secret, setT212Secret] = useState('');
     const [t212Environment, setT212Environment] = useState<'live' | 'demo'>('live');
     const [t212Remember, setT212Remember] = useState(false);
+    const [cdTarget, setCdTarget] = useState<string>('new');
+    const [cdName, setCdName] = useState('comdirect');
+    const [cdClientId, setCdClientId] = useState('');
+    const [cdClientSecret, setCdClientSecret] = useState('');
+    const [cdUsername, setCdUsername] = useState('');
+    const [cdRemember, setCdRemember] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     if (!project) return null;
@@ -190,12 +255,24 @@ export const BrokersContent = () => {
         setT212Secret('');
     };
 
+    const handleConnectComdirect = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!cdClientId.trim() || !cdClientSecret.trim() || !/^\d{8}$/.test(cdUsername)) return;
+        connectComdirect(resolveTarget(project, cdTarget, cdName, 'comdirect'), {
+            clientId: cdClientId,
+            clientSecret: cdClientSecret,
+            username: cdUsername,
+            remember: cdRemember
+        });
+        setCdClientSecret('');
+    };
+
     return (
         <div className="space-y-6">
             <div className="md3-card p-6">
                 <h2 className="text-lg font-semibold md3-text-main">Konten &amp; Broker</h2>
                 <p className="mt-1 text-sm md3-text-muted">
-                    Neue Buchungen kommen automatisch dazu: aus dem Ordner mit deinen DEGIRO-Exporten, über die Flex-Schnittstelle von Interactive Brokers oder die API von Trading 212.
+                    Neue Buchungen kommen automatisch dazu: aus dem Ordner mit deinen DEGIRO-Exporten, über die Flex-Schnittstelle von Interactive Brokers, die API von Trading 212 oder comdirect (mit TAN).
                     Vor jedem Import siehst du, was neu ist; bereits importierte Buchungen werden übersprungen. Zugangsdaten bleiben auf deinem Rechner.
                 </p>
             </div>
@@ -228,17 +305,18 @@ export const BrokersContent = () => {
                                         Zuletzt geprüft: {formatDateTime(connection.lastCheckedAt)} · Letzter Import: {formatDateTime(connection.lastImportAt)}
                                     </div>
                                     {isApi && status?.state === 'needs-token' && <CredentialsPrompt connection={connection} />}
+                                    {connection.kind === 'comdirect' && status?.state === 'needs-login' && <ComdirectLoginPrompt connection={connection} />}
                                 </div>
                             </div>
                             <div className="flex gap-2">
                                 <button
                                     type="button"
                                     onClick={() => void checkConnection(connection)}
-                                    disabled={(!isApi && !supported) || status?.state === 'checking'}
+                                    disabled={(!isApi && !supported) || status?.state === 'checking' || status?.state === 'awaiting-tan'}
                                     className="md3-filled-btn flex items-center gap-1.5 px-3 py-2 text-sm font-semibold disabled:opacity-50"
                                 >
                                     <RefreshCw size={14} />
-                                    {status?.state === 'needs-permission' ? 'Zugriff erlauben' : 'Jetzt prüfen'}
+                                    {status?.state === 'needs-permission' ? 'Zugriff erlauben' : connection.kind === 'comdirect' ? 'Anmelden' : 'Jetzt prüfen'}
                                 </button>
                                 <button
                                     type="button"
@@ -374,7 +452,49 @@ export const BrokersContent = () => {
                         <Plus size={16} /> Verbinden &amp; abrufen
                     </button>
                 </div>
-                <p className="mt-3 text-xs md3-text-muted">comdirect folgt.</p>
+            </form>
+
+            <form className="md3-card p-6" onSubmit={handleConnectComdirect}>
+                <h3 className="font-semibold md3-text-main">comdirect verbinden</h3>
+                <p className="mt-1 text-sm md3-text-muted">
+                    Im persönlichen Bereich unter <em>Verwaltung → REST API</em> freischalten und client_id sowie client_secret herunterladen.
+                    Jeder Abruf braucht deine PIN und eine TAN (photoTAN, photoTAN-Push oder mobileTAN); danach liest Openfolio Depotbestand,
+                    Depotumsätze und die Umsätze des Verrechnungskontos. Nach dem Abruf wird die Sitzung bei comdirect beendet.
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <TargetPicker project={project} targetId={cdTarget} setTargetId={setCdTarget} newName={cdName} setNewName={setCdName} />
+                    <label className="text-xs font-semibold md3-text-muted">
+                        client_id
+                        <input autoComplete="off" value={cdClientId} onChange={(e) => setCdClientId(e.target.value)} className="md3-field mt-1 w-full px-3 py-2 text-sm outline-none" />
+                    </label>
+                    <label className="text-xs font-semibold md3-text-muted">
+                        client_secret
+                        <input type="password" autoComplete="off" value={cdClientSecret} onChange={(e) => setCdClientSecret(e.target.value)} className="md3-field mt-1 w-full px-3 py-2 text-sm outline-none" />
+                    </label>
+                    <label className="text-xs font-semibold md3-text-muted">
+                        Zugangsnummer (8 Ziffern)
+                        <input inputMode="numeric" autoComplete="off" value={cdUsername} onChange={(e) => setCdUsername(e.target.value.replace(/\D/g, '').slice(0, 8))} className="md3-field mt-1 w-full px-3 py-2 text-sm outline-none" />
+                    </label>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    {canStoreTokens ? (
+                        <label className="flex items-center gap-1.5 text-xs md3-text-muted">
+                            <input type="checkbox" checked={cdRemember} onChange={(e) => setCdRemember(e.target.checked)} />
+                            client_id, client_secret und Zugangsnummer verschlüsselt speichern (die PIN nie)
+                        </label>
+                    ) : (
+                        <span className="text-xs md3-text-muted">
+                            Das Projekt ist nicht verschlüsselt: die Zugangsdaten gelten nur für diese Sitzung.
+                        </span>
+                    )}
+                    <button
+                        type="submit"
+                        disabled={!cdClientId.trim() || !cdClientSecret.trim() || cdUsername.length !== 8}
+                        className="md3-filled-btn flex items-center gap-1.5 px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                    >
+                        <Plus size={16} /> Verbinden
+                    </button>
+                </div>
             </form>
         </div>
     );
