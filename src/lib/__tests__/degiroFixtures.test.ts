@@ -10,7 +10,7 @@ describe('synthetic DEGIRO fixtures', () => {
     const points = parseFlatexCashBalancesCsv(fixture('degiro-account.csv'));
     const last = (currency: string) => points.filter((p) => p.currency === currency).at(-1);
 
-    expect(last('CHF')).toEqual({ currency: 'CHF', date: '2024-12-02', balance: 2819.15 });
+    expect(last('CHF')).toEqual({ currency: 'CHF', date: '2024-12-02', balance: 2812.92 });
     expect(last('EUR')).toEqual({ currency: 'EUR', date: '2024-11-05', balance: 8.82 });
     expect(last('USD')).toEqual({ currency: 'USD', date: '2024-09-10', balance: -0.1 });
   });

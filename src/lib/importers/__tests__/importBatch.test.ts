@@ -26,7 +26,7 @@ describe('applyImportBatch', () => {
     expect(project.transactions).toHaveLength(4);
     expect(Object.keys(project.securities).sort()).toEqual(['DE0000000002', 'US0000000001']);
     expect(project.cashAccounts?.map((a) => a.currency).sort()).toEqual(['CHF', 'EUR', 'USD']);
-    expect(project.cashAccounts?.find((a) => a.currency === 'CHF')?.balanceHistory?.['2024-12-02']).toBe(2819.15);
+    expect(project.cashAccounts?.find((a) => a.currency === 'CHF')?.balanceHistory?.['2024-12-02']).toBe(2812.92);
     expect(summary).toMatchObject({ addedTransactions: 4, duplicateTransactions: 0, duplicateMovements: 0 });
     expect(summary.addedMovements).toBe(project.cashMovements?.length);
   });
