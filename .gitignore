@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# personal data: broker exports, project files, local databases
+*.csv
+*.openfolio
+*.sqlite
+*.sqlite3
+*.sqlite-*
+/debug_*
+!src/**/fixtures/**
