@@ -1,13 +1,6 @@
 import { FxData, CurrencyHistory } from '@/types/domain';
+import { parseEcbResponse } from '@/lib/schemas/api';
 
-interface EcbResponse {
-    success: boolean;
-    count: number;
-    data: {
-        date: string;
-        rates: Record<string, number>
-    }[];
-}
 
 // The 90-day feed covers gaps of up to ~3 months; keep a margin before switching to the full history.
 const MAX_GAP_DAYS_FOR_90D_FEED = 85;
@@ -40,7 +33,7 @@ export const CurrencyService = {
             const res = await fetch(`/api/ecb?mode=${mode}`);
             if (!res.ok) throw new Error('Proxy fetch failed');
 
-            const result: EcbResponse = await res.json();
+            const result = parseEcbResponse(await res.json());
             if (!result.success) throw new Error('ECB Proxy returned error');
 
             console.log(`[CurrencyService] Received ${result.count} days of data`);

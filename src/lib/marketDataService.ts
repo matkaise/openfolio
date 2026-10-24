@@ -1,4 +1,5 @@
 import { ProjectData, type Security, type Transaction } from '@/types/domain';
+import { parseYahooQuoteResponse, type YahooQuoteResponse } from '@/lib/schemas/api';
 
 type ResolveTickerResult = {
     status: 'resolved' | 'unresolved' | 'error';
@@ -384,8 +385,13 @@ export const syncSecurityPatches = async (
             const { res, transient } = await fetchYahooWithRetry({ symbol: symbolToFetch, from }, retryDelaysMs);
 
             if (res.ok) {
-                const data = await res.json();
-                if (data.history) {
+                let data: YahooQuoteResponse | null = null;
+                try {
+                    data = parseYahooQuoteResponse(await res.json());
+                } catch (error) {
+                    console.warn(`[MarketData] Unexpected answer for ${symbolToFetch}:`, error instanceof Error ? error.message : error);
+                }
+                if (data) {
                     const incomingDividendHistory = Array.isArray(data.dividendHistory) ? data.dividendHistory : [];
                     const nextDividendHistory = requiresFullHistory
                         ? incomingDividendHistory
@@ -527,7 +533,7 @@ export const repairProjectSecurities = (project: ProjectData): ProjectData => {
     return project;
 };
 
-function mapYahooQuoteType(type: string): 'Stock' | 'ETF' | 'Fund' | 'Bond' | 'Crypto' | undefined {
+function mapYahooQuoteType(type: string | undefined): 'Stock' | 'ETF' | 'Fund' | 'Bond' | 'Crypto' | undefined {
     if (!type) return undefined;
     const t = type.toUpperCase();
     if (t === 'EQUITY') return 'Stock';
