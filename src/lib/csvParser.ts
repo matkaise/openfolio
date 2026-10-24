@@ -22,7 +22,6 @@ export type CashMovementImportEntry = {
 // Helper to parse Floats (handles "1.234,56" vs "1234.56")
 // The sample provided shows DOT as decimal separator e.g. "-1.43", "1.0770".
 // But German CSVs often use Comma. We will try to detect or strictly follow the sample.
-// Sample: "21-01-2026,06:31,...-1.43" -> Dot decimal.
 const parseNumber = (val: string): number => {
     const raw = (val || '').trim();
     if (!raw) return 0;
@@ -91,10 +90,9 @@ export const parseFlatexCsv = (text: string): Transaction[] => {
             const date = parseDate(row[0]);
             const isin = row[3];
             const name = row[2];
-            const quantity = parseNumber(row[6]); // Negative for Sell? Sample: -1359 for Sell (Val positive).
+            const quantity = parseNumber(row[6]); // Negative for Sell (value positive).
             const price = parseNumber(row[7]);
             const currency = row[8] || 'EUR'; // Col 8 is currency name?
-            // Sample: 6: 122, 7: 17.5559, 8: EUR
 
             // Logic:
             // Quantity > 0 => Buy (Cost negative)
@@ -106,8 +104,6 @@ export const parseFlatexCsv = (text: string): Transaction[] => {
             }
 
             // Amount: "Wert in Lokalwährung" (Col 9?)
-            // Sample line 2: 
-            // 0: 01-12-2025, 1: 13:43, 2: WISDOM..., 3: GB..., 4: TDG, 5: XGAT, 6: 122, 7: 17.5559, 8: EUR, 9: -2141.82
             const amount = parseNumber(row[9]);
 
             transactions.push({
@@ -144,11 +140,8 @@ export const parseFlatexCsv = (text: string): Transaction[] => {
                 // We'll treat Interest as a specialized Dividend? Or just ignore?
                 // Use 'Dividend' type for now but name it Interest.
                 const amount = parseNumber(row[7] || row[9]); // Col 7 or 9? 
-                // Sample line 5: 6: CHF, 7: -287.33 (Amount), 8: CHF (SaldoCcy), 9: Saldo
-                // Wait, Sample line 3: "Währungswechsel...", 6: 1.0770 (FX?), 7: EUR (Ccy?), 8: 1.54 (Amount?)
 
-                // Let's look closely at Account.csv Line 10 (Dividend):
-                // 30-12-2025,07:38,24-12-2025,ISHARES...,IE00BSKRJZ44,Dividende,,USD,2962.49,USD,2962.49,
+                // Account.csv dividend row layout:
                 // Col 0: Datum
                 // Col 3: Product
                 // Col 4: ISIN

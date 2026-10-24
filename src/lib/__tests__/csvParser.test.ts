@@ -35,8 +35,8 @@ describe('parseFlatexCashBalancesCsv', () => {
   it('keeps the first row on equal time when input is reverse-chronological', () => {
     const csv = [
       'Datum,Uhrze,Valutadatum,Produkt,ISIN,Beschreibung,FX,\u00c4nderung,,Saldo,,Order-ID',
-      '03-11-2025,00:05,02-11-2025,EOS,AU000000EOS8,W\u00e4hrungswechsel (Ausbuchung),1.9037,AUD,-8561.70,AUD,0.00,order-1',
-      '03-11-2025,00:05,02-11-2025,EOS,AU000000EOS8,Verkauf 1\u2019359 zu je 6.3 AUD,,AUD,8561.70,AUD,8561.70,order-1'
+      '03-11-2025,00:05,02-11-2025,ACME,AU0000000003,W\u00e4hrungswechsel (Ausbuchung),1.6500,AUD,-1260.00,AUD,0.00,order-1',
+      '03-11-2025,00:05,02-11-2025,ACME,AU0000000003,Verkauf 1\u2019200 zu je 1.05 AUD,,AUD,1260.00,AUD,1260.00,order-1'
     ].join('\n');
 
     const points = parseFlatexCashBalancesCsv(csv).filter((p) => p.currency === 'AUD');
@@ -48,8 +48,8 @@ describe('parseFlatexCashBalancesCsv', () => {
   it('merges sparse continuation lines before parsing balances', () => {
     const csv = [
       'Datum,Uhrze,Valutadatum,Produkt,ISIN,Beschreibung,FX,\u00c4nderung,,Saldo,,Order-ID',
-      '23-06-2025,14:21,23-06-2025,HIMS,US4330001060,W\u00e4hrungswechsel (Ausbuchung),1.0677,EUR,-20544.84,EUR,0.00,80f5eafa-1980-4668-',
-      ',,,,,,,,,,,a0f6-116081112db4'
+      '23-06-2025,14:21,23-06-2025,ACME,US0000000001,W\u00e4hrungswechsel (Ausbuchung),1.0500,EUR,-1000.00,EUR,0.00,aaaaaaaa-bbbb-4ccc-',
+      ',,,,,,,,,,,8ddd-eeeeeeeeeeee'
     ].join('\n');
 
     const points = parseFlatexCashBalancesCsv(csv).filter((p) => p.currency === 'EUR');
