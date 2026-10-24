@@ -1,14 +1,17 @@
 ﻿import React, { useMemo, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, Check, ChevronRight, PenLine, PieChart, Wallet, X } from 'lucide-react';
+import { Check, PenLine, X } from 'lucide-react';
 import { calculatePortfolioHistory, calculateTWRSeries } from '@/lib/portfolioUtils';
 import { buildMwrSeries, normalizeInvestedForExplicitCash, smoothPerformanceSeries } from '@/lib/performanceUtils';
 import { selectCalculationTransactions, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency } from '@/lib/fxUtils';
 import { resolveWealthGoalSource } from '@/lib/wealthGoalUtils';
 import { useProject } from '@/contexts/ProjectContext';
-import { SimpleAreaChart } from '@/components/SimpleAreaChart';
-import { AllocationChart } from '@/components/AllocationChart';
-import { Card } from '@/components/ui/Card';
+import { Avatar, CardHeader, Chip, Donut, GlassCard, Kpi, Pill, Segmented, toneOf } from '@/components/ui/primitives';
+import { useFormatters } from '@/components/ui/useFormatters';
+import { HeroChart } from '@/components/dashboard/HeroChart';
+import { annualizedReturnFromHistory } from '@/lib/domain/performance/xirr';
+import { getBrokerConnections } from '@/lib/brokers/connections';
+import type { BrokerConnection } from '@/types/domain';
 import { parseDateOnlyUTC } from '@/lib/dateUtils';
 import { type DividendHistoryEntry, type EventEntry, type TransactionLike, type UpcomingDividendEntry } from '@/types/portfolioView';
 
@@ -22,6 +25,9 @@ const sliceHistoryByRange = (
   let startDate = new Date(endDate);
 
   switch (range) {
+    case '1W':
+      startDate.setUTCDate(startDate.getUTCDate() - 7);
+      break;
     case '1M':
       startDate.setUTCMonth(startDate.getUTCMonth() - 1);
       break;
@@ -50,13 +56,48 @@ const sliceHistoryByRange = (
   return history.slice(startIndex);
 };
 
-export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectSecurity, onShowPortfolio, includeDividends, onToggleDividends }: { timeRange: string, setTimeRange: (range: string) => void, selectedPortfolioIds: string[], onSelectSecurity: (isin: string, currency?: string) => void, onShowPortfolio: () => void, includeDividends: boolean, onToggleDividends: () => void }) => {
+type DashboardProps = {
+  timeRange: string;
+  setTimeRange: (range: string) => void;
+  selectedPortfolioIds: string[];
+  onSelectPortfolios: (ids: string[]) => void;
+  onSelectSecurity: (isin: string, currency?: string) => void;
+  onShowPortfolio: () => void;
+  onShowBrokers: () => void;
+  includeDividends: boolean;
+  onToggleDividends: () => void;
+};
+
+const RANGES = ['1W', '1M', 'YTD', '1J', '5J', 'MAX'] as const;
+const RANGE_NAMES: Record<string, string> = {
+  '1W': '1 Woche', '1M': '1 Monat', '6M': '6 Monate', YTD: 'seit Jahresbeginn', '1J': '1 Jahr', '3J': '3 Jahre', '5J': '5 Jahre', MAX: 'seit Start'
+};
+const QUOTE_TYPE_LABELS: Record<string, string> = { Stock: 'Aktie', ETF: 'ETF', Fund: 'Fonds', Crypto: 'Krypto', Bond: 'Anleihe' };
+const BROKER_LABELS: Record<BrokerConnection['kind'], { name: string; short: string; method: string }> = {
+  'degiro-folder': { name: 'DEGIRO', short: 'DG', method: 'Ordner-Sync' },
+  'ibkr-flex': { name: 'Interactive Brokers', short: 'IB', method: 'Flex API' },
+  trading212: { name: 'Trading 212', short: 'T2', method: 'API' },
+  comdirect: { name: 'comdirect', short: 'CD', method: 'API mit TAN' }
+};
+
+const relativeTime = (iso: string | undefined, nowMs: number) => {
+  if (!iso) return 'noch nicht synchronisiert';
+  const minutes = Math.round((nowMs - Date.parse(iso)) / 60000);
+  if (minutes < 1) return 'gerade synchronisiert';
+  if (minutes < 60) return `vor ${minutes} Min. synchronisiert`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `vor ${hours} Std. synchronisiert`;
+  return `vor ${Math.round(hours / 24)} Tagen synchronisiert`;
+};
+
+export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectPortfolios, onSelectSecurity, onShowPortfolio, onShowBrokers, includeDividends, onToggleDividends }: DashboardProps) => {
   const { project, updateProject } = useProject();
+  const formatters = useFormatters();
+  const [nowMs] = useState(() => Date.now());
   const [chartMode, setChartMode] = useState<'value' | 'performance'>('value');
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
   const performanceMethod = project?.settings?.performanceMethod || 'MWR';
   const performanceSmoothing = project?.settings?.performanceSmoothing || '1d';
-  const [dividendRange, setDividendRange] = useState<'YTD' | '1J'>('YTD');
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState('');
 
@@ -139,10 +180,6 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     return smoothPerformanceSeries(rawPerformanceSeries, performanceSmoothing);
   }, [rawPerformanceSeries, performanceSmoothing]);
 
-  const displayData = useMemo(() => {
-    if (chartMode === 'value') return historyData;
-    return performanceSeries;
-  }, [historyData, chartMode, performanceSeries]);
 
   const latestKpiHistoryPoint = kpiHistoryData.length > 0 ? kpiHistoryData[kpiHistoryData.length - 1] : null;
   const latestKpiPerformancePoint = kpiHistoryForPerformance.length > 0
@@ -257,32 +294,6 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     ? (dayChangeValue / previousDailyPoint.value) * 100
     : 0;
   const dayChangePercent = Math.abs(rawDayChangePercent) < 0.005 ? 0 : rawDayChangePercent;
-  const dayChangePercentLabel = `${dayChangePercent > 0 ? '+' : ''}${dayChangePercent.toLocaleString('de-DE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })}%`;
-
-  const chartMetrics = useMemo(() => {
-    let badgeValue = 0;
-    let color = 'var(--gain)';
-
-    if (displayData.length > 1) {
-      const firstPoint = displayData[0];
-      const lastPoint = displayData[displayData.length - 1];
-
-      if (chartMode === 'value') {
-        badgeValue = lastPoint.value - firstPoint.value;
-      } else {
-        badgeValue = lastPoint.value;
-      }
-
-      if (badgeValue < 0) {
-        color = 'var(--loss)';
-      }
-    }
-    return { badgeValue, color };
-  }, [displayData, chartMode]);
-
   const dividendSummary = useMemo(() => {
     if (!project) {
       return {
@@ -327,7 +338,8 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       dividendsTx.forEach(t => {
         const d = new Date(t.date);
         const key = `${d.getFullYear()}-${d.getMonth()}`;
-        const amount = convertToBaseAtDate(Math.abs(t.amount), t.currency, t.date);
+        // Signed: a reversal (negative dividend) reduces the total
+        const amount = convertToBaseAtDate(t.amount, t.currency, t.date);
         if (d.getFullYear() === currentYear) {
           ytdValue += amount;
         }
@@ -517,409 +529,269 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       .sort((a, b) => b.value - a.value);
   }, [holdings, cashBalance]);
 
+  const totalHoldingsValue = holdings.reduce((sum, h) => sum + h.value, 0);
+  const totalParts = formatters.moneyParts(currentMaketValue);
+  const firstRangePoint = historyData[0];
+  const lastRangePoint = historyData[historyData.length - 1];
+  const rangeProfit = firstRangePoint && lastRangePoint
+    ? (lastRangePoint.value - firstRangePoint.value) - (lastRangePoint.invested - firstRangePoint.invested)
+    : 0;
+  const rangePerformance = rawPerformanceSeries.length > 0 ? rawPerformanceSeries[rawPerformanceSeries.length - 1].value : 0;
+  const annualizedReturn = annualizedReturnFromHistory(kpiHistoryForPerformance);
+  const totalReturnPercent = investedCapital > 0 ? (totalReturn / investedCapital) * 100 : 0;
+  const cashAccountsWithBalance = filteredCashAccounts.filter((account) => account.balanceHistory && Object.keys(account.balanceHistory).length > 0);
+  const cashCurrencies = Array.from(new Set(cashAccountsWithBalance.map((account) => account.currency)));
+  const topHoldings = [...holdings].sort((a, b) => b.value - a.value).slice(0, 6);
+  const connections = getBrokerConnections(project);
+  const portfolios = project?.portfolios || [];
+  const chartData = chartMode === 'value' ? historyData : performanceSeries;
+
+  const monthLabels = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(new Date(nowMs).getFullYear(), new Date(nowMs).getMonth() - 11 + i, 1);
+    return d.toLocaleDateString('de-DE', { month: 'narrow' });
+  });
+  const dividendBars = dividendSummary.monthlyBars1J;
+  const maxDividendBar = Math.max(...dividendBars, 0);
+
   return (
     <>
-      {/* KPI Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:items-stretch">
-        <Card className="col-span-1 md:col-span-2 relative overflow-hidden group !p-8 md3-card-primary h-full flex flex-col justify-between">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Wallet size={120} className="md3-accent" />
-          </div>
-          <div className="relative z-10">
-            <h3 className="md3-text-muted mb-1 font-medium">Gesamtwert Portfolio</h3>
-            <div className="flex items-baseline space-x-3">
-              <span className="md3-text-main text-4xl font-bold tracking-tight">
-                {currentMaketValue.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
-              </span>
-              <span className={`flex items-center rounded px-2 py-0.5 text-sm font-medium ${dayChangePercent >= 0 ? 'md3-positive-soft' : 'md3-negative-soft'}`}>
-                {dayChangePercent >= 0 ? <ArrowUpRight size={14} className="mr-1" /> : <ArrowDownRight size={14} className="mr-1" />}
-                {dayChangePercentLabel}
-              </span>
+      <GlassCard className="hero anim-in anim-in-1" aria-label="Gesamtvermögen">
+        <div className="hero-top">
+          <div>
+            <div className="ui-label">Gesamtvermögen</div>
+            <div className="hero-big">
+              {totalParts.main}<span className="hero-big-rest">{totalParts.rest}</span>
             </div>
-            <div className="mt-6 flex flex-wrap gap-8">
-              <div>
-                <p className="md3-text-muted text-xs uppercase tracking-wider">Ertrag Gesamt</p>
-                <p className={`text-lg font-semibold ${totalReturn >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                  {totalReturn > 0 ? '+' : ''}{totalReturn.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
-                </p>
-              </div>
-              <div>
-                <p className="md3-text-muted text-xs uppercase tracking-wider">Tagesgewinn</p>
-                <p className={`text-lg font-semibold ${dayChangeValue >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                  {dayChangeValue > 0 ? '+' : ''}{dayChangeValue.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
-                </p>
-              </div>
-              <div>
-                <p className="md3-text-muted text-xs uppercase tracking-wider">Investiert</p>
-                <p className="md3-text-main text-lg font-semibold">
-                  {investedCapital.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
-                </p>
-              </div>
-              <div>
-                <p className="md3-text-muted text-xs uppercase tracking-wider">Cash</p>
-                <p className={`text-lg font-semibold ${cashBalance >= 0 ? 'md3-text-main' : 'md3-negative'}`}>
-                  {cashBalance > 0 ? '+' : ''}{cashBalance.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
-                </p>
-              </div>
-            </div>
-
-            <div
-              className="mt-6 rounded-2xl p-3"
-              style={{ backgroundColor: 'color-mix(in srgb, var(--md3-primary) 10%, var(--md3-surface-container-high) 90%)' }}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="md3-text-muted text-[11px] uppercase tracking-wider">Zielvermögen</span>
-                {isEditingGoal ? (
-                  <div className="flex items-center gap-1.5">
-                    <div
-                      className="flex items-center rounded-full px-2 py-1"
-                      style={{ backgroundColor: 'var(--md3-surface-container-highest)' }}
-                    >
-                      <input
-                        value={goalInput}
-                        onChange={(e) => setGoalInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') saveGoalEdit();
-                          if (e.key === 'Escape') cancelGoalEdit();
-                        }}
-                        inputMode="numeric"
-                        className="w-20 bg-transparent text-xs font-semibold outline-none"
-                        style={{ color: 'var(--md3-on-surface)' }}
-                        aria-label="Zielvermögen"
-                      />
-                      <span className="ml-1 text-[10px] font-semibold md3-text-muted">{baseCurrency}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={saveGoalEdit}
-                      className="h-7 w-7 rounded-full md3-chip-accent inline-flex items-center justify-center"
-                      aria-label="Ziel speichern"
-                    >
-                      <Check size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={cancelGoalEdit}
-                      className="h-7 w-7 rounded-full md3-segment md3-text-muted inline-flex items-center justify-center"
-                      aria-label="Bearbeiten abbrechen"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="md3-text-main text-xs font-semibold">
-                      {wealthGoal.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR', maximumFractionDigits: 0 })}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={startGoalEdit}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-full md3-chip-tonal"
-                      aria-label="Ziel bearbeiten"
-                      title="Ziel bearbeiten"
-                    >
-                      <PenLine size={12} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div
-                className="mt-2 h-2.5 rounded-full overflow-hidden"
-                style={{ backgroundColor: 'color-mix(in srgb, var(--md3-primary) 18%, var(--md3-surface-container-highest) 82%)' }}
-              >
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${wealthGoalProgress}%`,
-                    background: 'linear-gradient(90deg, color-mix(in srgb, var(--md3-primary) 86%, white 14%) 0%, color-mix(in srgb, var(--md3-primary) 70%, white 30%) 100%)'
-                  }}
-                />
-              </div>
-
-              <div className="mt-2 flex items-end justify-between gap-3">
-                <div>
-                  <p className="md3-text-muted text-[11px] uppercase tracking-wider">Fortschritt</p>
-                  <p className="md3-text-main text-sm font-semibold">{wealthGoalProgress.toFixed(1)}%</p>
-                </div>
-                <div className="text-right">
-                  <p className="md3-text-muted text-[11px] uppercase tracking-wider">Bis Ziel</p>
-                  <p className="md3-accent text-sm font-semibold">
-                    {wealthGoalRemaining.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR', maximumFractionDigits: 0 })}
-                  </p>
-                </div>
-              </div>
+            <div className="hero-row">
+              <Pill tone={toneOf(dayChangeValue)} title="Veränderung seit dem letzten Handelstag">
+                {dayChangeValue >= 0 ? '↑' : '↓'} {formatters.money(Math.abs(dayChangeValue))}
+              </Pill>
+              <Pill tone={toneOf(dayChangePercent)}>{formatters.percent(dayChangePercent, { sign: true })} heute</Pill>
+              <Pill tone="neutral" title={performanceMethod === 'TWR' ? 'Zeitgewichtete Rendite' : 'Geldgewichtete Rendite'}>
+                {formatters.percent(rangePerformance, { sign: true, decimals: 1 })} · {RANGE_NAMES[timeRange] || timeRange}
+              </Pill>
             </div>
           </div>
-        </Card>
-
-        <Card className="flex flex-col justify-between !p-7 md3-card-secondary h-full">
-          <div className="flex items-center justify-between">
-            <h3 className="md3-text-muted font-medium">Dividenden ({dividendRange})</h3>
-            <div className="md3-segment flex p-1">
-              <button
-                onClick={() => setDividendRange('YTD')}
-                className={`rounded-md px-2 py-0.5 text-[10px] font-medium transition-all ${dividendRange === 'YTD' ? 'md3-chip-accent' : 'md3-text-muted'}`}
-              >
-                YTD
-              </button>
-              <button
-                onClick={() => setDividendRange('1J')}
-                className={`rounded-md px-2 py-0.5 text-[10px] font-medium transition-all ${dividendRange === '1J' ? 'md3-chip-accent' : 'md3-text-muted'}`}
-              >
-                1J
-              </button>
-            </div>
-          </div>
-          <div className="mt-2">
-            <span className="md3-text-main text-3xl font-bold">
-              {(
-                dividendRange === '1J'
-                  ? dividendSummary.monthlyBars1J.reduce((sum, v) => sum + v, 0)
-                  : dividendSummary.ytdValue
-              ).toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}
-            </span>
-            <p className="md3-text-muted mt-1 text-sm">
-              {dividendSummary.nextPayout ? (
-                <>
-                  {'N\u00e4chste Auszahlung:'} <span className="md3-text-main font-semibold">{dividendSummary.nextPayout.amount.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}</span> ({dividendSummary.nextPayout.name}) - <span className="md3-text-main font-semibold">{dividendSummary.nextPayout.date}</span>
-                  {dividendSummary.isTheoretical ? <span className="text-xs text-slate-600 ml-2">Prognose</span> : null}
-                </>
-              ) : (
-                'Keine geplanten Auszahlungen'
-              )}
-            </p>
-          </div>
-          {(() => {
-            const bars = dividendRange === '1J' ? dividendSummary.monthlyBars1J : dividendSummary.monthlyBarsYTD;
-            const max = Math.max(...bars, 0);
-            const hasDividendData = max > 0;
-            const now = new Date();
-            const monthLabels = dividendRange === '1J'
-              ? Array.from({ length: 12 }, (_, i) => {
-                const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
-                return d.toLocaleDateString('de-DE', { month: 'short' }).replace('.', '');
-              })
-              : Array.from({ length: bars.length }, (_, i) => {
-                const d = new Date(now.getFullYear(), i, 1);
-                return d.toLocaleDateString('de-DE', { month: 'short' }).replace('.', '');
-              });
-
-            return (
-              <div className="mt-4">
-                <div className="mb-1 flex items-center justify-between text-[11px] md3-text-muted">
-                  <span>Monatliche Dividenden</span>
-                  <span>{dividendRange === '1J' ? 'letzte 12 Monate' : 'seit Januar'}</span>
-                </div>
-                <div className="h-14 flex items-end gap-1">
-                  {bars.map((val, i) => (
-                    <div
-                      key={i}
-                      className="relative flex-1 h-full rounded-md group"
-                      style={{ backgroundColor: 'color-mix(in srgb, var(--md3-primary) 14%, var(--md3-surface-container-highest) 86%)' }}
-                      aria-label={`${monthLabels[i]}: ${val.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}`}
-                    >
-                      <div
-                        className="absolute inset-x-0 bottom-0 rounded-t-[6px] transition-all duration-200 group-hover:brightness-105"
-                        style={{
-                          height: `${hasDividendData ? Math.max((val / max) * 100, val > 0 ? 14 : 4) : 8}%`,
-                          backgroundColor: 'color-mix(in srgb, var(--md3-primary) 78%, white 22%)',
-                          opacity: hasDividendData ? (val > 0 ? 1 : 0.35) : 0.5
-                        }}
-                      />
-                      <div
-                        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-1.5 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-xs md3-text-main z-10"
-                        style={{ backgroundColor: 'var(--md3-surface-container-highest)' }}
-                      >
-                        {monthLabels[i]}: {val.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-1 grid text-[10px] md3-text-muted" style={{ gridTemplateColumns: `repeat(${monthLabels.length}, minmax(0, 1fr))` }}>
-                  {monthLabels.map((label, i) => (
-                    <span key={`${label}-${i}`} className="text-center truncate">
-                      {monthLabels.length > 8 && i % 2 === 1 ? '' : label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-        </Card>
-      </div>
-
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2 !p-7 flex flex-col">
-          <div className="relative mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="z-10 flex items-center gap-4">
-              <div className="md3-segment flex p-1">
-                <button
-                  onClick={() => setChartMode('value')}
-                  className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${chartMode === 'value' ? 'md3-chip-accent' : 'md3-text-muted'}`}
-                >
-                  Wert
-                </button>
-                <button
-                  onClick={() => setChartMode('performance')}
-                  className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${chartMode === 'performance' ? 'md3-chip-accent' : 'md3-text-muted'}`}
-                >
-                  %
-                </button>
-              </div>
-              {chartMode === 'performance' && (
-                <button
-                  onClick={onToggleDividends}
-                  className={`flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium transition-all ${includeDividends ? 'md3-chip-accent' : 'md3-text-muted md3-segment'}`}
-                >
-                  {includeDividends && <Check size={12} />}
-                  Dividenden
-                </button>
-              )}
-            </div>
-
-            <div className="absolute left-1/2 hidden max-w-full -translate-x-1/2 overflow-x-auto md3-segment p-1 md:flex">
-              {['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'].map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${timeRange === range ? 'md3-chip-tonal' : 'md3-text-muted'}`}
-                >
-                  {range}
-                </button>
-              ))}
-            </div>
-
-            <div className="md3-segment flex max-w-full self-start overflow-x-auto p-1 md:hidden">
-              {['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'].map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${timeRange === range ? 'md3-chip-tonal' : 'md3-text-muted'}`}
-                >
-                  {range}
-                </button>
-              ))}
-            </div>
-
-            <div className="z-10 flex items-center">
-              {displayData.length > 1 && (
-                <div className="md3-segment px-3 py-1.5">
-                  <span className={`text-sm font-medium ${chartMetrics.badgeValue >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                    {chartMetrics.badgeValue >= 0 ? '+' : ''}
-                    {chartMode === 'value'
-                      ? chartMetrics.badgeValue.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })
-                      : `${chartMetrics.badgeValue.toFixed(2)}%`} {timeRange}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex-1 min-h-[280px]">
-            <SimpleAreaChart
-              data={displayData}
-              currency={project?.settings.baseCurrency || 'EUR'}
-              timeRange={timeRange}
-              height="100%"
-              showAxes={true}
-              isPercentage={chartMode === 'performance'}
-              color={chartMetrics.color}
-            />
-          </div>
-        </Card>
-
-        <Card className="!p-6">
-          <h3 className="md3-text-main mb-4 flex items-center gap-2 font-semibold">
-            <PieChart size={18} className="md3-accent" />
-            Allokation
-          </h3>
-
-          <div className="flex flex-col items-center gap-6">
-            <div className="relative h-52 w-full">
-              {allocationData.length > 0 ? (
-                <AllocationChart data={allocationData} currency={project?.settings.baseCurrency || 'EUR'} />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                  Portfolio leer
-                </div>
-              )}
-            </div>
-
-            <div className="w-full pt-4">
-              <div className="custom-scrollbar max-h-52 space-y-2 overflow-y-auto pr-2">
-                {allocationData.map((item) => (
-                  <div key={item.id} className="md3-list-item group flex cursor-default items-center justify-between p-3 text-sm">
-                    <div className="flex items-center space-x-3">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span className="md3-text-main max-w-[150px] truncate font-medium">{item.name}</span>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                      <span className="w-12 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.percentage.toFixed(1)}%</span>
-                      <span className="md3-text-main w-24 text-right text-xs font-bold">
-                        {item.value.toLocaleString('de-DE', { maximumFractionDigits: 0 })} {project?.settings.baseCurrency}
-                      </span>
-                    </div>
-                  </div>
+          <div className="hero-controls">
+            {portfolios.length > 1 && (
+              <div className="hero-row" role="group" aria-label="Depot">
+                <Chip active={selectedPortfolioIds.length === 0} onClick={() => onSelectPortfolios([])}>Alle</Chip>
+                {portfolios.map((portfolio) => (
+                  <Chip
+                    key={portfolio.id}
+                    active={selectedPortfolioIds.length === 1 && selectedPortfolioIds[0] === portfolio.id}
+                    onClick={() => onSelectPortfolios([portfolio.id])}
+                  >
+                    {portfolio.name}
+                  </Chip>
                 ))}
               </div>
-            </div>
+            )}
+            <Segmented
+              ariaLabel="Zeitraum"
+              options={RANGES.map((range) => ({ value: range, label: range }))}
+              value={(RANGES as readonly string[]).includes(timeRange) ? timeRange as typeof RANGES[number] : 'MAX'}
+              onChange={(range) => setTimeRange(range)}
+            />
           </div>
-        </Card>
+        </div>
+
+        <HeroChart data={chartData} mode={chartMode} formatters={formatters} />
+
+        <div className="hero-row" style={{ justifyContent: 'space-between' }}>
+          <div className="hero-legend">
+            <span><i aria-hidden="true" />{chartMode === 'value' ? 'Depot' : 'Rendite'}</span>
+            {chartMode === 'value' && <span><i className="is-invested" aria-hidden="true" />Eingezahlt</span>}
+          </div>
+          <div className="hero-row">
+            {chartMode === 'performance' && (
+              <Chip active={includeDividends} onClick={onToggleDividends}>Dividenden einrechnen</Chip>
+            )}
+            <Segmented
+              size="sm"
+              ariaLabel="Darstellung"
+              options={[{ value: 'value', label: 'Wert' }, { value: 'performance', label: 'Rendite %' }]}
+              value={chartMode}
+              onChange={setChartMode}
+            />
+          </div>
+        </div>
+      </GlassCard>
+
+      <div className="dash-kpis anim-in anim-in-2">
+        <Kpi label="Investiert" value={formatters.money(investedCapital, { decimals: 0 })} sub="Einstand der Positionen" icon="€" tone="accent" />
+        <Kpi
+          label="Gewinn"
+          value={formatters.money(totalReturn, { decimals: 0, sign: true })}
+          valueTone={toneOf(totalReturn)}
+          sub={`${formatters.percent(totalReturnPercent, { sign: true, decimals: 1 })} gesamt · Zeitraum ${formatters.money(rangeProfit, { decimals: 0, sign: true })}`}
+          icon="↗"
+          tone="gain"
+        />
+        <Kpi
+          label="Rendite p. a."
+          value={annualizedReturn === null ? '–' : formatters.percent(annualizedReturn * 100, { decimals: 1 })}
+          valueTone={annualizedReturn === null ? undefined : toneOf(annualizedReturn)}
+          sub={annualizedReturn === null ? 'Historie zu kurz' : 'Geldgewichtet (MWR)'}
+          icon="%"
+          tone="teal"
+        />
+        <Kpi
+          label="Cash"
+          value={formatters.money(cashBalance, { decimals: 0 })}
+          valueTone={cashBalance < 0 ? 'down' : undefined}
+          sub={cashAccountsWithBalance.length > 0
+            ? `${cashAccountsWithBalance.length} ${cashAccountsWithBalance.length === 1 ? 'Konto' : 'Konten'} · ${cashCurrencies.join(', ')}`
+            : 'Aus Einzahlungen und Erträgen'}
+          icon="◎"
+          tone="amber"
+        />
       </div>
 
-      {/* Holdings List (Compact) */}
-      <Card className="mt-2 !p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="md3-text-main text-xl font-semibold">Top Holding Performance</h3>
-          <button
-            onClick={onShowPortfolio}
-            className="md3-accent flex items-center text-sm opacity-90 hover:opacity-100"
-          >
-            Alles sehen <ChevronRight size={16} />
+      <div className="dash-goal glass anim-in anim-in-2">
+        <span className="ui-label">Zielvermögen</span>
+        {isEditingGoal ? (
+          <span className="hero-row">
+            <input
+              value={goalInput}
+              onChange={(e) => setGoalInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveGoalEdit();
+                if (e.key === 'Escape') cancelGoalEdit();
+              }}
+              inputMode="numeric"
+              autoFocus
+              className="md3-field w-32 px-3 text-sm font-bold outline-none"
+              aria-label="Zielvermögen"
+            />
+            <button type="button" onClick={saveGoalEdit} className="md3-icon-btn" aria-label="Ziel speichern"><Check size={15} /></button>
+            <button type="button" onClick={cancelGoalEdit} className="md3-icon-btn" aria-label="Bearbeiten abbrechen"><X size={15} /></button>
+          </span>
+        ) : (
+          <button type="button" onClick={startGoalEdit} className="ui-link" title="Ziel bearbeiten">
+            {formatters.money(wealthGoal, { decimals: 0 })} <PenLine size={12} className="inline" />
           </button>
+        )}
+        <div className="dash-goal-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(wealthGoalProgress)}>
+          <div className="dash-goal-fill" style={{ width: `${wealthGoalProgress}%` }} />
         </div>
-        <div className="space-y-3">
-          {holdings.length === 0 ? (
-            <div className="md3-list-item p-5 text-center text-sm text-slate-400">Keine Positionen vorhanden.</div>
-          ) : (
-            holdings.slice(0, 5).map((stock) => (
-              <div key={`${stock.security.isin}-${stock.currency}`} onClick={() => onSelectSecurity(stock.security.isin, stock.currency)} className="md3-list-item flex cursor-pointer items-center justify-between p-4">
-                <div className="flex items-center space-x-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-white">
-                    {stock.security.name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <h4 className="md3-text-main font-medium">{stock.security.name}</h4>
-                    <div className="mt-0.5 flex items-center space-x-2 text-xs text-slate-400">
-                      <span className="rounded bg-slate-700 px-1.5">{stock.security.quoteType || 'Aktie'}</span>
-                      <span>{stock.quantity} Stk.</span>
-                      <span className="text-slate-500">|</span>
-                      <span>Avg {stock.averageBuyPriceInOriginalCurrency.toLocaleString('de-DE', { style: 'currency', currency: stock.currency })}</span>
-                      <span className="text-slate-500">|</span>
-                      <span>Aktuell: {stock.currentPriceInOriginalCurrency.toLocaleString('de-DE', { style: 'currency', currency: stock.currency })}</span>
-                    </div>
-                  </div>
-                </div>
+        <span className="ui-sub">{formatters.percent(wealthGoalProgress, { decimals: 1 })} erreicht · noch {formatters.money(wealthGoalRemaining, { decimals: 0 })}</span>
+      </div>
 
-                <div className="text-right">
-                  <p className="md3-text-main font-medium">{stock.value.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}</p>
-                  <div className="flex flex-col items-end">
-                    <p className={`text-xs ${stock.totalReturn >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                      {stock.totalReturn > 0 ? '+' : ''}{stock.totalReturn.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
-                    </p>
-                    <p className={`text-xs ${stock.totalReturnPercent >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                      {stock.totalReturnPercent > 0 ? '+' : ''}{stock.totalReturnPercent.toLocaleString('de-DE', { maximumFractionDigits: 2 })}%
-                    </p>
-                  </div>
+      <div className="dash-grid">
+        <div className="dash-col">
+          <GlassCard className="anim-in anim-in-3">
+            <CardHeader title="Top-Positionen">
+              {holdings.length > 0 && <button type="button" className="ui-link" onClick={onShowPortfolio}>Alle {holdings.length} →</button>}
+            </CardHeader>
+            {topHoldings.length === 0 ? (
+              <p className="ui-sub">Noch keine Positionen. Über „Import“ oder „+ Transaktion“ kommen die ersten dazu.</p>
+            ) : topHoldings.map((holding) => {
+              const security = project?.securities?.[holding.security.isin];
+              const weight = totalHoldingsValue > 0 ? (holding.value / totalHoldingsValue) * 100 : 0;
+              return (
+                <button
+                  type="button"
+                  key={holding.security.isin}
+                  className="dash-pos"
+                  onClick={() => onSelectSecurity(holding.security.isin, holding.currency)}
+                >
+                  <Avatar seed={holding.security.isin} label={security?.symbol && security.symbol !== holding.security.isin ? security.symbol : holding.security.name} />
+                  <span style={{ minWidth: 0 }}>
+                    <span className="dash-pos-name" style={{ display: 'block' }}>{holding.security.name}</span>
+                    <span className="dash-pos-meta" style={{ display: 'block' }}>
+                      {QUOTE_TYPE_LABELS[holding.security.quoteType || ''] || 'Wertpapier'} · {formatters.number(holding.quantity, holding.quantity % 1 === 0 ? 0 : 3)} Stk.
+                    </span>
+                  </span>
+                  <span>
+                    <span className="dash-pos-value" style={{ display: 'block' }}>{formatters.money(holding.value)}</span>
+                    <span className="dash-pos-weight" style={{ display: 'block' }}>{formatters.percent(weight, { decimals: 1 })} vom Depot</span>
+                  </span>
+                  <Pill tone={toneOf(holding.totalReturnPercent)} className="dash-pos-perf">
+                    {formatters.percent(holding.totalReturnPercent, { sign: true, decimals: 1 })}
+                  </Pill>
+                </button>
+              );
+            })}
+          </GlassCard>
+
+          <GlassCard className="anim-in anim-in-4">
+            <CardHeader title="Dividenden">
+              <Pill tone={dividendSummary.ytdValue > 0 ? 'up' : 'neutral'}>{formatters.money(dividendSummary.ytdValue, { decimals: 0 })} YTD</Pill>
+            </CardHeader>
+            <div className="dash-bars" role="img" aria-label="Dividenden der letzten 12 Monate">
+              {dividendBars.map((value, index) => (
+                <div className="dash-bar-col" key={index} title={`${monthLabels[index]}: ${formatters.money(value)}`}>
+                  <div
+                    className={value > 0 ? 'dash-bar is-paid' : 'dash-bar'}
+                    style={{ height: `${maxDividendBar > 0 ? Math.max(4, (value / maxDividendBar) * 100) : 4}%` }}
+                  />
+                  <span className="dash-bar-label">{monthLabels[index]}</span>
+                </div>
+              ))}
+            </div>
+            {dividendSummary.nextPayout ? (
+              <div className="dash-next">
+                <span>
+                  <span className="dash-next-title" style={{ display: 'block' }}>{dividendSummary.nextPayout.name}</span>
+                  <span className="ui-sub">Nächste Zahlung · {dividendSummary.nextPayout.date}{dividendSummary.isTheoretical ? ' · Prognose' : ''}</span>
+                </span>
+                <span className="dash-next-value">≈ {formatters.money(dividendSummary.nextPayout.amount)}</span>
+              </div>
+            ) : (
+              <p className="ui-sub mt-4">Keine geplanten Auszahlungen bekannt.</p>
+            )}
+          </GlassCard>
+        </div>
+
+        <div className="dash-col">
+          <GlassCard className="anim-in anim-in-3">
+            <CardHeader title="Aufteilung"><span className="ui-sub">Anlageklassen</span></CardHeader>
+            {allocationData.length === 0 ? (
+              <p className="ui-sub">Noch nichts aufzuteilen.</p>
+            ) : (
+              <div className="dash-donut">
+                <Donut
+                  segments={allocationData.map((item) => ({ label: item.name, value: item.value, color: item.color }))}
+                  centerValue={holdings.length}
+                  centerLabel={holdings.length === 1 ? 'Position' : 'Positionen'}
+                />
+                <div className="dash-legend">
+                  {allocationData.map((item) => (
+                    <div className="dash-legend-row" key={item.id}>
+                      <span className="dash-legend-dot" style={{ background: item.color }} />
+                      <span>{item.name}</span>
+                      <span className="dash-legend-pct">{formatters.percent(item.percentage, { decimals: 1 })}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))
-          )}
+            )}
+          </GlassCard>
+
+          <GlassCard className="anim-in anim-in-4">
+            <CardHeader title="Verbundene Broker"><span className="ui-sub">{connections.length > 0 ? 'Sync beim Öffnen' : ''}</span></CardHeader>
+            {connections.length === 0 && <p className="ui-sub">Noch kein Broker verbunden.</p>}
+            {connections.map((connection) => {
+              const info = BROKER_LABELS[connection.kind];
+              return (
+                <div className="dash-broker" key={connection.id}>
+                  <span className="dash-broker-logo">{info.short}</span>
+                  <span style={{ minWidth: 0 }}>
+                    <span className="dash-broker-name" style={{ display: 'block' }}>{info.name}</span>
+                    <span className="dash-broker-meta">
+                      <span className={connection.lastCheckedAt ? 'app-live' : 'app-live is-warn'} aria-hidden="true" />
+                      {relativeTime(connection.lastCheckedAt, nowMs)}
+                    </span>
+                  </span>
+                  <span className="dash-broker-tag">{info.method}</span>
+                </div>
+              );
+            })}
+            <button type="button" onClick={onShowBrokers} className="md3-tonal-btn mt-3 w-full text-sm">+ Broker verbinden</button>
+          </GlassCard>
         </div>
-      </Card>
+      </div>
     </>
   );
 };
-

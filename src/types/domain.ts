@@ -113,6 +113,7 @@ export interface ProjectSettings {
     wealthGoalCurrency?: Currency; // Currency in which wealthGoal was last saved
     wealthGoals?: Record<Currency, number>; // Legacy: only for migration of old project files
     theme?: 'dark' | 'light' | 'system';
+    numberLocale?: 'de-DE' | 'de-CH' | 'de-AT' | 'en-US'; // separators for amounts
     themeId?: string; // Legacy (Material palettes); ignored
     isDarkMode?: boolean; // Legacy; read once to migrate to `theme`
     brokerConnections?: BrokerConnection[]; // folder handles live in IndexedDB, keyed by connection id
