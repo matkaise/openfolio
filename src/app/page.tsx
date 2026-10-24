@@ -7,22 +7,13 @@ import {
   PieChart,
   Wallet,
   Calendar,
-  Plus,
-  X,
-  Search,
   FileText,
   Database,
-  Save,
-  LogOut,
-  Moon,
   RefreshCw,
-  Sun,
   Loader2,
   Sparkles,
-  Settings,
   ShieldAlert,
-  FolderSync,
-  Monitor
+  FolderSync
 } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { ProjectLauncher } from '@/components/ProjectLauncher';
@@ -33,10 +24,13 @@ import { TransactionModal } from '@/components/TransactionModal';
 import { SecurityDetailModal } from '@/components/SecurityDetailModal';
 import { repairProjectSecurities, securityNeedsSync } from '@/lib/marketDataService';
 import { findMissingFxCurrencies } from '@/lib/domain/fx/rates';
-import { applyThemePreference, NEXT_THEME, resolveThemePreference, THEME_LABELS, type ThemePreference } from '@/lib/theme';
+import { applyThemePreference, resolveThemePreference, THEME_LABELS, type ThemePreference } from '@/lib/theme';
 import { normalizeWealthGoalSettings } from '@/lib/wealthGoalUtils';
 import { type AnalysisCache } from '@/types/portfolioView';
-import { SidebarItem } from '@/components/ui/SidebarItem';
+import { AppSidebar, type ShellNavItem } from '@/components/shell/AppSidebar';
+import { SecuritySearch } from '@/components/shell/SecuritySearch';
+import { getBrokerConnections } from '@/lib/brokers/connections';
+import { calculateProjectHoldings, selectCalculationTransactions } from '@/lib/portfolioSelectors';
 import { DashboardContent } from '@/components/DashboardContent';
 import { AnalysisContent } from '@/components/AnalysisContent';
 import { DividendenContent } from '@/components/DividendenContent';
@@ -70,13 +64,20 @@ const TAB_PRELOAD_SEQUENCE: TabKey[] = [
   'Import'
 ];
 
-const MOBILE_NAV_ITEMS = NAV_ITEMS.slice(0, 4);
+const MOBILE_LABELS: Partial<Record<TabKey, string>> = {
+  Dashboard: 'Übersicht',
+  Portfolio: 'Positionen',
+  Dividenden: 'Dividenden',
+  Transaktionen: 'Umsätze'
+};
 
 export default function PortfolioApp() {
-  const { isLoaded, closeProject, saveProject, project, isModified, updateProject, syncAll, syncMarket, isSyncing, isMarketSyncing, marketSyncProgress, isHydratingProject, encryptionStatus } = useProject();
+  const { isLoaded, closeProject, saveProject, project, isModified, updateProject, syncAll, syncMarket, isSyncing, isMarketSyncing, marketSyncProgress, isHydratingProject, encryptionStatus, fileName, lastSavedAt } = useProject();
   const [activeTab, setActiveTab] = useState<TabKey>('Dashboard');
   const [visitedTabs, setVisitedTabs] = useState<TabKey[]>(['Dashboard']);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMobileMoreOpen, setIsMobileMoreOpen] = useState(false);
+  // Reference time for the greeting; taken once per mount to keep rendering pure.
+  const [shellNow] = useState(() => new Date());
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [timeRange, setTimeRange] = useState('1M');
   const [selectedPortfolioIds, setSelectedPortfolioIds] = useState<string[]>([]);
@@ -92,6 +93,10 @@ export default function PortfolioApp() {
   const [importTargetPortfolio, setImportTargetPortfolio] = useState<{ id: string; name: string; isNew: boolean } | null>(null);
 
   // Only meaningful once FX data is loaded (lazy hydration or the first sync may still be running).
+  const holdingsCount = useMemo(() => (
+    project ? calculateProjectHoldings(project, selectCalculationTransactions(project, [])).holdings.length : 0
+  ), [project]);
+
   const missingFxCurrencies = useMemo(() => {
     if (!project || isHydratingProject || Object.keys(project.fxData?.rates || {}).length === 0) return [];
     return findMissingFxCurrencies(project);
@@ -194,21 +199,12 @@ export default function PortfolioApp() {
     setAnalysisCache(data);
   }, []);
 
-  const closeSidebar = useCallback(() => {
-    setIsSidebarOpen(false);
-  }, []);
-
   const handleTabChange = useCallback((key: TabKey) => {
     setVisitedTabs((prev) => (prev.includes(key) ? prev : [...prev, key]));
     startTransition(() => {
       setActiveTab(key);
     });
-    closeSidebar();
-  }, [closeSidebar, startTransition]);
-
-  const handleNavClick = useCallback((key: NavKey) => {
-    handleTabChange(key);
-  }, [handleTabChange]);
+  }, [startTransition]);
 
   const handleCloseProject = useCallback(() => {
     setActiveTab('Dashboard');
@@ -425,190 +421,119 @@ export default function PortfolioApp() {
     }
   };
 
+  const brokerConnections = getBrokerConnections(project);
+  const navItems: ShellNavItem[] = NAV_ITEMS.map((item) => ({
+    key: item.key,
+    label: item.label,
+    badge: item.key === 'Portfolio' ? holdingsCount : item.key === 'Broker' ? brokerConnections.length : undefined
+  }));
+  navItems.push({ key: 'Einstellungen', label: 'Einstellungen' });
+  const hour = shellNow.getHours();
+  const greeting = hour < 11 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
+  const savedTime = lastSavedAt ? new Date(lastSavedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : null;
+  const fileDetail = isModified
+    ? 'Ungespeicherte Änderungen'
+    : `${encryptionStatus === 'encrypted' ? 'Verschlüsselt' : 'Unverschlüsselt'} · ${savedTime ? `${savedTime} gespeichert` : 'noch nicht gespeichert'}`;
+  const mobileMainKeys: TabKey[] = ['Dashboard', 'Portfolio', 'Dividenden', 'Transaktionen'];
+
   return (
-    <div className="theme-md3 md3-app flex min-h-[100dvh] w-full font-sans">
+    <div className="theme-md3 md3-app app-shell font-sans">
       <div className="app-glow app-glow-1" aria-hidden="true" />
       <div className="app-glow app-glow-2" aria-hidden="true" />
-      {isSidebarOpen && (
-        <button
-          type="button"
-          aria-label="Close navigation"
-          onClick={closeSidebar}
-          className="md:hidden fixed inset-0 z-30 bg-black/40"
-        />
-      )}
 
-      <div className="relative z-10 flex w-full">
-        <aside
-          className={`
-            fixed inset-y-0 left-0 z-40 w-[84vw] max-w-[320px] transform p-0 transition-transform duration-300 ease-out
-            ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-            md:translate-x-0 md:w-72
-          `}
-        >
-          <div className="md3-sidebar flex h-full flex-col p-4">
-            <div className="flex items-center justify-between px-2 pb-2 md:hidden">
-              <span className="text-sm font-semibold" style={{ color: 'var(--md3-on-surface-variant)' }}>Navigation</span>
-              <button type="button" onClick={closeSidebar} className="md3-icon-btn" aria-label="Close">
-                <X size={18} />
-              </button>
+      <AppSidebar
+        items={navItems}
+        activeKey={activeTab}
+        onNavigate={(key) => handleTabChange(key as TabKey)}
+        sync={brokerConnections.length > 0
+          ? {
+            title: 'Auto-Sync aktiv',
+            text: `${brokerConnections.length} ${brokerConnections.length === 1 ? 'Broker' : 'Broker'} verbunden. Abgleich beim Öffnen des Projekts.`,
+            ok: true,
+            onClick: () => handleTabChange('Broker')
+          }
+          : {
+            title: 'Broker verbinden',
+            text: 'Neue Buchungen automatisch übernehmen: DEGIRO-Ordner, IBKR, Trading 212, comdirect.',
+            ok: false,
+            onClick: () => handleTabChange('Broker')
+          }}
+        file={{ name: fileName || 'Unbenannt.openfolio', detail: fileDetail, modified: isModified, onSave: () => void saveProject() }}
+        onClose={handleCloseProject}
+      />
+
+      <main className="app-main">
+        <header className="app-bar anim-in">
+          <div className="app-hello">
+            <span className="app-hello-sub">{shellNow.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+            <span className="app-hello-title">{greeting}</span>
+          </div>
+          <div className="app-bar-actions">
+            <SecuritySearch
+              securities={project?.securities || {}}
+              onSelect={(isin) => setSelectedSecurity({ isin })}
+            />
+            {project?.portfolios && project.portfolios.length > 0 && (
+              <MultiSelectDropdown
+                options={project.portfolios}
+                selectedIds={selectedPortfolioIds}
+                onChange={setSelectedPortfolioIds}
+              />
+            )}
+            <select
+              aria-label="Anzeigewährung"
+              title="Anzeigewährung"
+              value={project?.settings?.baseCurrency || 'EUR'}
+              onChange={(e) => {
+                const nextCurrency = e.target.value;
+                updateProject((prev) => ({
+                  ...prev,
+                  settings: { ...normalizeWealthGoalSettings(prev.settings), baseCurrency: nextCurrency }
+                }));
+              }}
+              className="app-select app-hide-mobile"
+            >
+              <option value="EUR">EUR</option>
+              <option value="USD">USD</option>
+              <option value="CHF">CHF</option>
+              <option value="GBP">GBP</option>
+            </select>
+            <div className="app-tgl glass app-hide-mobile" role="radiogroup" aria-label="Darstellung">
+              {(['dark', 'light', 'system'] as ThemePreference[]).map((theme) => (
+                <button
+                  type="button"
+                  key={theme}
+                  role="radio"
+                  aria-checked={themePreference === theme}
+                  onClick={() => setThemePreference(theme)}
+                >
+                  {THEME_LABELS[theme]}
+                </button>
+              ))}
             </div>
-
-            <div className="mb-5 flex h-20 items-center gap-3 px-2">
-              <div
-                className="flex h-12 w-12 items-center justify-center rounded-2xl"
-                style={{
-                  background: 'var(--md3-primary-container)',
-                  color: 'var(--md3-on-primary-container)'
-                }}
-              >
-                <Wallet size={24} strokeWidth={2.5} />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xl font-bold tracking-tight">Openfolio</div>
-                <div className="text-xs" style={{ color: 'var(--md3-on-surface-variant)' }}>OpenFolio</div>
-              </div>
-            </div>
-
             <button
               type="button"
-              onClick={() => {
-                handleTabChange('Import');
-              }}
-              className="md3-fab mb-5 flex items-center justify-center gap-2 px-4 text-sm font-semibold"
+              onClick={() => syncAll(true)}
+              className="md3-icon-btn"
+              aria-label="Kurse und Wechselkurse aktualisieren"
+              disabled={isSyncing || isMarketSyncing}
+              title="Kurse und Wechselkurse aktualisieren"
             >
-              <Plus size={20} />
-              <span>Import</span>
+              {(isSyncing || isMarketSyncing) ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
             </button>
-
-            <nav className="flex-1 space-y-1">
-              {NAV_ITEMS.map((item) => (
-                <SidebarItem
-                  key={item.key}
-                  icon={item.icon}
-                  label={item.label}
-                  active={activeTab === item.key}
-                  onClick={() => handleNavClick(item.key)}
-                />
-              ))}
-            </nav>
-
-            <div className="mt-auto space-y-3 pt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  handleTabChange('Einstellungen');
-                }}
-                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 transition"
-                style={{ color: 'var(--md3-on-surface-variant)' }}
-              >
-                <Settings size={18} />
-                <span className="text-sm font-semibold">Einstellungen</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={saveProject}
-                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition"
-                style={isModified
-                  ? { background: 'var(--md3-primary)', color: 'var(--md3-on-primary)' }
-                  : { color: 'var(--md3-on-surface-variant)' }}
-              >
-                <Save size={18} />
-                <span>{isModified ? 'Speichern *' : 'Gespeichert'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleCloseProject}
-                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition hover:bg-rose-500/10"
-                style={{ color: 'var(--md3-on-surface-variant)' }}
-              >
-                <LogOut size={18} />
-                <span>Schliessen</span>
-              </button>
-
-            </div>
+            <button type="button" onClick={() => handleTabChange('Import')} className="md3-tonal-btn app-hide-mobile px-4 text-sm">
+              Import
+            </button>
+            <button type="button" onClick={() => handleTabChange('Import')} className="md3-filled-btn px-4 text-sm">
+              + Transaktion
+            </button>
           </div>
-        </aside>
+        </header>
 
-        <main className="flex min-h-[100dvh] flex-1 flex-col overflow-hidden md:pl-72" style={{ background: 'var(--md3-bg)' }}>
-          <header
-            className="sticky top-0 z-20 px-4 py-3 md:px-8"
-            style={{ background: 'var(--md3-surface)' }}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3" />
-              <div className="flex items-center gap-2 md:gap-3">
-                <div className="md3-field hidden items-center gap-2 px-3 sm:flex">
-                  <span className="text-xs font-semibold" style={{ color: 'var(--md3-on-surface-variant)' }}>Waehrung</span>
-                  <select
-                    value={project?.settings?.baseCurrency || 'EUR'}
-                    onChange={(e) => {
-                      const nextCurrency = e.target.value;
-                      updateProject((prev) => {
-                        const normalizedSettings = normalizeWealthGoalSettings(prev.settings);
-
-                        return {
-                          ...prev,
-                          settings: {
-                            ...normalizedSettings,
-                            baseCurrency: nextCurrency
-                          }
-                        };
-                      });
-                    }}
-                    className="cursor-pointer border-none py-1 text-sm font-semibold outline-none"
-                  >
-                    <option value="EUR">EUR</option>
-                    <option value="USD">USD</option>
-                    <option value="CHF">CHF</option>
-                    <option value="GBP">GBP</option>
-                  </select>
-                </div>
-
-                {project?.portfolios && project.portfolios.length > 0 && (
-                  <MultiSelectDropdown
-                    options={project.portfolios}
-                    selectedIds={selectedPortfolioIds}
-                    onChange={setSelectedPortfolioIds}
-                  />
-                )}
-
-                <div className="md3-field hidden items-center px-4 lg:flex lg:w-72">
-                  <Search size={16} style={{ color: 'var(--md3-on-surface-variant)' }} />
-                  <input
-                    type="text"
-                    placeholder="ISIN oder Name suchen"
-                    className="ml-3 w-full border-none bg-transparent text-sm outline-none"
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setThemePreference(NEXT_THEME[themePreference])}
-                  className="md3-icon-btn"
-                  aria-label={`Darstellung: ${THEME_LABELS[themePreference]} (wechseln)`}
-                  title={`Darstellung: ${THEME_LABELS[themePreference]}`}
-                >
-                  {themePreference === 'dark' ? <Moon size={18} /> : themePreference === 'light' ? <Sun size={18} /> : <Monitor size={18} />}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => syncAll(true)}
-                  className="md3-icon-btn"
-                  aria-label="Aktualisieren"
-                  disabled={isSyncing || isMarketSyncing}
-                  title="Aktualisieren"
-                >
-                  {(isSyncing || isMarketSyncing) ? <Loader2 size={20} className="animate-spin" /> : <RefreshCw size={20} />}
-                </button>
-
-              </div>
-            </div>
+        {(missingFxCurrencies.length > 0 || encryptionStatus === 'legacy-unencrypted') && (
+          <div className="app-notices">
             {missingFxCurrencies.length > 0 && (
-              <div className="md3-warning-soft mt-3 flex items-start gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
+              <div className="md3-warning-soft flex items-start gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
                 <ShieldAlert size={18} className="mt-0.5 shrink-0" />
                 <span>
                   Kurs fehlt: Für {missingFxCurrencies.join(', ')} gibt es keinen Wechselkurs.
@@ -617,7 +542,7 @@ export default function PortfolioApp() {
               </div>
             )}
             {encryptionStatus === 'legacy-unencrypted' && (
-              <div className="md3-warning-soft mt-3 flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
+              <div className="md3-warning-soft flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
                 <ShieldAlert size={18} className="shrink-0" />
                 <span className="flex-1 min-w-[12rem]">
                   Diese Datei hatte nur eine Zugriffssperre, die Daten lagen unverschlüsselt darin.
@@ -628,82 +553,88 @@ export default function PortfolioApp() {
                 </button>
               </div>
             )}
-          </header>
-
-          <div className="flex-1 overflow-y-auto px-4 pb-[calc(6.8rem+env(safe-area-inset-bottom))] pt-6 md:px-8 md:pb-10 custom-scrollbar">
-            <div className="mx-auto w-full max-w-none space-y-6">
-              {visitedTabs.map((tab) => (
-                <section
-                  key={tab}
-                  aria-hidden={activeTab !== tab}
-                  className={activeTab === tab ? '' : 'hidden'}
-                >
-                  {renderContent(tab)}
-                </section>
-              ))}
-            </div>
           </div>
+        )}
 
-          {selectedSecurity && project?.securities?.[selectedSecurity.isin] && (
-            <SecurityDetailModal
-              isOpen={!!selectedSecurity}
-              onClose={() => setSelectedSecurity(null)}
-              security={project.securities[selectedSecurity.isin]}
-              transactions={project.transactions}
-              currencyFilter={selectedSecurity.currency}
-            />
-          )}
-        </main>
-      </div>
+        <div className="app-content pt-4">
+          {visitedTabs.map((tab) => (
+            <section
+              key={tab}
+              aria-hidden={activeTab !== tab}
+              className={activeTab === tab ? 'space-y-6' : 'hidden'}
+            >
+              {renderContent(tab)}
+            </section>
+          ))}
+        </div>
 
-      <nav
-        className="fixed bottom-0 left-0 right-0 z-30 px-2 py-1 md:hidden"
-        style={{
-          background: 'var(--md3-surface)',
-          paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.25rem)'
-        }}
-      >
-        <div className="flex items-center justify-between">
-          {MOBILE_NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const active = activeTab === item.key;
-            return (
+        {selectedSecurity && project?.securities?.[selectedSecurity.isin] && (
+          <SecurityDetailModal
+            isOpen={!!selectedSecurity}
+            onClose={() => setSelectedSecurity(null)}
+            security={project.securities[selectedSecurity.isin]}
+            transactions={project.transactions}
+            currencyFilter={selectedSecurity.currency}
+          />
+        )}
+      </main>
+
+      <nav className="app-bottom-nav glass" aria-label="Navigation">
+        {mobileMainKeys.map((key) => (
+          <button
+            type="button"
+            key={key}
+            onClick={() => {
+              setIsMobileMoreOpen(false);
+              handleTabChange(key);
+            }}
+            className={activeTab === key ? 'is-active' : ''}
+            aria-current={activeTab === key ? 'page' : undefined}
+          >
+            {MOBILE_LABELS[key] || key}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setIsMobileMoreOpen((open) => !open)}
+          className={isMobileMoreOpen || !mobileMainKeys.includes(activeTab) ? 'is-active' : ''}
+          aria-expanded={isMobileMoreOpen}
+        >
+          Mehr
+        </button>
+      </nav>
+
+      {isMobileMoreOpen && (
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setIsMobileMoreOpen(false)}>
+          <div
+            className="glass absolute bottom-[calc(84px+env(safe-area-inset-bottom))] left-3 right-3 flex flex-col gap-1 rounded-3xl p-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {navItems.filter((item) => !mobileMainKeys.includes(item.key as TabKey)).map((item) => (
               <button
                 type="button"
                 key={item.key}
-                onClick={() => handleNavClick(item.key)}
-                className="flex min-w-[74px] flex-col items-center gap-1 px-2 py-1"
+                className={activeTab === item.key ? 'app-nav-item is-active' : 'app-nav-item'}
+                onClick={() => {
+                  setIsMobileMoreOpen(false);
+                  handleTabChange(item.key as TabKey);
+                }}
               >
-                <span
-                  className="flex h-8 w-14 items-center justify-center rounded-full transition"
-                  style={active
-                    ? { background: 'var(--md3-secondary-container)', color: 'var(--md3-on-secondary-container)' }
-                    : { color: 'var(--md3-on-surface-variant)' }}
-                >
-                  <Icon size={20} strokeWidth={active ? 2.5 : 2} />
-                </span>
-                <span
-                  className="text-[11px] font-semibold"
-                  style={{ color: active ? 'var(--md3-on-secondary-container)' : 'var(--md3-on-surface-variant)' }}
-                >
-                  {item.label}
-                </span>
+                <span className="app-nav-dot" aria-hidden="true" />
+                {item.label}
               </button>
-            );
-          })}
+            ))}
+            <button type="button" className="app-nav-item" onClick={() => { setIsMobileMoreOpen(false); void saveProject(); }}>
+              <span className="app-nav-dot" aria-hidden="true" />
+              {isModified ? 'Speichern (ungespeicherte Änderungen)' : 'Gespeichert'}
+            </button>
+            <button type="button" className="app-nav-item" onClick={() => { setIsMobileMoreOpen(false); handleCloseProject(); }}>
+              <span className="app-nav-dot" aria-hidden="true" />
+              Projekt schließen
+            </button>
+          </div>
         </div>
-      </nav>
-
-      <div className="fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] right-4 z-30 md:hidden">
-        <button
-          type="button"
-          onClick={() => handleTabChange('Import')}
-          className="md3-fab flex h-14 w-14 items-center justify-center rounded-[18px]"
-          aria-label="Import"
-        >
-          <Plus size={24} />
-        </button>
-      </div>
+      )}
 
       <PendingImportDialog />
       <TanDialog />
