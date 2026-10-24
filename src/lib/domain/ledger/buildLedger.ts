@@ -254,3 +254,24 @@ export const getProjectLedger = (project: ProjectData): LedgerEntry[] => {
     }
     return ledger;
 };
+
+const roundCents = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * Cash per currency as the ledger books it, to compare with the broker's balances.
+ * Trade fees are charged in the fee currency. The FX fee (DEGIRO AutoFX) is not a booking
+ * of its own: it is priced into the conversion legs, so it only counts for the cost basis.
+ */
+export const deriveCashBalances = (entries: LedgerEntry[]): Record<string, number> => {
+    const balances: Record<string, number> = {};
+    const add = (currency: string, amount: number) => {
+        if (!amount) return;
+        balances[currency] = (balances[currency] ?? 0) + amount;
+    };
+    for (const entry of entries) {
+        add(entry.currency, entry.amount);
+        if (entry.fee) add(entry.feeCurrency || entry.currency, entry.fee);
+    }
+    for (const currency of Object.keys(balances)) balances[currency] = roundCents(balances[currency]);
+    return balances;
+};

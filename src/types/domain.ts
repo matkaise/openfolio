@@ -12,7 +12,7 @@ export interface Transaction {
     currency: Currency;
     exchangeRate?: number; // Transaction specific rate
     fee?: number; // Broker fees, negative = cost, in feeCurrency
-    fxFee?: number; // Currency conversion fee (e.g. DEGIRO AutoFX), negative = cost, in feeCurrency
+    fxFee?: number; // Currency conversion fee (e.g. DEGIRO AutoFX), negative = cost, in feeCurrency; priced into the FX legs, so cost basis only, not cash
     feeCurrency?: Currency; // Defaults to the transaction currency
     externalId?: string; // Stable id from the import source (order id or row hash), used to skip duplicates
     broker: string;
