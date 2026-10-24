@@ -34,7 +34,7 @@ const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: ()
         <div className="h-80 w-full">
           <SimpleAreaChart
             data={data}
-            color="#f43f5e"
+            color="var(--loss)"
             height={320}
             showAxes={true}
             timeRange="MAX"
@@ -894,7 +894,7 @@ export const AnalysisContent = ({
 
   const benchmarkSeries = useMemo(() => {
     if (!performanceRangeDates.start || !performanceRangeDates.end) return [];
-    const colors = ['#38bdf8', '#a855f7', '#f59e0b', '#22c55e', '#f43f5e', '#e2e8f0'];
+    const colors = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)', 'var(--c5)', 'var(--text3)'];
     const baseCurrency = project?.settings.baseCurrency || 'EUR';
     return benchmarkList.map((b, i) => ({
       key: `bench_${b.symbol}`,
@@ -1085,7 +1085,7 @@ export const AnalysisContent = ({
             onClose={() => setRiskModal(null)}
             title={riskModal?.title || ''}
             series={riskModal?.series || []}
-            color={riskModal?.color || '#10b981'}
+            color={riskModal?.color || 'var(--gain)'}
             isPercentage={riskModal?.isPercentage ?? true}
             tooltipLabel={riskModal?.tooltipLabel || ''}
           />
@@ -1096,7 +1096,7 @@ export const AnalysisContent = ({
               onClick={() => setRiskModal({
                 title: 'Volatilität (1J)',
                 series: riskSeries.volatility,
-                color: '#f97316',
+                color: 'var(--c4)',
                 isPercentage: true,
                 tooltipLabel: 'Volatilität (annualisiert)'
               })}
@@ -1115,7 +1115,7 @@ export const AnalysisContent = ({
               onClick={() => setRiskModal({
                 title: 'Sharpe Ratio (1J)',
                 series: riskSeries.sharpe,
-                color: '#10b981',
+                color: 'var(--gain)',
                 isPercentage: false,
                 tooltipLabel: 'Sharpe Ratio'
               })}
@@ -1232,12 +1232,12 @@ export const AnalysisContent = ({
                   <AreaChart data={performanceComparisonData} margin={{ top: 10, right: 20, bottom: 0, left: 0 }}>
                     <defs>
                       <linearGradient id="portfolioSplitStroke" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset={portfolioGradientOffset} stopColor="#10b981" stopOpacity={1} />
-                        <stop offset={portfolioGradientOffset} stopColor="#f43f5e" stopOpacity={1} />
+                        <stop offset={portfolioGradientOffset} stopColor="var(--gain)" stopOpacity={1} />
+                        <stop offset={portfolioGradientOffset} stopColor="var(--loss)" stopOpacity={1} />
                       </linearGradient>
                       <linearGradient id="portfolioSplitFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset={portfolioGradientOffset} stopColor="#10b981" stopOpacity={0.25} />
-                        <stop offset={portfolioGradientOffset} stopColor="#f43f5e" stopOpacity={0.25} />
+                        <stop offset={portfolioGradientOffset} stopColor="var(--gain)" stopOpacity={0.25} />
+                        <stop offset={portfolioGradientOffset} stopColor="var(--loss)" stopOpacity={0.25} />
                       </linearGradient>
                     </defs>
                     <XAxis
