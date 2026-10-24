@@ -76,29 +76,42 @@ const resolveTarget = (project: ProjectData, targetId: string, newName: string, 
         : { portfolioId: crypto.randomUUID(), portfolioName: newName.trim() || fallback, isNew: true };
 };
 
-const TokenPrompt = ({ connection }: { connection: BrokerConnection }) => {
-    const { provideToken, canStoreTokens } = useBrokerSync();
+const CredentialsPrompt = ({ connection }: { connection: BrokerConnection }) => {
+    const { provideSecrets, canStoreTokens } = useBrokerSync();
     const [token, setToken] = useState('');
+    const [apiKey, setApiKey] = useState('');
+    const [apiSecret, setApiSecret] = useState('');
     const [remember, setRemember] = useState(false);
+    const isT212 = connection.kind === 'trading212';
+    const field = (label: string, value: string, onChange: (v: string) => void) => (
+        <label className="text-xs font-semibold md3-text-muted">
+            {label}
+            <input
+                type="password"
+                autoComplete="off"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="md3-field mt-1 w-56 px-3 py-2 text-sm outline-none"
+            />
+        </label>
+    );
     return (
         <form
             className="mt-3 flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
                 e.preventDefault();
-                provideToken(connection, token, remember);
+                provideSecrets(connection, isT212 ? { apiKey, apiSecret } : { token }, remember);
                 setToken('');
+                setApiKey('');
+                setApiSecret('');
             }}
         >
-            <label className="text-xs font-semibold md3-text-muted">
-                Flex-Token
-                <input
-                    type="password"
-                    autoComplete="off"
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                    className="md3-field mt-1 w-64 px-3 py-2 text-sm outline-none"
-                />
-            </label>
+            {isT212 ? (
+                <>
+                    {field('API-Schlüssel', apiKey, setApiKey)}
+                    {field('API-Secret', apiSecret, setApiSecret)}
+                </>
+            ) : field('Flex-Token', token, setToken)}
             {canStoreTokens && (
                 <label className="flex items-center gap-1.5 text-xs md3-text-muted">
                     <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
@@ -110,9 +123,19 @@ const TokenPrompt = ({ connection }: { connection: BrokerConnection }) => {
     );
 };
 
+const CONNECTION_INFO: Record<BrokerConnection['kind'], { name: string; method: string }> = {
+    'degiro-folder': { name: 'DEGIRO', method: 'Datei-Ordner' },
+    'ibkr-flex': { name: 'Interactive Brokers', method: 'Flex Web Service' },
+    trading212: { name: 'Trading 212', method: 'Public API' }
+};
+
+const hasStoredSecrets = (connection: BrokerConnection) => (
+    connection.kind === 'trading212' ? Boolean(connection.apiKey && connection.apiSecret) : Boolean(connection.token)
+);
+
 export const BrokersContent = () => {
     const { project } = useProject();
-    const { supported, statuses, connectDegiroFolder, connectIbkrFlex, canStoreTokens, checkConnection, removeConnection } = useBrokerSync();
+    const { supported, statuses, connectDegiroFolder, connectIbkrFlex, connectTrading212, canStoreTokens, checkConnection, removeConnection } = useBrokerSync();
     const [degiroTarget, setDegiroTarget] = useState<string>('new');
     const [degiroName, setDegiroName] = useState('DEGIRO');
     const [ibkrTarget, setIbkrTarget] = useState<string>('new');
@@ -120,6 +143,12 @@ export const BrokersContent = () => {
     const [ibkrToken, setIbkrToken] = useState('');
     const [ibkrQueryId, setIbkrQueryId] = useState('');
     const [ibkrRemember, setIbkrRemember] = useState(false);
+    const [t212Target, setT212Target] = useState<string>('new');
+    const [t212Name, setT212Name] = useState('Trading 212');
+    const [t212Key, setT212Key] = useState('');
+    const [t212Secret, setT212Secret] = useState('');
+    const [t212Environment, setT212Environment] = useState<'live' | 'demo'>('live');
+    const [t212Remember, setT212Remember] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     if (!project) return null;
@@ -148,18 +177,32 @@ export const BrokersContent = () => {
         setIbkrQueryId('');
     };
 
+    const handleConnectT212 = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!t212Key.trim() || !t212Secret.trim()) return;
+        connectTrading212(resolveTarget(project, t212Target, t212Name, 'Trading 212'), {
+            apiKey: t212Key,
+            apiSecret: t212Secret,
+            environment: t212Environment,
+            remember: t212Remember
+        });
+        setT212Key('');
+        setT212Secret('');
+    };
+
     return (
         <div className="space-y-6">
             <div className="md3-card p-6">
                 <h2 className="text-lg font-semibold md3-text-main">Konten &amp; Broker</h2>
                 <p className="mt-1 text-sm md3-text-muted">
-                    Neue Buchungen kommen automatisch dazu: aus dem Ordner mit deinen DEGIRO-Exporten oder über die Flex-Schnittstelle von Interactive Brokers.
+                    Neue Buchungen kommen automatisch dazu: aus dem Ordner mit deinen DEGIRO-Exporten, über die Flex-Schnittstelle von Interactive Brokers oder die API von Trading 212.
                     Vor jedem Import siehst du, was neu ist; bereits importierte Buchungen werden übersprungen. Zugangsdaten bleiben auf deinem Rechner.
                 </p>
             </div>
 
             {connections.map((connection) => {
-                const isIbkr = connection.kind === 'ibkr-flex';
+                const isApi = connection.kind !== 'degiro-folder';
+                const info = CONNECTION_INFO[connection.kind];
                 const status = statuses[connection.id];
                 return (
                     <div key={connection.id} className="md3-card p-6">
@@ -169,29 +212,29 @@ export const BrokersContent = () => {
                                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl"
                                     style={{ background: 'var(--md3-primary-container)', color: 'var(--md3-on-primary-container)' }}
                                 >
-                                    {isIbkr ? <Landmark size={18} /> : <FolderOpen size={18} />}
+                                    {isApi ? <Landmark size={18} /> : <FolderOpen size={18} />}
                                 </span>
                                 <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <span className="font-semibold md3-text-main">{isIbkr ? 'Interactive Brokers' : 'DEGIRO'}</span>
-                                        <span className="md3-chip-tonal rounded-md px-2 py-0.5 text-xs font-semibold">{isIbkr ? 'Flex Web Service' : 'Datei-Ordner'}</span>
+                                        <span className="font-semibold md3-text-main">{info.name}</span>
+                                        <span className="md3-chip-tonal rounded-md px-2 py-0.5 text-xs font-semibold">{info.method}</span>
                                     </div>
                                     <div className="mt-0.5 text-sm md3-text-muted">
-                                        {isIbkr ? connection.label : `Ordner „${connection.label}“`} → Depot „{portfolioName(connection.portfolioId)}“
-                                        {isIbkr && (connection.token ? ' · Token gespeichert' : ' · Token nur für diese Sitzung')}
+                                        {isApi ? connection.label : `Ordner „${connection.label}“`} → Depot „{portfolioName(connection.portfolioId)}“
+                                        {isApi && (hasStoredSecrets(connection) ? ' · Zugangsdaten gespeichert' : ' · Zugangsdaten nur für diese Sitzung')}
                                     </div>
                                     <div className="mt-2 text-sm"><StatusLine status={status} connection={connection} /></div>
                                     <div className="mt-1 text-xs md3-text-muted">
                                         Zuletzt geprüft: {formatDateTime(connection.lastCheckedAt)} · Letzter Import: {formatDateTime(connection.lastImportAt)}
                                     </div>
-                                    {isIbkr && status?.state === 'needs-token' && <TokenPrompt connection={connection} />}
+                                    {isApi && status?.state === 'needs-token' && <CredentialsPrompt connection={connection} />}
                                 </div>
                             </div>
                             <div className="flex gap-2">
                                 <button
                                     type="button"
                                     onClick={() => void checkConnection(connection)}
-                                    disabled={(!isIbkr && !supported) || status?.state === 'checking'}
+                                    disabled={(!isApi && !supported) || status?.state === 'checking'}
                                     className="md3-filled-btn flex items-center gap-1.5 px-3 py-2 text-sm font-semibold disabled:opacity-50"
                                 >
                                     <RefreshCw size={14} />
@@ -286,7 +329,52 @@ export const BrokersContent = () => {
                         <Plus size={16} /> Verbinden &amp; abrufen
                     </button>
                 </div>
-                <p className="mt-3 text-xs md3-text-muted">Trading 212 und comdirect folgen.</p>
+            </form>
+
+            <form className="md3-card p-6" onSubmit={handleConnectT212}>
+                <h3 className="font-semibold md3-text-main">Trading 212 verbinden</h3>
+                <p className="mt-1 text-sm md3-text-muted">
+                    In der Trading-212-App unter <em>Einstellungen → API (Beta)</em> einen Schlüssel mit Leserechten für
+                    Konto, Historie und Portfolio erzeugen. Die API gibt es nur für Invest- und Aktien-ISA-Konten; Beträge kommen in der Kontowährung.
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <TargetPicker project={project} targetId={t212Target} setTargetId={setT212Target} newName={t212Name} setNewName={setT212Name} />
+                    <label className="text-xs font-semibold md3-text-muted">
+                        API-Schlüssel
+                        <input type="password" autoComplete="off" value={t212Key} onChange={(e) => setT212Key(e.target.value)} className="md3-field mt-1 w-full px-3 py-2 text-sm outline-none" />
+                    </label>
+                    <label className="text-xs font-semibold md3-text-muted">
+                        API-Secret
+                        <input type="password" autoComplete="off" value={t212Secret} onChange={(e) => setT212Secret(e.target.value)} className="md3-field mt-1 w-full px-3 py-2 text-sm outline-none" />
+                    </label>
+                    <label className="text-xs font-semibold md3-text-muted">
+                        Konto
+                        <select value={t212Environment} onChange={(e) => setT212Environment(e.target.value === 'demo' ? 'demo' : 'live')} className="md3-field mt-1 w-full px-3 py-2 text-sm outline-none">
+                            <option value="live">Echtgeld</option>
+                            <option value="demo">Demo (Paper Trading)</option>
+                        </select>
+                    </label>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    {canStoreTokens ? (
+                        <label className="flex items-center gap-1.5 text-xs md3-text-muted">
+                            <input type="checkbox" checked={t212Remember} onChange={(e) => setT212Remember(e.target.checked)} />
+                            Zugangsdaten in der verschlüsselten Projektdatei speichern (automatischer Abruf beim Öffnen)
+                        </label>
+                    ) : (
+                        <span className="text-xs md3-text-muted">
+                            Das Projekt ist nicht verschlüsselt: die Zugangsdaten gelten nur für diese Sitzung und werden nicht gespeichert.
+                        </span>
+                    )}
+                    <button
+                        type="submit"
+                        disabled={!t212Key.trim() || !t212Secret.trim()}
+                        className="md3-filled-btn flex items-center gap-1.5 px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                    >
+                        <Plus size={16} /> Verbinden &amp; abrufen
+                    </button>
+                </div>
+                <p className="mt-3 text-xs md3-text-muted">comdirect folgt.</p>
             </form>
         </div>
     );

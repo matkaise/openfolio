@@ -1,0 +1,48 @@
+{
+  "orders": [
+    {
+      "order": { "id": 50002, "side": "SELL", "status": "FILLED", "ticker": "ACME_US_EQ", "currency": "USD", "quantity": -4, "filledQuantity": 4, "createdAt": "2024-09-10T15:59:00Z",
+        "instrument": { "ticker": "ACME_US_EQ", "isin": "US0000000001", "name": "Acme Corp", "currency": "USD" } },
+      "fill": { "id": 60002, "type": "TRADE", "filledAt": "2024-09-10T16:00:00Z", "price": 125, "quantity": -4,
+        "walletImpact": { "currency": "EUR", "fxRate": 0.9, "netValue": 449.55, "realisedProfitLoss": 89.6,
+          "taxes": [{ "name": "CURRENCY_CONVERSION_FEE", "quantity": -0.45, "currency": "EUR", "chargedAt": "2024-09-10T16:00:00Z" }] } }
+    },
+    {
+      "order": { "id": 50003, "side": "BUY", "status": "CANCELLED", "ticker": "ACME_US_EQ", "currency": "USD", "quantity": 1,
+        "instrument": { "ticker": "ACME_US_EQ", "isin": "US0000000001", "name": "Acme Corp", "currency": "USD" } }
+    },
+    {
+      "order": { "id": 50004, "side": "BUY", "status": "FILLED", "ticker": "WDGl_EQ", "currency": "GBX", "quantity": 20, "filledQuantity": 20,
+        "instrument": { "ticker": "WDGl_EQ", "isin": "GB0000000003", "name": "Widget plc", "currency": "GBX" } },
+      "fill": { "id": 60004, "type": "TRADE", "filledAt": "2024-06-20T10:00:00Z", "price": 250, "quantity": 20,
+        "walletImpact": { "currency": "EUR", "fxRate": 0.0117, "netValue": -58.79,
+          "taxes": [{ "name": "STAMP_DUTY_RESERVE_TAX", "quantity": -0.29, "currency": "EUR" }] } }
+    },
+    {
+      "order": { "id": 50005, "side": "BUY", "status": "FILLED", "ticker": "ACME_US_EQ", "currency": "USD", "quantity": 10,
+        "instrument": { "ticker": "ACME_US_EQ", "isin": "US0000000001", "name": "Acme Corp", "currency": "USD" } },
+      "fill": { "id": 60005, "type": "STOCK_SPLIT", "filledAt": "2024-05-01T00:00:00Z", "price": 0, "quantity": 10, "walletImpact": { "currency": "EUR", "netValue": 0, "taxes": [] } }
+    },
+    {
+      "order": { "id": 50001, "side": "BUY", "status": "FILLED", "ticker": "ACME_US_EQ", "currency": "USD", "quantity": 10, "filledQuantity": 10,
+        "instrument": { "ticker": "ACME_US_EQ", "isin": "US0000000001", "name": "Acme Corp", "currency": "USD" } },
+      "fill": { "id": 60001, "type": "TRADE", "filledAt": "2024-03-15T15:30:00Z", "price": 100, "quantity": 10,
+        "walletImpact": { "currency": "EUR", "fxRate": 0.92, "netValue": -921.38, "realisedProfitLoss": 0,
+          "taxes": [{ "name": "CURRENCY_CONVERSION_FEE", "quantity": -1.38, "currency": "EUR" }] } }
+    }
+  ],
+  "dividends": [
+    { "reference": "DIV-1", "ticker": "ACME_US_EQ", "type": "ORDINARY", "paidOn": "2024-05-10T08:00:00Z", "amount": 3.91, "currency": "EUR", "quantity": 10, "grossAmountPerShare": 0.5, "tickerCurrency": "USD",
+      "instrument": { "ticker": "ACME_US_EQ", "isin": "US0000000001", "name": "Acme Corp", "currency": "USD" } }
+  ],
+  "transactions": [
+    { "reference": "TX-1", "type": "DEPOSIT", "amount": 5000, "currency": "EUR", "dateTime": "2024-01-05T09:00:00Z" },
+    { "reference": "TX-2", "type": "INTEREST_ON_FREE_CASH", "amount": 1.23, "currency": "EUR", "dateTime": "2024-02-01T00:00:00Z" },
+    { "reference": "TX-3", "type": "WITHDRAW", "amount": 1000, "currency": "EUR", "dateTime": "2024-12-02T09:00:00Z" },
+    { "reference": "TX-4", "type": "FEE", "amount": 2.5, "currency": "EUR", "dateTime": "2024-07-01T00:00:00Z" }
+  ],
+  "positions": [
+    { "instrument": { "ticker": "ACME_US_EQ", "isin": "US0000000001", "name": "Acme Corp", "currency": "USD" }, "quantity": 6, "averagePricePaid": 100 },
+    { "instrument": { "ticker": "WDGl_EQ", "isin": "GB0000000003", "name": "Widget plc", "currency": "GBX" }, "quantity": 20, "averagePricePaid": 250 }
+  ]
+}

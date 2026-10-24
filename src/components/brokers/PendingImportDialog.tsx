@@ -26,9 +26,11 @@ export const PendingImportDialog = () => {
                     </div>
                     <div className="min-w-0 flex-1">
                         <div id="pending-import-title" className="text-sm font-semibold md3-text-main">
-                            {pending.connection.kind === 'ibkr-flex'
-                                ? `Neue Buchungen von Interactive Brokers (${pending.connection.label})`
-                                : `Neue DEGIRO-Exporte in „${pending.connection.label}“`}
+                            {pending.connection.kind === 'degiro-folder'
+                                ? `Neue DEGIRO-Exporte in „${pending.connection.label}“`
+                                : pending.connection.kind === 'trading212'
+                                    ? `Neue Buchungen von ${pending.connection.label}`
+                                    : `Neue Buchungen von Interactive Brokers (${pending.connection.label})`}
                         </div>
                         <div className="mt-0.5 text-xs md3-text-muted">{pending.source.files.join(', ')}</div>
                     </div>
