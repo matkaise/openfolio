@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { parseEcbXml } from '@/lib/ecbXml';
 
 const ECB_URLS = {
     daily: 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml',
+    '90d': 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml',
     hist: 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml'
 };
 
-type EcbDay = { date: string; rates: Record<string, number> };
+type EcbMode = keyof typeof ECB_URLS;
+
+const parseMode = (value: string | null): EcbMode => (
+    value === 'hist' || value === '90d' || value === 'daily' ? value : '90d'
+);
 
 export async function GET(request: NextRequest) {
-    const searchParams = request.nextUrl.searchParams;
-    const mode = searchParams.get('mode') === 'hist' ? 'hist' : 'daily';
+    const mode = parseMode(request.nextUrl.searchParams.get('mode'));
 
     try {
         const url = ECB_URLS[mode];
@@ -21,37 +26,7 @@ export async function GET(request: NextRequest) {
             throw new Error(`ECB fetch failed: ${response.statusText}`);
         }
 
-        const xmlText = await response.text();
-
-        // Simple XML Parsing using Regex to avoid heavy XML DOM dependencies
-        // Structure: <Cube time="2023-10-27"> <Cube currency="USD" rate="1.05" /> ... </Cube>
-
-        const result: EcbDay[] = [];
-        const dateRegex = /<Cube time="(\d{4}-\d{2}-\d{2})">/g;
-        let dateMatch: RegExpExecArray | null;
-
-        // Iterate over dates
-        while ((dateMatch = dateRegex.exec(xmlText)) !== null) {
-            const date = dateMatch[1];
-            const rates: Record<string, number> = { EUR: 1 };
-
-            // Find end of this date block or file
-            const startIndex = dateMatch.index;
-            const nextDateMatch = xmlText.slice(startIndex + 1).match(/<Cube time="/);
-            const endIndex = nextDateMatch && nextDateMatch.index !== undefined
-                ? (startIndex + 1 + nextDateMatch.index)
-                : xmlText.length;
-            const block = xmlText.slice(startIndex, endIndex);
-
-            // Extract rates within block
-            const rateRegex = /currency="([A-Z]{3})" rate="([\d.]+)"/g;
-            let rateMatch;
-            while ((rateMatch = rateRegex.exec(block)) !== null) {
-                rates[rateMatch[1]] = parseFloat(rateMatch[2]);
-            }
-
-            result.push({ date, rates });
-        }
+        const result = parseEcbXml(await response.text());
 
         return NextResponse.json({
             success: true,
