@@ -24,6 +24,15 @@ const isBuyType = (type: Transaction['type']) => {
     return type === 'Buy' || type === 'Sparplan_Buy';
 };
 
+/**
+ * Fees of a trade as a positive cost (fees are stored negative = cost). Kept in the
+ * fee currency, which defaults to the trade currency.
+ */
+export const getTradeFeeCost = (tx: Transaction): { cost: number; currency: string } => ({
+    cost: -((tx.fee || 0) + (tx.fxFee || 0)),
+    currency: tx.feeCurrency || tx.currency
+});
+
 const getAbsoluteAmount = (amount: number | undefined) => {
     return Math.abs(amount || 0);
 };
@@ -420,18 +429,20 @@ export function calculateHoldings(
                 const amountOriginal = Math.abs(tx.amount);
                 const txCurrency = normalizeCurrency(tx.currency) || h.currency || baseCurrency;
                 const amountBase = convert(amountOriginal, txCurrency, baseCurrency, tx.date);
+                const fees = getTradeFeeCost(tx);
+                const feesBase = fees.cost ? convert(fees.cost, fees.currency, baseCurrency, tx.date) : 0;
 
                 if (isBuyType(tx.type)) {
                     if (h.quantity <= 0.000001) {
                         h.currency = txCurrency;
                     }
                     h.quantity += shares;
-                    h.invested += amountBase;
-                    h.investedOriginal += amountOriginal;
+                    h.invested += amountBase + feesBase;
+                    h.investedOriginal += amountOriginal + (fees.cost ? convert(fees.cost, fees.currency, txCurrency, tx.date) : 0);
                 } else if (tx.type === 'Sell') {
                     const avgCost = h.quantity > 0 ? h.invested / h.quantity : 0;
                     const costBasis = shares * avgCost;
-                    const pnl = amountBase - costBasis;
+                    const pnl = amountBase - feesBase - costBasis;
                     h.realizedPnL += pnl;
                     globalRealizedPnL += pnl;
                     h.invested -= costBasis;
@@ -959,7 +970,9 @@ export function calculatePortfolioHistory(
                     const tx = event.data;
                     if (isBuyType(tx.type)) {
                         const shares = Math.abs(tx.shares || 0);
-                        const amountBase = convert(Math.abs(tx.amount), tx.currency, baseCurrency, event.time);
+                        const fees = getTradeFeeCost(tx);
+                        const amountBase = convert(Math.abs(tx.amount), tx.currency, baseCurrency, event.time)
+                            + (fees.cost ? convert(fees.cost, fees.currency, baseCurrency, event.time) : 0);
                         h.quantity += shares;
                         h.invested += amountBase;
                     } else if (tx.type === 'Sell') {
@@ -997,10 +1010,12 @@ export function calculatePortfolioHistory(
             }
 
             if (useTradeFlowsForInvested) {
+                const fees = getTradeFeeCost(tx);
+                const feesBase = fees.cost ? convert(fees.cost, fees.currency, baseCurrency, txTime) : 0;
                 if (isBuyType(tx.type)) {
-                    totalTradeInvested += convert(amountAbs, txCurrency, baseCurrency, txTime);
+                    totalTradeInvested += convert(amountAbs, txCurrency, baseCurrency, txTime) + feesBase;
                 } else if (tx.type === 'Sell') {
-                    totalTradeInvested -= convert(amountAbs, txCurrency, baseCurrency, txTime);
+                    totalTradeInvested -= convert(amountAbs, txCurrency, baseCurrency, txTime) - feesBase;
                 }
             }
 

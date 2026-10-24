@@ -8,6 +8,7 @@ import { parseFlatexCashBalancesCsv, parseFlatexCashMovementsCsv, parseFlatexCsv
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
 import { getCurrencyOptions } from '@/lib/fxUtils';
 import { buildManualPriceHistory } from '@/lib/marketDataService';
+import { mergeImportedTransactions } from '@/lib/importMerge';
 import { searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
 
 interface TransactionModalProps {
@@ -43,6 +44,7 @@ type CsvImportSummary = {
     imported: number;
     importedMovements?: number;
     skipped: number;
+    duplicates?: number;
     errors: string[];
 };
 
@@ -86,6 +88,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     const [genericDateFormat, setGenericDateFormat] = useState<'auto' | 'ymd' | 'dmy' | 'mdy'>('auto');
     const [genericDefaultCurrency, setGenericDefaultCurrency] = useState('EUR');
     const [genericImportSummary, setGenericImportSummary] = useState<CsvImportSummary | null>(null);
+    const [importResult, setImportResult] = useState<{ added: number; duplicates: number } | null>(null);
     const [genericStep, setGenericStep] = useState<'upload' | 'mapping'>('upload');
     const [showGenericPreview, setShowGenericPreview] = useState(false);
     const [showGenericAdvanced, setShowGenericAdvanced] = useState(false);
@@ -587,15 +590,19 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     };
 
     const commitImport = () => {
+        if (!project) return;
         if (parsedTx.length === 0 && parsedCashBalances.length === 0 && parsedCashMovements.length === 0) return;
 
-        let updatedProject: ProjectData | null = null;
+        // Resolve the target once so every run of the updater below uses the same portfolio id.
+        const target = getTargetPortfolioId(project.portfolios || []);
 
-        updateProject(prev => {
+        // Pure: React may run state updaters twice (StrictMode) or later than this function.
+        const applyImport = (prev: ProjectData): ProjectData => {
             const updatedSecurities = { ...prev.securities };
+            const mergedTransactions = mergeImportedTransactions(prev.transactions, parsedTx, target.id);
 
             // Extract and merge securities from imported transactions
-            parsedTx.forEach(tx => {
+            mergedTransactions.added.forEach(tx => {
                 const isin = tx.isin;
                 if (isin && !updatedSecurities[isin]) {
                     updatedSecurities[isin] = {
@@ -611,19 +618,12 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
             // Handle Portfolio Creation
             const portfolios = prev.portfolios || [];
-            const target = getTargetPortfolioId(portfolios);
 
             let updatedPortfolios = portfolios;
             // Only add if it's new AND not already in the list (safety check)
             if (target.isNew && !updatedPortfolios.find(p => p.id === target.id)) {
                 updatedPortfolios = [...portfolios, { id: target.id, name: target.name }];
             }
-
-            // Assign Portfolio ID to transactions
-            const mappedTxs = parsedTx.map(tx => ({
-                ...tx,
-                portfolioId: target.id
-            }));
 
             // Merge imported balances by portfolio + currency + sourceKey
             const existingCashAccounts = prev.cashAccounts || [];
@@ -687,26 +687,27 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 });
             });
 
-            updatedProject = {
+            return {
                 ...prev,
                 portfolios: updatedPortfolios,
-                transactions: [...prev.transactions, ...mappedTxs],
+                transactions: mergedTransactions.transactions,
                 securities: updatedSecurities,
                 cashAccounts: Array.from(cashAccountMap.values()),
                 cashMovements: Array.from(movementMap.values()),
                 modified: new Date().toISOString()
             };
-            return updatedProject;
-        });
+        };
 
-        if (updatedProject) {
-            void syncMarket(true, { full: true, projectOverride: updatedProject });
-        }
+        const nextProject = applyImport(project);
+        const { added, duplicates } = mergeImportedTransactions(project.transactions, parsedTx, target.id);
+        updateProject(applyImport);
+        void syncMarket(true, { full: true, projectOverride: nextProject });
 
+        setImportResult({ added: added.length, duplicates });
         setImportStatus('success');
         setTimeout(() => {
             onClose();
-        }, 1000);
+        }, duplicates > 0 ? 2500 : 1000);
     };
 
     const currencies = useMemo(() => {
@@ -1360,25 +1361,26 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             return;
         }
 
-        let updatedProject: ProjectData | null = null;
+        if (!project) return;
+        const target = getTargetPortfolioId(project.portfolios || []);
+        const importable = transactions.filter((tx) => Boolean(tx.isin));
 
-        updateProject(prev => {
+        // Pure, see commitImport.
+        const applyGenericImport = (prev: ProjectData): ProjectData => {
             const portfolios = prev.portfolios || [];
-            const target = getTargetPortfolioId(portfolios);
             let updatedPortfolios = portfolios;
             if (target.isNew && !updatedPortfolios.find(p => p.id === target.id)) {
                 updatedPortfolios = [...portfolios, { id: target.id, name: target.name }];
             }
 
-            const updatedTransactions = [...prev.transactions];
+            const merged = mergeImportedTransactions(prev.transactions, importable, target.id);
             const updatedSecurities = { ...prev.securities };
 
-            transactions.forEach((tx) => {
+            merged.added.forEach((tx) => {
                 const securityKey = tx.isin;
                 if (!securityKey) return;
 
                 const existing = updatedSecurities[securityKey];
-                updatedTransactions.push({ ...tx, isin: securityKey, portfolioId: target.id });
 
                 updatedSecurities[securityKey] = {
                     isin: securityKey,
@@ -1397,28 +1399,34 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 };
             });
 
-            updatedProject = {
+            return {
                 ...prev,
                 portfolios: updatedPortfolios,
-                transactions: updatedTransactions,
+                transactions: merged.transactions,
                 securities: updatedSecurities,
                 modified: new Date().toISOString()
             };
-            return updatedProject;
-        });
+        };
 
-        if (updatedProject) {
-            void syncMarket(true, { full: true, projectOverride: updatedProject });
-        }
+        const nextProject = applyGenericImport(project);
+        const { added, duplicates } = mergeImportedTransactions(project.transactions, importable, target.id);
+        updateProject(applyGenericImport);
+        void syncMarket(true, { full: true, projectOverride: nextProject });
 
         setGenericImportSummary({
-            imported: transactions.length,
-            skipped: genericRows.length - transactions.length,
+            imported: added.length,
+            skipped: genericRows.length - added.length,
+            duplicates,
             errors: errors.slice(0, 3)
         });
     };
 
     if (!isOpen) return null;
+
+    // Preview of the Flatex import: how many trades are already in the target portfolio.
+    const importPreviewDuplicates = importStatus === 'ready' && project && targetPortfolio && parsedTx.length > 0
+        ? mergeImportedTransactions(project.transactions, parsedTx, targetPortfolio.id).duplicates
+        : 0;
 
     const normalizeIdentifier = (value: string) => value.trim().toUpperCase();
     const isIsin = (value: string) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value);
@@ -2093,6 +2101,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                             <> - Kontobewegungen: {genericImportSummary.importedMovements || 0}</>
                                         )}
                                         {' '} - Uebersprungen: {genericImportSummary.skipped}
+                                        {genericImportSummary.duplicates ? <> (davon {genericImportSummary.duplicates} Duplikate)</> : null}
                                         {genericImportSummary.errors.length > 0 && (
                                             <div className="mt-2 text-xs md3-negative">{genericImportSummary.errors.join(' ')}</div>
                                         )}
@@ -2135,7 +2144,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     </div>
                                     <h3 className="text-sm font-semibold md3-text-main">
                                         {importStatus === 'ready'
-                                            ? `${parsedTx.length} Transaktionen, ${parsedCashBalances.length} Kontostaende, ${parsedCashMovements.length} Kontobewegungen erkannt`
+                                            ? `${parsedTx.length} Transaktionen${importPreviewDuplicates > 0 ? ` (${importPreviewDuplicates} bereits vorhanden)` : ''}, ${parsedCashBalances.length} Kontostaende, ${parsedCashMovements.length} Kontobewegungen erkannt`
                                             : 'Datei hier ablegen'}
                                     </h3>
                                     <p className="text-xs md3-text-muted mt-1">
@@ -2385,7 +2394,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                             disabled={importStatus !== 'ready'}
                             className="md3-filled-btn px-6 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                            {importStatus === 'success' ? 'Erfolgreich!' : 'Import starten'}
+                            {importStatus === 'success'
+                                ? (importResult && importResult.duplicates > 0
+                                    ? `Importiert: ${importResult.added} neu, ${importResult.duplicates} Duplikate übersprungen`
+                                    : 'Erfolgreich!')
+                                : 'Import starten'}
                         </button>
                     )
                 ) : (

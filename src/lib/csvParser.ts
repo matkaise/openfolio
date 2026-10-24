@@ -19,9 +19,56 @@ export type CashMovementImportEntry = {
     originalData?: unknown;
 };
 
-// Helper to parse Floats (handles "1.234,56" vs "1234.56")
-// The sample provided shows DOT as decimal separator e.g. "-1.43", "1.0770".
-// But German CSVs often use Comma. We will try to detect or strictly follow the sample.
+export type DecimalSeparator = '.' | ',';
+
+/**
+ * Detects the decimal separator of a whole file from its numeric cells.
+ * Guessing per cell breaks on values like "17,5559" (German, 4 decimals), which looks
+ * like a thousands separator. Only unambiguous cells vote; "1,000" or "1.000" do not.
+ */
+export const detectDecimalSeparator = (cells: string[]): DecimalSeparator => {
+    let commaVotes = 0;
+    let dotVotes = 0;
+    for (const cell of cells) {
+        const value = (cell || '').trim().replace(/[’'\s]/g, '');
+        if (!/^[-+]?[\d.,]*\d$/.test(value)) continue;
+        const lastComma = value.lastIndexOf(',');
+        const lastDot = value.lastIndexOf('.');
+        if (lastComma >= 0 && lastDot >= 0) {
+            if (lastComma > lastDot) commaVotes += 1; else dotVotes += 1;
+        } else if (lastComma >= 0 || lastDot >= 0) {
+            const separator = lastComma >= 0 ? ',' : '.';
+            const groups = value.split(separator);
+            const votesForSeparatorAsDecimal = groups.length === 2 && groups[1].length !== 3; // "17,5559", "1.5"
+            const votesForSeparatorAsThousands = groups.length > 2; // "1.234.567"
+            if (votesForSeparatorAsDecimal) {
+                if (separator === ',') commaVotes += 1; else dotVotes += 1;
+            } else if (votesForSeparatorAsThousands) {
+                if (separator === ',') dotVotes += 1; else commaVotes += 1;
+            }
+        }
+    }
+    return commaVotes > dotVotes ? ',' : '.';
+};
+
+/** Parses a number using a known decimal separator; the other separator and apostrophes are thousands marks. */
+export const parseNumberWithSeparator = (val: string, decimal: DecimalSeparator): number => {
+    const raw = (val || '').trim();
+    if (!raw) return 0;
+    const thousands = decimal === ',' ? '.' : ',';
+    const normalized = raw
+        .replace(/[’'\s]/g, '')
+        .split(thousands).join('')
+        .replace(decimal, '.')
+        .replace(/[^\d.+-]/g, '');
+    return parseFloat(normalized);
+};
+
+const collectCells = (rows: string[][], columns: number[]): string[] => (
+    rows.slice(1).flatMap((row) => columns.map((index) => row[index] || ''))
+);
+
+// Legacy per-cell guess, still used for amounts embedded in descriptions.
 const parseNumber = (val: string): number => {
     const raw = (val || '').trim();
     if (!raw) return 0;
@@ -68,6 +115,17 @@ const parseDate = (dateStr: string): string => {
     return new Date().toISOString();
 };
 
+/**
+ * Stable key of a DEGIRO trade row: order id plus execution time, quantity and price,
+ * because one order can be filled in several rows. Raw strings keep it independent of
+ * number parsing, so rows imported by older versions (originalData) map to the same key.
+ */
+export const buildDegiroTradeKey = (row: string[]): string => {
+    const orderId = (row[17] || row[16] || '').trim() || 'no-order';
+    const part = (index: number) => (row[index] || '').trim();
+    return `degiro:${orderId}:${part(0)} ${part(1)}:${part(3)}:${part(6)}@${part(7)}`;
+};
+
 export const parseFlatexCsv = (text: string): Transaction[] => {
     const rows = parseCsvRows(text);
     const transactions: Transaction[] = [];
@@ -77,44 +135,44 @@ export const parseFlatexCsv = (text: string): Transaction[] => {
     const header = rows[0].join(',');
 
     // Strategy 1: "Transactions.csv" (Trades)
-    // Header: Datum,Uhrzeit,Produkt,ISIN,Referenzbörse,Ausführungsort,Anzahl,Kurs,,Wert in Lokalwährung...
+    // Columns: 0 Datum, 1 Uhrzeit, 2 Produkt, 3 ISIN, 4 Referenzbörse, 5 Ausführungsort, 6 Anzahl,
+    // 7 Kurs, 8 Kurswährung, 9 Wert in Lokalwährung, 10 Lokalwährung, 11 Wert <Konto>, 12 Wechselkurs,
+    // 13 AutoFX-Gebühr, 14 Transaktionsgebühren, 15 Gesamt <Konto>, 16/17 Order-ID.
+    // Fees (13, 14) are in the account currency named in the "Gesamt XXX" header.
+    // "Gesamt" = "Wert" + transaction fees; the AutoFX fee is reported on top.
     if (header.includes('Referenzbörse') && header.includes('Anzahl')) {
-        console.log("Detected Flatex Transactions CSV");
-        // Skip header
+        const decimal = detectDecimalSeparator(collectCells(rows, [6, 7, 9, 11, 12, 13, 14, 15]));
+        const num = (value: string) => parseNumberWithSeparator(value, decimal);
+        const accountCurrency = /Gesamt\s+([A-Z]{3})/.exec(header)?.[1]
+            || /Wert\s+([A-Z]{3})/.exec(header)?.[1];
+        const seenKeys = new Map<string, number>();
+
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
             if (row.length < 10) continue;
 
-            // Map columns (Indices based on sample)
-            // 0: Datum, 1: Uhrzeit, 2: Produkt, 3: ISIN, 4: Ref, 5: Ausf, 6: Anzahl, 7: Kurs, 8: empty?, 9: WertLocal
-            const date = parseDate(row[0]);
-            const isin = row[3];
-            const name = row[2];
-            const quantity = parseNumber(row[6]); // Negative for Sell (value positive).
-            const price = parseNumber(row[7]);
-            const currency = row[8] || 'EUR'; // Col 8 is currency name?
+            const quantity = num(row[6]);
+            const fee = num(row[14]);
+            const fxFee = num(row[13]);
 
-            // Logic:
-            // Quantity > 0 => Buy (Cost negative)
-            // Quantity < 0 => Sell (Revenue positive)
-
-            let type: Transaction['type'] = 'Buy';
-            if (quantity < 0) {
-                type = 'Sell';
-            }
-
-            // Amount: "Wert in Lokalwährung" (Col 9?)
-            const amount = parseNumber(row[9]);
+            // Order IDs repeat for partial fills, and identical fills can repeat inside one file.
+            const baseKey = buildDegiroTradeKey(row);
+            const occurrence = (seenKeys.get(baseKey) || 0) + 1;
+            seenKeys.set(baseKey, occurrence);
 
             transactions.push({
                 id: crypto.randomUUID(),
-                date,
-                type,
-                isin,
-                name,
+                date: parseDate(row[0]),
+                type: quantity < 0 ? 'Sell' : 'Buy',
+                isin: row[3],
+                name: row[2],
                 shares: Math.abs(quantity),
-                amount: amount, // Keep sign from CSV (Negative for Buy, Positive for Sell)
+                amount: num(row[9]), // Sign from the CSV: negative for buys, positive for sells
                 currency: row[8],
+                ...(fee ? { fee } : {}),
+                ...(fxFee ? { fxFee } : {}),
+                ...((fee || fxFee) && accountCurrency ? { feeCurrency: accountCurrency } : {}),
+                externalId: occurrence > 1 ? `${baseKey}#${occurrence}` : baseKey,
                 broker: 'Flatex',
                 originalData: row
             });
@@ -123,7 +181,6 @@ export const parseFlatexCsv = (text: string): Transaction[] => {
     // Strategy 2: "Account.csv" (Dividends, Cash)
     // Header: Datum,Uhrze,Valutadatum,Produkt,ISIN,Beschreibung...
     else if (header.includes('Valutadatum') && header.includes('Beschreibung')) {
-        console.log("Detected Flatex Account CSV");
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
             if (row.length < 6) continue;
@@ -201,6 +258,7 @@ export const parseFlatexCashBalancesCsv = (text: string): CashBalanceImportPoint
     if (!(header.includes('Valutadatum') && header.includes('Beschreibung'))) {
         return [];
     }
+    const decimal = detectDecimalSeparator(collectCells(rows, [6, 8, 10]));
 
     const parseDateOnly = (value: string): string | null => {
         const raw = (value || '').trim();
@@ -272,7 +330,7 @@ export const parseFlatexCashBalancesCsv = (text: string): CashBalanceImportPoint
         const currency = normalizeCurrency(row[9] || row[7]);
         if (!currency) continue;
 
-        const balance = parseNumber(row[10] || row[8]);
+        const balance = parseNumberWithSeparator(row[10] || row[8], decimal);
         if (!Number.isFinite(balance)) continue;
 
         const timeMinutes = parseTimeMinutes(row[1]);
@@ -320,6 +378,8 @@ export const parseFlatexCashMovementsCsv = (text: string): CashMovementImportEnt
     if (!(header.includes('Valutadatum') && header.includes('Beschreibung'))) {
         return [];
     }
+    const decimal = detectDecimalSeparator(collectCells(rows, [6, 8, 10]));
+    const num = (value: string) => parseNumberWithSeparator(value, decimal);
 
     const parseDateOnly = (value: string): string | null => {
         const raw = (value || '').trim();
@@ -355,7 +415,7 @@ export const parseFlatexCashMovementsCsv = (text: string): CashMovementImportEnt
         const matches = description.match(/[-+]?\d[\d'’.,]*/g);
         if (!matches || matches.length === 0) return null;
         const lastMatch = matches[matches.length - 1];
-        const parsed = parseNumber(lastMatch);
+        const parsed = num(lastMatch);
         return Number.isFinite(parsed) ? parsed : null;
     };
 
@@ -424,13 +484,13 @@ export const parseFlatexCashMovementsCsv = (text: string): CashMovementImportEnt
         const normalizedCurrency = currency || shiftedCurrency;
         if (!normalizedCurrency) continue;
 
-        let amount = parseNumber(row[8]);
+        let amount = num(row[8]);
         if (!Number.isFinite(amount) || (row[8] || '').trim() === '') {
             const parsedFromDescription = extractAmountFromDescription(description);
             if (parsedFromDescription !== null) {
                 amount = parsedFromDescription;
             } else if (shiftedCurrency) {
-                amount = parseNumber(row[9]);
+                amount = num(row[9]);
             }
         }
         if (!Number.isFinite(amount) || Math.abs(amount) < 0.0000001) continue;

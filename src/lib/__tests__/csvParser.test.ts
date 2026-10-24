@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseFlatexCashBalancesCsv, parseFlatexCashMovementsCsv } from '../csvParser';
+import { parseFlatexCashBalancesCsv, parseFlatexCashMovementsCsv, parseFlatexCsv } from '../csvParser';
 
 describe('parseFlatexCashBalancesCsv', () => {
   it('keeps the end-of-day balance per currency even for reverse-chronological rows', () => {
@@ -83,5 +85,72 @@ describe('parseFlatexCashMovementsCsv', () => {
     const movements = parseFlatexCashMovementsCsv(csv);
     expect(movements).toHaveLength(1);
     expect(movements[0]).toMatchObject({ type: 'Transfer', isInternal: true, currency: 'CHF', amount: -100 });
+  });
+});
+
+describe('parseFlatexCsv (trades)', () => {
+  const TRADES_HEADER = 'Datum,Uhrzeit,Produkt,ISIN,Referenzbörse,Ausführungsort,Anzahl,Kurs,,Wert in Lokalwährung,,Wert CHF,Wechselkurs,AutoFX-Gebühr,Transaktionsgebühren und/oder Fremdkosten,Gesamt CHF,Order-ID,';
+  const fixture = readFileSync(path.join(__dirname, 'fixtures', 'degiro-transactions.csv'), 'utf-8');
+
+  it('keeps fees and the AutoFX fee in the account currency (B15)', () => {
+    const txs = parseFlatexCsv(fixture);
+    const firstBuy = txs.find((tx) => tx.date === '2024-03-15');
+
+    expect(txs).toHaveLength(4);
+    expect(firstBuy).toMatchObject({
+      type: 'Buy',
+      shares: 10,
+      amount: -1000,
+      currency: 'USD',
+      fee: -1,
+      fxFee: -2.2,
+      feeCurrency: 'CHF'
+    });
+  });
+
+  it('gives every trade a stable external id built from the order id (B3)', () => {
+    const first = parseFlatexCsv(fixture);
+    const second = parseFlatexCsv(fixture);
+
+    expect(first.map((tx) => tx.externalId)).toEqual(second.map((tx) => tx.externalId));
+    expect(first.find((tx) => tx.date === '2024-03-15')?.externalId)
+      .toContain('11111111-1111-4111-8111-111111111111');
+    expect(new Set(first.map((tx) => tx.externalId)).size).toBe(4);
+  });
+
+  it('separates partial fills that share an order id', () => {
+    const csv = [
+      TRADES_HEADER,
+      '15-03-2024,15:31,ACME CORP,US0000000001,NDQ,XNAS,4,100.5000,USD,-402.00,USD,-353.75,1.1364,-0.88,-1.00,-354.75,,order-a',
+      '15-03-2024,15:30,ACME CORP,US0000000001,NDQ,XNAS,6,100.0000,USD,-600.00,USD,-528.00,1.1364,-1.32,0.00,-528.00,,order-a',
+      '15-03-2024,15:30,ACME CORP,US0000000001,NDQ,XNAS,6,100.0000,USD,-600.00,USD,-528.00,1.1364,-1.32,0.00,-528.00,,order-a'
+    ].join('\n');
+
+    const ids = parseFlatexCsv(csv).map((tx) => tx.externalId);
+    expect(new Set(ids).size).toBe(3);
+  });
+
+  it('reads German decimal commas once per file (B14)', () => {
+    const csv = [
+      TRADES_HEADER,
+      '01-12-2025,13:43,ACME CORP,US0000000001,TDG,XGAT,"122,5","17,5559",EUR,"-2.150,60",EUR,"-2.024,67","1,0622","-5,06","-3,90","-2.028,57",,order-b'
+    ].join('\n');
+
+    const [tx] = parseFlatexCsv(csv);
+    expect(tx.shares).toBeCloseTo(122.5, 6);
+    expect(tx.amount).toBeCloseTo(-2150.6, 6);
+    expect(tx.fee).toBeCloseTo(-3.9, 6);
+    expect(tx.fxFee).toBeCloseTo(-5.06, 6);
+  });
+
+  it('reads dot decimals with comma thousands', () => {
+    const csv = [
+      TRADES_HEADER,
+      '01-12-2025,13:43,ACME CORP,US0000000001,TDG,XGAT,"1,000",1.2346,USD,"-1,234.57",USD,"-1,086.36",1.1364,0.00,-1.00,"-1,087.36",,order-c'
+    ].join('\n');
+
+    const [tx] = parseFlatexCsv(csv);
+    expect(tx.shares).toBe(1000);
+    expect(tx.amount).toBeCloseTo(-1234.57, 6);
   });
 });
