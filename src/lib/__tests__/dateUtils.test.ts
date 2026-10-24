@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseDateOnlyUTC, toDateKeyUTC, toUtcTime } from '../dateUtils';
+import { getRangeStartDate, parseDateOnlyUTC, toDateKeyLocal, toDateKeyUTC, toUtcTime } from '../dateUtils';
 
 describe('dateUtils', () => {
   it('parses date-only strings in UTC', () => {
@@ -16,5 +16,33 @@ describe('dateUtils', () => {
 
   it('converts date-only strings to UTC timestamps', () => {
     expect(toUtcTime('2024-01-02')).toBe(Date.UTC(2024, 0, 2));
+  });
+});
+
+describe('getRangeStartDate (B19)', () => {
+  const start = (range: string, now: Date) => {
+    const date = getRangeStartDate(range, now);
+    if (!date) throw new Error(`no start for ${range}`);
+    return toDateKeyLocal(date);
+  };
+
+  it('clamps month arithmetic to the end of the shorter month', () => {
+    // setMonth(m - 1) on 31 March gave 3 March
+    expect(start('1M', new Date(2026, 2, 31))).toBe('2026-02-28');
+    expect(start('6M', new Date(2026, 7, 31))).toBe('2026-02-28');
+  });
+
+  it('handles 29 February for yearly ranges', () => {
+    expect(start('1J', new Date(2028, 1, 29))).toBe('2027-02-28');
+  });
+
+  it('supports YTD and the multi-year ranges', () => {
+    expect(start('YTD', new Date(2026, 9, 24))).toBe('2026-01-01');
+    expect(start('3J', new Date(2026, 9, 24))).toBe('2023-10-24');
+    expect(start('5J', new Date(2026, 9, 24))).toBe('2021-10-24');
+  });
+
+  it('returns null for MAX and unknown ranges', () => {
+    expect(getRangeStartDate('MAX', new Date(2026, 9, 24))).toBeNull();
   });
 });

@@ -227,6 +227,20 @@ const mergeSecurityPayload = (
   return result;
 };
 
+/**
+ * Id for files written without one. Derived from stored metadata so the project keeps the
+ * same identity every time it is opened (a random id would change on each open).
+ */
+export const legacyProjectId = (meta: Record<string, string>): string => {
+  const source = `${meta.created || ''}|${meta.name || ''}`;
+  let hash = 0x811c9dc5; // FNV-1a
+  for (let i = 0; i < source.length; i += 1) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `legacy-${hash.toString(16).padStart(8, '0')}`;
+};
+
 class SqliteProjectSessionImpl implements SqliteProjectSession {
   readonly format = 'sqlite' as const;
   hasLazyPayload = false;
@@ -419,7 +433,7 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
 
     const project: ProjectData = {
       version: Number(meta.version || '1'),
-      id: meta.id || crypto.randomUUID(),
+      id: meta.id || legacyProjectId(meta),
       name: meta.name || 'Mein Portfolio',
       created: meta.created || new Date().toISOString(),
       modified: meta.modified || new Date().toISOString(),

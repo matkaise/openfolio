@@ -1,5 +1,6 @@
 import { Transaction, Security, CurrencyHistory, CashAccount } from '../types/domain';
 import { getFxTable } from './domain/fx/rates';
+import { getRangeStartDate } from './dateUtils';
 
 export interface Holding {
     security: {
@@ -465,30 +466,11 @@ export function calculatePortfolioHistory(
         securityByIsin[sec.isin] = sec;
     });
 
-    switch (timeRange) {
-        case '1M':
-            startDate.setMonth(now.getMonth() - 1);
-            break;
-        case '6M':
-            startDate.setMonth(now.getMonth() - 6);
-            break;
-        case 'YTD':
-            startDate = new Date(now.getFullYear(), 0, 1);
-            break;
-        case '1J':
-            startDate.setFullYear(now.getFullYear() - 1);
-            break;
-        case '3J':
-            startDate.setFullYear(now.getFullYear() - 3);
-            break;
-        case '5J':
-            startDate.setFullYear(now.getFullYear() - 5);
-            break;
-        case 'MAX':
-            if (firstTxDate) {
-                startDate = new Date(firstTxDate);
-            }
-            break;
+    const rangeStart = getRangeStartDate(timeRange, now);
+    if (rangeStart) {
+        startDate = rangeStart;
+    } else if (timeRange === 'MAX' && firstTxDate) {
+        startDate = new Date(firstTxDate);
     }
 
     // Clamp start date to first transaction if we have history

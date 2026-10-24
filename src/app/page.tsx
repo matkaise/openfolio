@@ -761,7 +761,7 @@ export default function PortfolioApp() {
                 <Wallet size={24} strokeWidth={2.5} />
               </div>
               <div className="min-w-0">
-                <div className="text-xl font-bold tracking-tight">FinFlow</div>
+                <div className="text-xl font-bold tracking-tight">Openfolio</div>
                 <div className="text-xs" style={{ color: 'var(--md3-on-surface-variant)' }}>OpenFolio</div>
               </div>
             </div>

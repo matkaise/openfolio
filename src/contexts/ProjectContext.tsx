@@ -19,6 +19,7 @@ import {
     type SqliteProjectSession
 } from '@/lib/projectPersistence';
 import { createProjectKey, type ProjectEncryptionKey } from '@/lib/projectCrypto';
+import { downloadFile, pickFileWithInput, supportsFileSystemAccess } from '@/lib/fileAccess';
 
 const ensurePortfoliosFromData = (project: ProjectData): ProjectData => {
     if ((project.portfolios || []).length > 0) {
@@ -135,19 +136,24 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         encryptionKeyRef.current = nextKey;
     }, []);
 
-    const writeToHandle = useCallback(async (handle: FileSystemFileHandle, data: ProjectData) => {
-        if (encryptionKeyRef.current && !isSqliteFileName(handle.name)) {
+    const serializeForSave = useCallback(async (targetName: string, data: ProjectData) => {
+        if (encryptionKeyRef.current && !isSqliteFileName(targetName)) {
             throw new Error('Verschluesselte Projekte koennen nur als .openfolio/.sqlite gespeichert werden.');
         }
-
-        // Serialize before opening the file, so a serialization error leaves the file untouched.
         const serialized = await serializeProjectForFile(
-            handle.name,
+            targetName,
             data,
             sqliteSessionRef.current,
             encryptionKeyRef.current
         );
         setSqliteSession(serialized.sqliteSession);
+        return serialized.data;
+    }, [setSqliteSession]);
+
+    const writeToHandle = useCallback(async (handle: FileSystemFileHandle, data: ProjectData) => {
+        // Serialize before opening the file, so a serialization error leaves the file untouched.
+        const serializedData = await serializeForSave(handle.name, data);
+        const serialized = { data: serializedData };
 
         const writable = await handle.createWritable();
         try {
@@ -165,7 +171,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             throw error;
         }
         setEncryptionStatus(encryptionKeyRef.current ? 'encrypted' : 'none');
-    }, [setSqliteSession]);
+    }, [serializeForSave]);
 
     // Helper to perform sync on a given project data state
     const performSync = useCallback(async (currentProject: ProjectData) => {
@@ -243,19 +249,27 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         requestPassword?: (reason: 'required' | 'invalid') => Promise<string | null>;
     }) => {
         try {
-            // @ts-expect-error File System Access API types might need polyfill
-            const [handle] = await window.showOpenFilePicker({
-                types: [
-                    {
-                        description: 'OpenFolio Projekt',
-                        accept: { 'application/x-openfolio-project': ['.openfolio'] }
-                    }
-                ],
-                excludeAcceptAllOption: true,
-                multiple: false
-            });
-
-            const file = await handle.getFile();
+            let handle: FileSystemFileHandle | null = null;
+            let file: File;
+            if (supportsFileSystemAccess()) {
+                // @ts-expect-error File System Access API types might need polyfill
+                [handle] = await window.showOpenFilePicker({
+                    types: [
+                        {
+                            description: 'Openfolio Projekt',
+                            accept: { 'application/x-openfolio-project': ['.openfolio'] }
+                        }
+                    ],
+                    excludeAcceptAllOption: true,
+                    multiple: false
+                });
+                file = await handle!.getFile();
+            } else {
+                // Firefox/Safari: no file handles; saving downloads a new copy
+                const picked = await pickFileWithInput('.openfolio,.sqlite,.sqlite3,.db,.json');
+                if (!picked) return;
+                file = picked;
+            }
 
             let opened;
             let passwordAttempt: string | undefined;
@@ -369,6 +383,21 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const saveProjectAs = useCallback(async () => {
         if (!project) return;
         try {
+            if (!supportsFileSystemAccess()) {
+                // Firefox/Safari: save as a download
+                const suggested = fileName || 'Portfolio.openfolio';
+                const downloadName = isSqliteFileName(suggested) ? suggested : `${suggested.replace(/\.[^.]+$/, '')}.openfolio`;
+                const modified = new Date().toISOString();
+                const { clean } = await revisionsRef.current.save(async () => {
+                    downloadFile(await serializeForSave(downloadName, { ...project, modified }), downloadName);
+                });
+                setFileName(downloadName);
+                setEncryptionStatus(encryptionKeyRef.current ? 'encrypted' : 'none');
+                setProject((prev) => prev ? { ...prev, modified } : prev);
+                if (clean) setIsModified(false);
+                return;
+            }
+
             // @ts-expect-error File System Access API types might need polyfill
             const handle = await window.showSaveFilePicker({
                 types: [
@@ -397,7 +426,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             console.error('Failed to save project:', err);
             alert('Fehler beim Speichern: ' + message);
         }
-    }, [project, fileName, writeToHandle]);
+    }, [project, fileName, writeToHandle, serializeForSave]);
 
     const saveProject = useCallback(async () => {
         if (!project) return;

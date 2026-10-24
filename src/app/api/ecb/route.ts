@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         const url = ECB_URLS[mode];
         console.log(`[ECB Proxy] Fetching ${mode} data from ${url}`);
 
-        const response = await fetch(url, { headers: { 'User-Agent': 'OpenParqet/1.0' } });
+        const response = await fetch(url, { headers: { 'User-Agent': 'Openfolio/1.0' } });
 
         if (!response.ok) {
             throw new Error(`ECB fetch failed: ${response.statusText}`);

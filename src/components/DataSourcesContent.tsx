@@ -13,6 +13,7 @@ import {
     ResponsiveContainer
 } from 'recharts';
 import { buildManualPriceHistory, securityNeedsSync } from '@/lib/marketDataService';
+import { getRangeStartDate, toDateKeyLocal } from '@/lib/dateUtils';
 import { BarChart3, X } from 'lucide-react';
 import { SimpleAreaChart } from './SimpleAreaChart';
 import { Security, type ProjectData } from '@/types/domain';
@@ -35,21 +36,8 @@ export const DataSourcesContent = () => {
 
         // Filter based on Time Range
         const now = new Date();
-        const cutoff = new Date();
-
-        // Helper to set cutoff
-        switch (timeRange) {
-            case '1M': cutoff.setMonth(now.getMonth() - 1); break;
-            case '6M': cutoff.setMonth(now.getMonth() - 6); break;
-            case 'YTD': cutoff.setFullYear(now.getFullYear(), 0, 1); break; // Jan 1st current year
-            case '1J': cutoff.setFullYear(now.getFullYear() - 1); break;
-            case '3J': cutoff.setFullYear(now.getFullYear() - 3); break;
-            case '5J': cutoff.setFullYear(now.getFullYear() - 5); break;
-            case 'MAX': cutoff.setFullYear(1900); break; // Way back
-            default: cutoff.setFullYear(now.getFullYear() - 1);
-        }
-
-        const cutoffStr = cutoff.toISOString().split('T')[0];
+        const cutoff = timeRange === 'MAX' ? null : (getRangeStartDate(timeRange, now) ?? getRangeStartDate('1J', now));
+        const cutoffStr = cutoff ? toDateKeyLocal(cutoff) : '';
         entries = entries.filter(([date]) => date >= cutoffStr);
 
         return entries.map(([date, rate]) => ({
@@ -88,20 +76,8 @@ export const DataSourcesContent = () => {
         const entries = Object.entries(history).sort((a, b) => a[0].localeCompare(b[0]));
 
         const now = new Date();
-        const cutoff = new Date();
-
-        switch (modalTimeRange) {
-            case '1M': cutoff.setMonth(now.getMonth() - 1); break;
-            case '6M': cutoff.setMonth(now.getMonth() - 6); break;
-            case 'YTD': cutoff.setFullYear(now.getFullYear(), 0, 1); break;
-            case '1J': cutoff.setFullYear(now.getFullYear() - 1); break;
-            case '3J': cutoff.setFullYear(now.getFullYear() - 3); break;
-            case '5J': cutoff.setFullYear(now.getFullYear() - 5); break;
-            case 'MAX': cutoff.setFullYear(1900); break;
-            default: cutoff.setMonth(now.getMonth() - 1);
-        }
-
-        const cutoffStr = cutoff.toISOString().split('T')[0];
+        const cutoff = modalTimeRange === 'MAX' ? null : (getRangeStartDate(modalTimeRange, now) ?? getRangeStartDate('1M', now));
+        const cutoffStr = cutoff ? toDateKeyLocal(cutoff) : '';
         return entries
             .filter(([date]) => date >= cutoffStr)
             .map(([date, value]) => ({ date, value }));

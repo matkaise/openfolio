@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Globe, BarChart3, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { SimpleAreaChart } from './SimpleAreaChart';
 import { Security, Transaction } from '@/types/domain';
+import { getRangeStartDate, toDateKeyLocal } from '@/lib/dateUtils';
 
 interface SecurityDetailModalProps {
     isOpen: boolean;
@@ -30,17 +31,11 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
         const sortedDates = Object.keys(security.priceHistory).sort();
 
         // Filter by time range (simplified logic)
-        const now = new Date();
-        const cutoffDate = new Date();
-        if (timeRange === '1M') cutoffDate.setMonth(now.getMonth() - 1);
-        if (timeRange === '6M') cutoffDate.setMonth(now.getMonth() - 6);
-        if (timeRange === '1J') cutoffDate.setFullYear(now.getFullYear() - 1);
-        if (timeRange === '3J') cutoffDate.setFullYear(now.getFullYear() - 3);
-        if (timeRange === '5J') cutoffDate.setFullYear(now.getFullYear() - 5);
-        if (timeRange === 'MAX') cutoffDate.setFullYear(1900);
+        const cutoffDate = getRangeStartDate(timeRange, new Date());
+        const cutoffKey = cutoffDate ? toDateKeyLocal(cutoffDate) : '';
 
         return sortedDates
-            .filter(d => new Date(d) >= cutoffDate)
+            .filter(d => d >= cutoffKey)
             .map(date => ({
                 date,
                 value: security.priceHistory![date]
