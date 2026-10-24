@@ -112,8 +112,9 @@ export interface ProjectSettings {
     wealthGoal?: number; // Single stored target value
     wealthGoalCurrency?: Currency; // Currency in which wealthGoal was last saved
     wealthGoals?: Record<Currency, number>; // Legacy: only for migration of old project files
-    themeId?: string;
-    isDarkMode?: boolean;
+    theme?: 'dark' | 'light' | 'system';
+    themeId?: string; // Legacy (Material palettes); ignored
+    isDarkMode?: boolean; // Legacy; read once to migrate to `theme`
     brokerConnections?: BrokerConnection[]; // folder handles live in IndexedDB, keyed by connection id
 }
 
@@ -177,8 +178,7 @@ export const createEmptyProject = (name: string = 'Mein Portfolio'): ProjectData
         performanceSmoothing: '1d',
         wealthGoal: 100000,
         wealthGoalCurrency: 'EUR',
-        themeId: 'baseline',
-        isDarkMode: false,
+        theme: 'system',
     },
     transactions: [],
     securities: {},

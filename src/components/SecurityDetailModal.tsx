@@ -50,7 +50,7 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
             .map(t => ({
                 date: t.date.split('T')[0],
                 label: t.type === 'Buy' ? 'Kauf' : 'Verkauf',
-                color: t.type === 'Buy' ? '#10b981' : '#f43f5e',
+                color: t.type === 'Buy' ? 'var(--gain)' : 'var(--loss)',
                 type: t.type as 'Buy' | 'Sell'
             }));
     }, [transactions, security.isin, normalizedCurrencyFilter]);
@@ -122,7 +122,7 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
                                 data={chartData}
                                 currency={security.currency}
                                 timeRange={timeRange}
-                                color={isPositive ? "#10b981" : "#f43f5e"}
+                                color={isPositive ? 'var(--gain)' : 'var(--loss)'}
                                 showAxes={true}
                                 markers={markers}
                             />

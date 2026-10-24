@@ -78,66 +78,23 @@ export const ProjectLauncher = () => {
 
   return (
     <div
-      className="theme-md3 md3-app relative flex min-h-screen w-full items-center justify-center overflow-hidden px-4 py-12"
-      style={
-        {
-          '--md3-bg': '#f6faff',
-          '--md3-on-bg': '#1a1c1e',
-          '--md3-surface': '#f6faff',
-          '--md3-on-surface': '#1a1c1e',
-          '--md3-surface-variant': '#d4e2f5',
-          '--md3-on-surface-variant': '#3e5168',
-          '--md3-outline': '#7388a2',
-          '--md3-primary': '#005db8',
-          '--md3-on-primary': '#ffffff',
-          '--md3-primary-container': '#d6e8ff',
-          '--md3-on-primary-container': '#002047',
-          '--md3-secondary-container': '#cfe1fb',
-          '--md3-on-secondary-container': '#102844',
-          '--md3-tertiary': '#6b5778',
-          '--md3-on-tertiary': '#ffffff',
-          '--md3-surface-container': '#ffffff',
-          '--md3-surface-container-high': '#f0f6ff',
-          '--md3-surface-container-highest': '#e7f0ff',
-          '--md3-inverse-surface': '#2f3033',
-          '--md3-inverse-primary': '#9ecaff',
-          '--md3-gradient-a': 'rgba(0, 93, 184, 0.16)',
-          '--md3-gradient-b': 'rgba(0, 130, 240, 0.12)',
-          '--md3-orb-a': 'rgba(0, 93, 184, 0.18)',
-          '--md3-orb-b': 'rgba(0, 130, 240, 0.14)'
-        } as React.CSSProperties
-      }
+      className="theme-md3 md3-app relative flex min-h-screen w-full items-center justify-center px-4 py-12"
     >
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div
-          className="absolute -top-[15%] -left-[10%] w-[70vw] h-[70vw] rounded-full opacity-80 blur-[100px] md3-blob-anim max-w-[800px] max-h-[800px]"
-          style={{ background: 'var(--md3-orb-a)' }}
-        />
-        <div
-          className="absolute top-[10%] -right-[15%] w-[60vw] h-[60vw] rounded-full opacity-80 blur-[120px] md3-blob-anim-alt max-w-[700px] max-h-[700px]"
-          style={{ background: 'var(--md3-orb-b)' }}
-        />
-        <div
-          className="absolute -bottom-[20%] left-[15%] w-[80vw] h-[80vw] rounded-full opacity-60 blur-[140px] md3-blob-anim max-w-[900px] max-h-[900px]"
-          style={{ background: 'var(--md3-gradient-a)', animationDelay: '-12s', animationDuration: '24s' }}
-        />
-      </div>
+      <div className="app-glow app-glow-1" aria-hidden="true" />
+      <div className="app-glow app-glow-2" aria-hidden="true" />
 
       <div className="relative z-10 w-full max-w-xl">
         <div
           className="md3-card space-y-8 px-6 py-8 text-center md:px-8 md:py-10"
-          style={{
-            border: '1px solid color-mix(in srgb, var(--md3-outline) 22%, transparent 78%)',
-            boxShadow: '0 18px 38px rgba(12, 36, 66, 0.12)'
-          }}
+          style={{ borderRadius: 28 }}
         >
           <div className="flex flex-col items-center gap-4">
             <div
               className="flex h-16 w-16 items-center justify-center rounded-3xl"
               style={{
-                background: 'linear-gradient(140deg, var(--md3-primary-container), color-mix(in srgb, var(--md3-primary) 14%, white 86%))',
-                color: 'var(--md3-on-primary-container)',
-                boxShadow: '0 10px 20px rgba(0, 93, 184, 0.18)'
+                background: 'linear-gradient(135deg, var(--c1), var(--c3))',
+                color: 'oklch(0.99 0 0)',
+                boxShadow: 'var(--accent-glow)'
               }}
             >
               <TrendingUp size={30} />

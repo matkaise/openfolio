@@ -21,7 +21,8 @@ import {
   Sparkles,
   Settings,
   ShieldAlert,
-  FolderSync
+  FolderSync,
+  Monitor
 } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { ProjectLauncher } from '@/components/ProjectLauncher';
@@ -32,6 +33,7 @@ import { TransactionModal } from '@/components/TransactionModal';
 import { SecurityDetailModal } from '@/components/SecurityDetailModal';
 import { repairProjectSecurities, securityNeedsSync } from '@/lib/marketDataService';
 import { findMissingFxCurrencies } from '@/lib/domain/fx/rates';
+import { applyThemePreference, NEXT_THEME, resolveThemePreference, THEME_LABELS, type ThemePreference } from '@/lib/theme';
 import { normalizeWealthGoalSettings } from '@/lib/wealthGoalUtils';
 import { type AnalysisCache } from '@/types/portfolioView';
 import { SidebarItem } from '@/components/ui/SidebarItem';
@@ -68,272 +70,6 @@ const TAB_PRELOAD_SEQUENCE: TabKey[] = [
   'Import'
 ];
 
-type ThemeTones = {
-  bg: string;
-  onBg: string;
-  surface: string;
-  onSurface: string;
-  surfaceVariant: string;
-  onSurfaceVariant: string;
-  outline: string;
-  primary: string;
-  onPrimary: string;
-  primaryContainer: string;
-  onPrimaryContainer: string;
-  secondaryContainer: string;
-  onSecondaryContainer: string;
-  tertiary: string;
-  onTertiary: string;
-  surfaceContainer: string;
-  surfaceContainerHigh: string;
-  surfaceContainerHighest: string;
-  inverseSurface: string;
-  inversePrimary: string;
-  gradientA: string;
-  gradientB: string;
-  orbA: string;
-  orbB: string;
-};
-
-type ThemeConfig = {
-  id: string;
-  name: string;
-  swatch: string;
-  light: ThemeTones;
-  dark: ThemeTones;
-};
-
-const MATERIAL_THEMES = {
-  baseline: {
-    id: 'baseline',
-    name: 'Ocean Blue',
-    swatch: '#005db8',
-    light: {
-      bg: '#f6faff',
-      onBg: '#1a1c1e',
-      surface: '#f6faff',
-      onSurface: '#1a1c1e',
-      surfaceVariant: '#d4e2f5',
-      onSurfaceVariant: '#3e5168',
-      outline: '#7388a2',
-      primary: '#005db8',
-      onPrimary: '#ffffff',
-      primaryContainer: '#d6e8ff',
-      onPrimaryContainer: '#002047',
-      secondaryContainer: '#cfe1fb',
-      onSecondaryContainer: '#102844',
-      tertiary: '#6b5778',
-      onTertiary: '#ffffff',
-      surfaceContainer: '#e9f1ff',
-      surfaceContainerHigh: '#e1ebfb',
-      surfaceContainerHighest: '#d9e5f8',
-      inverseSurface: '#2f3033',
-      inversePrimary: '#9ecaff',
-      gradientA: 'rgba(0, 93, 184, 0.22)',
-      gradientB: 'rgba(0, 130, 240, 0.16)',
-      orbA: 'rgba(0, 93, 184, 0.30)',
-      orbB: 'rgba(0, 130, 240, 0.22)'
-    },
-    dark: {
-      bg: '#161d27',
-      onBg: '#e2e2e6',
-      surface: '#161d27',
-      onSurface: '#e2e2e6',
-      surfaceVariant: '#3b4b63',
-      onSurfaceVariant: '#bfcee2',
-      outline: '#889ab2',
-      primary: '#8ec5ff',
-      onPrimary: '#003567',
-      primaryContainer: '#084d8f',
-      onPrimaryContainer: '#d1e4ff',
-      secondaryContainer: '#334a69',
-      onSecondaryContainer: '#d6e6fa',
-      tertiary: '#d6bee4',
-      onTertiary: '#3b2948',
-      surfaceContainer: '#1b2431',
-      surfaceContainerHigh: '#243043',
-      surfaceContainerHighest: '#2e3d55',
-      inverseSurface: '#e2e2e6',
-      inversePrimary: '#005db8',
-      gradientA: 'rgba(142, 197, 255, 0.24)',
-      gradientB: 'rgba(76, 153, 230, 0.18)',
-      orbA: 'rgba(68, 129, 194, 0.34)',
-      orbB: 'rgba(52, 112, 180, 0.28)'
-    }
-  },
-  sunset: {
-    id: 'sunset',
-    name: 'Sunset Orange',
-    swatch: '#c44900',
-    light: {
-      bg: '#fffbff',
-      onBg: '#201a17',
-      surface: '#fffbff',
-      onSurface: '#201a17',
-      surfaceVariant: '#f4ded4',
-      onSurfaceVariant: '#52443c',
-      outline: '#85736b',
-      primary: '#c44900',
-      onPrimary: '#ffffff',
-      primaryContainer: '#ffdbc8',
-      onPrimaryContainer: '#2d1600',
-      secondaryContainer: '#ffdbc8',
-      onSecondaryContainer: '#2b160c',
-      tertiary: '#695e2f',
-      onTertiary: '#ffffff',
-      surfaceContainer: '#ffeee5',
-      surfaceContainerHigh: '#ffe8dd',
-      surfaceContainerHighest: '#ffe2d5',
-      inverseSurface: '#362f2c',
-      inversePrimary: '#ffb68e',
-      gradientA: 'rgba(196, 73, 0, 0.19)',
-      gradientB: 'rgba(105, 94, 47, 0.16)',
-      orbA: 'rgba(196, 73, 0, 0.26)',
-      orbB: 'rgba(159, 120, 74, 0.20)'
-    },
-    dark: {
-      bg: '#201a17',
-      onBg: '#ede0da',
-      surface: '#201a17',
-      onSurface: '#ede0da',
-      surfaceVariant: '#52443c',
-      onSurfaceVariant: '#d7c2b8',
-      outline: '#9f8d84',
-      primary: '#ffb68e',
-      onPrimary: '#552100',
-      primaryContainer: '#7a3300',
-      onPrimaryContainer: '#ffdbc8',
-      secondaryContainer: '#5d4033',
-      onSecondaryContainer: '#ffdbc8',
-      tertiary: '#d6c68d',
-      onTertiary: '#393005',
-      surfaceContainer: '#251e1b',
-      surfaceContainerHigh: '#302925',
-      surfaceContainerHighest: '#3b3330',
-      inverseSurface: '#ede0da',
-      inversePrimary: '#c44900',
-      gradientA: 'rgba(255, 182, 142, 0.20)',
-      gradientB: 'rgba(214, 198, 141, 0.17)',
-      orbA: 'rgba(156, 89, 47, 0.30)',
-      orbB: 'rgba(124, 101, 60, 0.24)'
-    }
-  },
-  forest: {
-    id: 'forest',
-    name: 'Forest Green',
-    swatch: '#3f6939',
-    light: {
-      bg: '#fdfdf5',
-      onBg: '#1a1c18',
-      surface: '#fdfdf5',
-      onSurface: '#1a1c18',
-      surfaceVariant: '#dfe4d7',
-      onSurfaceVariant: '#42493f',
-      outline: '#73796e',
-      primary: '#3f6939',
-      onPrimary: '#ffffff',
-      primaryContainer: '#c0f0b3',
-      onPrimaryContainer: '#002204',
-      secondaryContainer: '#d7e8cc',
-      onSecondaryContainer: '#121f0e',
-      tertiary: '#386569',
-      onTertiary: '#ffffff',
-      surfaceContainer: '#eff2ea',
-      surfaceContainerHigh: '#e9ece4',
-      surfaceContainerHighest: '#e3e6de',
-      inverseSurface: '#2f312d',
-      inversePrimary: '#a5d499',
-      gradientA: 'rgba(63, 105, 57, 0.20)',
-      gradientB: 'rgba(56, 101, 105, 0.16)',
-      orbA: 'rgba(63, 105, 57, 0.27)',
-      orbB: 'rgba(56, 101, 105, 0.21)'
-    },
-    dark: {
-      bg: '#1a1c18',
-      onBg: '#e2e3dc',
-      surface: '#1a1c18',
-      onSurface: '#e2e3dc',
-      surfaceVariant: '#42493f',
-      onSurfaceVariant: '#c2c8bc',
-      outline: '#8c9388',
-      primary: '#a5d499',
-      onPrimary: '#0f380e',
-      primaryContainer: '#275023',
-      onPrimaryContainer: '#c0f0b3',
-      secondaryContainer: '#3d4b37',
-      onSecondaryContainer: '#d7e8cc',
-      tertiary: '#a0cfd3',
-      onTertiary: '#003739',
-      surfaceContainer: '#1e201c',
-      surfaceContainerHigh: '#282b26',
-      surfaceContainerHighest: '#333631',
-      inverseSurface: '#e2e3dc',
-      inversePrimary: '#3f6939',
-      gradientA: 'rgba(165, 212, 153, 0.20)',
-      gradientB: 'rgba(160, 207, 211, 0.17)',
-      orbA: 'rgba(74, 116, 69, 0.30)',
-      orbB: 'rgba(63, 113, 117, 0.24)'
-    }
-  },
-  lavender: {
-    id: 'lavender',
-    name: 'Lavender Dream',
-    swatch: '#6e4fa2',
-    light: {
-      bg: '#fffbff',
-      onBg: '#1c1b1e',
-      surface: '#fffbff',
-      onSurface: '#1c1b1e',
-      surfaceVariant: '#e7e0eb',
-      onSurfaceVariant: '#49454e',
-      outline: '#7a757f',
-      primary: '#6e4fa2',
-      onPrimary: '#ffffff',
-      primaryContainer: '#eaddff',
-      onPrimaryContainer: '#23005c',
-      secondaryContainer: '#e9def8',
-      onSecondaryContainer: '#1e192b',
-      tertiary: '#7e525f',
-      onTertiary: '#ffffff',
-      surfaceContainer: '#f3edf7',
-      surfaceContainerHigh: '#ede7f1',
-      surfaceContainerHighest: '#e7e1eb',
-      inverseSurface: '#313033',
-      inversePrimary: '#d0bcff',
-      gradientA: 'rgba(110, 79, 162, 0.19)',
-      gradientB: 'rgba(126, 82, 95, 0.16)',
-      orbA: 'rgba(110, 79, 162, 0.27)',
-      orbB: 'rgba(126, 82, 95, 0.20)'
-    },
-    dark: {
-      bg: '#1c1b1e',
-      onBg: '#e5e1e6',
-      surface: '#1c1b1e',
-      onSurface: '#e5e1e6',
-      surfaceVariant: '#49454e',
-      onSurfaceVariant: '#cac5cd',
-      outline: '#948f99',
-      primary: '#d0bcff',
-      onPrimary: '#3a1f73',
-      primaryContainer: '#523789',
-      onPrimaryContainer: '#eaddff',
-      secondaryContainer: '#4b4458',
-      onSecondaryContainer: '#e9def8',
-      tertiary: '#efb8c7',
-      onTertiary: '#492532',
-      surfaceContainer: '#201f22',
-      surfaceContainerHigh: '#2b2a2d',
-      surfaceContainerHighest: '#363538',
-      inverseSurface: '#e5e1e6',
-      inversePrimary: '#6e4fa2',
-      gradientA: 'rgba(208, 188, 255, 0.20)',
-      gradientB: 'rgba(239, 184, 199, 0.17)',
-      orbA: 'rgba(108, 86, 144, 0.30)',
-      orbB: 'rgba(131, 78, 100, 0.24)'
-    }
-  }
-} as const satisfies Record<string, ThemeConfig>;
-
 const MOBILE_NAV_ITEMS = NAV_ITEMS.slice(0, 4);
 
 export default function PortfolioApp() {
@@ -355,19 +91,21 @@ export default function PortfolioApp() {
 
   const [importTargetPortfolio, setImportTargetPortfolio] = useState<{ id: string; name: string; isNew: boolean } | null>(null);
 
-  const resolveThemeId = useCallback((value?: string) => {
-    if (value && value in MATERIAL_THEMES) return value as keyof typeof MATERIAL_THEMES;
-    return 'baseline';
-  }, []);
-
   // Only meaningful once FX data is loaded (lazy hydration or the first sync may still be running).
   const missingFxCurrencies = useMemo(() => {
     if (!project || isHydratingProject || Object.keys(project.fxData?.rates || {}).length === 0) return [];
     return findMissingFxCurrencies(project);
   }, [project, isHydratingProject]);
 
-  const activeThemeId = resolveThemeId(project?.settings?.themeId);
-  const isDarkMode = Boolean(project?.settings?.isDarkMode);
+  const themePreference = resolveThemePreference(project?.settings);
+
+  useEffect(() => {
+    applyThemePreference(themePreference);
+  }, [themePreference]);
+
+  const setThemePreference = useCallback((theme: ThemePreference) => {
+    updateProject((prev) => ({ ...prev, settings: { ...prev.settings, theme } }));
+  }, [updateProject]);
 
   useEffect(() => {
     if (project) return;
@@ -478,37 +216,6 @@ export default function PortfolioApp() {
     closeProject();
   }, [closeProject]);
 
-  const currentTheme = MATERIAL_THEMES[activeThemeId] ?? MATERIAL_THEMES.baseline;
-  const tones = isDarkMode ? currentTheme.dark : currentTheme.light;
-
-  const themeVars = useMemo(() => ({
-    '--background': tones.bg,
-    '--foreground': tones.onBg,
-    '--md3-bg': tones.bg,
-    '--md3-on-bg': tones.onBg,
-    '--md3-surface': tones.surface,
-    '--md3-on-surface': tones.onSurface,
-    '--md3-surface-variant': tones.surfaceVariant,
-    '--md3-on-surface-variant': tones.onSurfaceVariant,
-    '--md3-outline': tones.outline,
-    '--md3-primary': tones.primary,
-    '--md3-on-primary': tones.onPrimary,
-    '--md3-primary-container': tones.primaryContainer,
-    '--md3-on-primary-container': tones.onPrimaryContainer,
-    '--md3-secondary-container': tones.secondaryContainer,
-    '--md3-on-secondary-container': tones.onSecondaryContainer,
-    '--md3-tertiary': tones.tertiary,
-    '--md3-on-tertiary': tones.onTertiary,
-    '--md3-surface-container': tones.surfaceContainer,
-    '--md3-surface-container-high': tones.surfaceContainerHigh,
-    '--md3-surface-container-highest': tones.surfaceContainerHighest,
-    '--md3-inverse-surface': tones.inverseSurface,
-    '--md3-inverse-primary': tones.inversePrimary,
-    '--md3-gradient-a': tones.gradientA,
-    '--md3-gradient-b': tones.gradientB,
-    '--md3-orb-a': tones.orbA,
-    '--md3-orb-b': tones.orbB
-  }) as React.CSSProperties, [tones]);
 
   const startupSyncModalVisible = showStartupSyncModal && isMarketSyncing;
   const startupSyncProgress = marketSyncProgress && marketSyncProgress.total > 0
@@ -570,40 +277,27 @@ export default function PortfolioApp() {
                 <div className="space-y-1">
                   <h2 className="text-xl font-semibold">Design</h2>
                   <p className="text-sm" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                    Waehle dein Farbschema fuer die App.
+                    Dunkel, hell oder wie im Betriebssystem eingestellt.
                   </p>
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {Object.values(MATERIAL_THEMES).map((theme) => {
-                  const active = theme.id === activeThemeId;
-                  return (
-                    <button
-                      type="button"
-                      key={theme.id}
-                      onClick={() => {
-                        const nextTheme = theme.id as keyof typeof MATERIAL_THEMES;
-                        updateProject((prev) => ({
-                          ...prev,
-                          settings: {
-                            ...prev.settings,
-                            themeId: nextTheme
-                          }
-                        }));
-                      }}
-                      className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition"
-                      style={{
-                        background: active ? 'var(--md3-secondary-container)' : 'var(--md3-surface-container)',
-                        color: active ? 'var(--md3-on-secondary-container)' : 'var(--md3-on-surface-variant)'
-                      }}
-                    >
-                      <span className="md3-theme-dot" style={{ backgroundColor: theme.swatch }} />
-                      <span className="text-sm font-semibold">{theme.name}</span>
-                      {active && <Sparkles size={15} className="ml-auto" />}
-                    </button>
-                  );
-                })}
+              <div className="mt-6 inline-flex gap-1 rounded-2xl p-1" style={{ background: 'var(--surface2)' }} role="radiogroup" aria-label="Darstellung">
+                {(['dark', 'light', 'system'] as ThemePreference[]).map((theme) => (
+                  <button
+                    type="button"
+                    key={theme}
+                    role="radio"
+                    aria-checked={themePreference === theme}
+                    onClick={() => setThemePreference(theme)}
+                    className="rounded-xl px-4 py-2 text-sm font-bold transition"
+                    style={themePreference === theme
+                      ? { background: 'var(--text)', color: 'var(--bg)' }
+                      : { color: 'var(--text2)' }}
+                  >
+                    {THEME_LABELS[theme]}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -732,7 +426,9 @@ export default function PortfolioApp() {
   };
 
   return (
-    <div className="theme-md3 md3-app flex min-h-[100dvh] w-full overflow-hidden font-sans" style={themeVars}>
+    <div className="theme-md3 md3-app flex min-h-[100dvh] w-full font-sans">
+      <div className="app-glow app-glow-1" aria-hidden="true" />
+      <div className="app-glow app-glow-2" aria-hidden="true" />
       {isSidebarOpen && (
         <button
           type="button"
@@ -890,20 +586,12 @@ export default function PortfolioApp() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    const next = !isDarkMode;
-                    updateProject((prev) => ({
-                      ...prev,
-                      settings: {
-                        ...prev.settings,
-                        isDarkMode: next
-                      }
-                    }));
-                  }}
+                  onClick={() => setThemePreference(NEXT_THEME[themePreference])}
                   className="md3-icon-btn"
-                  aria-label="Toggle appearance"
+                  aria-label={`Darstellung: ${THEME_LABELS[themePreference]} (wechseln)`}
+                  title={`Darstellung: ${THEME_LABELS[themePreference]}`}
                 >
-                  {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+                  {themePreference === 'dark' ? <Moon size={18} /> : themePreference === 'light' ? <Sun size={18} /> : <Monitor size={18} />}
                 </button>
 
                 <button

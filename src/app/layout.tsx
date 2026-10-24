@@ -3,6 +3,7 @@ import { Geist_Mono, Manrope } from "next/font/google";
 import "./globals.css";
 import { ProjectProvider } from '@/contexts/ProjectContext';
 import { BrokerSyncProvider } from '@/components/brokers/BrokerSyncContext';
+import { THEME_BOOT_SCRIPT } from '@/lib/theme';
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -26,7 +27,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="de">
+    <html lang="de" suppressHydrationWarning>
+      <head>
+        {/* Applies the last chosen theme before the first paint */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body
         className={`${manrope.variable} ${geistMono.variable} antialiased`}
       >

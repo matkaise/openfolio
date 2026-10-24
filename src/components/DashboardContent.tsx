@@ -264,7 +264,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
 
   const chartMetrics = useMemo(() => {
     let badgeValue = 0;
-    let color = '#10b981';
+    let color = 'var(--gain)';
 
     if (displayData.length > 1) {
       const firstPoint = displayData[0];
@@ -277,7 +277,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       }
 
       if (badgeValue < 0) {
-        color = '#f43f5e';
+        color = 'var(--loss)';
       }
     }
     return { badgeValue, color };
@@ -495,14 +495,14 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
 
     // Define colors
     const colorMap: Record<string, string> = {
-      'Einzelaktien': '#3b82f6', // blue-500
-      'Aktie': '#3b82f6',
-      'ETFs': '#10b981', // emerald-500
-      'Cash': '#f59e0b', // amber-500
-      'Krypto': '#a855f7', // purple-500
-      'Fonds': '#f97316', // orange-500
-      'Derivate': '#ef4444', // red-500
-      'Sonstige': '#64748b' // slate-500
+      'Einzelaktien': 'var(--c2)',
+      'Aktie': 'var(--c2)',
+      'ETFs': 'var(--c1)',
+      'Cash': 'var(--c3)',
+      'Krypto': 'var(--c5)',
+      'Fonds': 'var(--c4)',
+      'Derivate': 'var(--loss)',
+      'Sonstige': 'var(--text3)'
     };
 
     return Object.entries(groups)
@@ -512,7 +512,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
         value: data.value,
         count: data.count,
         percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0,
-        color: colorMap[name] || '#64748b'
+        color: colorMap[name] || 'var(--text3)'
       }))
       .sort((a, b) => b.value - a.value);
   }, [holdings, cashBalance]);

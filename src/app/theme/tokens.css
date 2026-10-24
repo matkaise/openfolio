@@ -1,0 +1,124 @@
+/*
+ * Openfolio design tokens ("Modern Fintech", design v2). Dark and light are equal:
+ * <html data-theme="dark|light"> picks one; without the attribute the system setting decides.
+ * Accent, gain and loss share lightness and chroma per theme; only the hue changes.
+ */
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: oklch(0.145 0.012 285);
+  --surface: oklch(0.2 0.014 285);
+  --surface2: oklch(0.25 0.016 285);
+  --stroke: oklch(1 0 0 / 0.08);
+  --stroke2: oklch(1 0 0 / 0.14);
+  --text: oklch(0.97 0.005 285);
+  --text2: oklch(0.76 0.012 285);
+  --text3: oklch(0.6 0.014 285);
+  --accent: oklch(0.72 0.19 295);
+  --accent-ink: oklch(0.16 0.03 295);
+  --accent-soft: oklch(0.72 0.19 295 / 0.16);
+  --gain: oklch(0.8 0.19 150);
+  --gain-soft: oklch(0.8 0.19 150 / 0.14);
+  --loss: oklch(0.72 0.19 22);
+  --loss-soft: oklch(0.72 0.19 22 / 0.14);
+  --warn: oklch(0.78 0.15 80);
+  --warn-soft: oklch(0.78 0.15 80 / 0.16);
+  --glow1: oklch(0.55 0.22 295 / 0.35);
+  --glow2: oklch(0.6 0.16 200 / 0.22);
+  --c1: oklch(0.72 0.17 295);
+  --c2: oklch(0.72 0.17 250);
+  --c3: oklch(0.72 0.17 195);
+  --c4: oklch(0.72 0.17 80);
+  --c5: oklch(0.72 0.17 350);
+  --shadow: 0 20px 50px oklch(0 0 0 / 0.35);
+  --accent-glow: 0 8px 24px oklch(0.6 0.2 295 / 0.35);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: oklch(0.975 0.006 285);
+  --surface: oklch(1 0 0);
+  --surface2: oklch(0.955 0.008 285);
+  --stroke: oklch(0.2 0.02 285 / 0.08);
+  --stroke2: oklch(0.2 0.02 285 / 0.14);
+  --text: oklch(0.2 0.02 285);
+  --text2: oklch(0.42 0.02 285);
+  --text3: oklch(0.56 0.02 285);
+  --accent: oklch(0.55 0.22 295);
+  --accent-ink: oklch(0.99 0 0);
+  --accent-soft: oklch(0.55 0.22 295 / 0.1);
+  --gain: oklch(0.56 0.17 150);
+  --gain-soft: oklch(0.56 0.17 150 / 0.12);
+  --loss: oklch(0.56 0.19 22);
+  --loss-soft: oklch(0.56 0.19 22 / 0.1);
+  --warn: oklch(0.58 0.15 70);
+  --warn-soft: oklch(0.58 0.15 70 / 0.12);
+  --glow1: oklch(0.75 0.15 295 / 0.35);
+  --glow2: oklch(0.82 0.1 200 / 0.35);
+  --c1: oklch(0.58 0.2 295);
+  --c2: oklch(0.58 0.2 250);
+  --c3: oklch(0.58 0.2 195);
+  --c4: oklch(0.58 0.2 80);
+  --c5: oklch(0.58 0.2 350);
+  --shadow: 0 16px 40px oklch(0.3 0.05 285 / 0.08);
+  --accent-glow: 0 8px 24px oklch(0.55 0.22 295 / 0.28);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg: oklch(0.975 0.006 285);
+    --surface: oklch(1 0 0);
+    --surface2: oklch(0.955 0.008 285);
+    --stroke: oklch(0.2 0.02 285 / 0.08);
+    --stroke2: oklch(0.2 0.02 285 / 0.14);
+    --text: oklch(0.2 0.02 285);
+    --text2: oklch(0.42 0.02 285);
+    --text3: oklch(0.56 0.02 285);
+    --accent: oklch(0.55 0.22 295);
+    --accent-ink: oklch(0.99 0 0);
+    --accent-soft: oklch(0.55 0.22 295 / 0.1);
+    --gain: oklch(0.56 0.17 150);
+    --gain-soft: oklch(0.56 0.17 150 / 0.12);
+    --loss: oklch(0.56 0.19 22);
+    --loss-soft: oklch(0.56 0.19 22 / 0.1);
+    --warn: oklch(0.58 0.15 70);
+    --warn-soft: oklch(0.58 0.15 70 / 0.12);
+    --glow1: oklch(0.75 0.15 295 / 0.35);
+    --glow2: oklch(0.82 0.1 200 / 0.35);
+    --c1: oklch(0.58 0.2 295);
+    --c2: oklch(0.58 0.2 250);
+    --c3: oklch(0.58 0.2 195);
+    --c4: oklch(0.58 0.2 80);
+    --c5: oklch(0.58 0.2 350);
+    --shadow: 0 16px 40px oklch(0.3 0.05 285 / 0.08);
+    --accent-glow: 0 8px 24px oklch(0.55 0.22 295 / 0.28);
+  }
+}
+
+/* Older components use the Material 3 names; they are aliases of the tokens now. */
+:root {
+  --background: var(--bg);
+  --foreground: var(--text);
+  --md3-bg: var(--bg);
+  --md3-on-bg: var(--text);
+  --md3-surface: var(--surface);
+  --md3-on-surface: var(--text);
+  --md3-surface-variant: var(--surface2);
+  --md3-on-surface-variant: var(--text2);
+  --md3-outline: var(--stroke2);
+  --md3-primary: var(--accent);
+  --md3-on-primary: var(--accent-ink);
+  --md3-primary-container: var(--accent-soft);
+  --md3-on-primary-container: var(--accent);
+  --md3-secondary-container: var(--surface2);
+  --md3-on-secondary-container: var(--text);
+  --md3-tertiary: var(--c3);
+  --md3-on-tertiary: var(--accent-ink);
+  --md3-surface-container: color-mix(in oklch, var(--surface) 72%, transparent);
+  --md3-surface-container-high: var(--surface2);
+  --md3-surface-container-highest: color-mix(in oklch, var(--surface2) 88%, var(--text) 12%);
+  --md3-inverse-surface: var(--text);
+  --md3-inverse-primary: var(--accent);
+}

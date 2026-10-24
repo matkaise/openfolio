@@ -53,7 +53,7 @@ export const SimpleAreaChart = ({
     const padding = priceRange > 0 ? priceRange * 0.05 : Math.max(Math.abs(maxPrice) * 0.02, 1);
 
     // Use CSS variable for axis tick color if possible, strictly referencing globals.css tokens
-    const axisTickColor = 'var(--md3-on-surface-variant, #8d9199)';
+    const axisTickColor = 'var(--text3)';
 
     const formatDate = (dateStr: string) => {
         const d = parseDateOnlyUTC(dateStr);
@@ -112,12 +112,12 @@ export const SimpleAreaChart = ({
                             <stop offset="95%" stopColor={color} stopOpacity={0} />
                         </linearGradient>
                         <linearGradient id="splitStroke" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset={off} stopColor="#18a957" stopOpacity={1} />
-                            <stop offset={off} stopColor="#c73a59" stopOpacity={1} />
+                            <stop offset={off} stopColor="var(--gain)" stopOpacity={1} />
+                            <stop offset={off} stopColor="var(--loss)" stopOpacity={1} />
                         </linearGradient>
                         <linearGradient id="splitFill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset={off} stopColor="#18a957" stopOpacity={0.3} />
-                            <stop offset={off} stopColor="#c73a59" stopOpacity={0.3} />
+                            <stop offset={off} stopColor="var(--gain)" stopOpacity={0.3} />
+                            <stop offset={off} stopColor="var(--loss)" stopOpacity={0.3} />
                         </linearGradient>
                     </defs>
                     <XAxis
@@ -146,9 +146,9 @@ export const SimpleAreaChart = ({
                             border: 'none',
                             borderRadius: '16px',
                             fontSize: '12px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                            boxShadow: 'var(--shadow)'
                         }}
-                        itemStyle={{ color: isPercentage ? (Number(data[0]?.value) > 0 ? '#18a957' : '#c73a59') : color }}
+                        itemStyle={{ color: isPercentage ? (Number(data[0]?.value) > 0 ? 'var(--gain)' : 'var(--loss)') : color }}
                         labelStyle={{ color: 'var(--md3-on-surface-variant)' }}
                         formatter={(value: number | string | undefined) => {
                             if (value === undefined) return ['', ''];
@@ -196,7 +196,7 @@ export const SimpleAreaChart = ({
                                 x={point.date}
                                 y={point.value}
                                 r={4}
-                                fill={m.color || '#18a957'}
+                                fill={m.color || 'var(--gain)'}
                                 stroke="#fff"
                                 strokeWidth={2}
                             />
