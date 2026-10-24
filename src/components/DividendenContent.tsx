@@ -3,7 +3,7 @@ import { Activity, BarChart3, CalendarCheck, Coins, PiggyBank, Timer, TrendingUp
 import { selectCalculationTransactions, calculateProjectHoldings } from '@/lib/portfolioSelectors';
 import { buildSplitIgnoreDates } from '@/lib/portfolioUtils';
 import { convertCurrency } from '@/lib/fxUtils';
-import { toDateKeyLocal } from '@/lib/dateUtils';
+import { getRangeStartDate, toDateKeyLocal } from '@/lib/dateUtils';
 import { useProject } from '@/contexts/ProjectContext';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { Card } from '@/components/ui/Card';
@@ -185,7 +185,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       const secCurrency = sec.currency || 'EUR';
       // const fxRate = getLatestRate(secCurrency);
       // Rate is typically Base/Quote or Quote/Base? 
-      // Usually OpenParqet stores rate as "1 EUR = X USD". 
+      // Usually Openfolio stores rate as "1 EUR = X USD". 
       // If base is CHF and we have USD, we need USD->CHF.
       // Assuming project.fxData stores rates relative to BASE (EUR usually).
       // If Project Base is `CHF` and data is from ECB (EUR base), we need to be careful.
@@ -560,8 +560,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
 
     switch (cumulativeRange) {
       case '1M':
-        startDate = new Date(endDate);
-        startDate.setMonth(endDate.getMonth() - 1);
+        startDate = getRangeStartDate('1M', endDate) ?? endDate;
         return [
           { date: toDateKeyLocal(startDate), value: valueAt(startDate) },
           { date: toDateKeyLocal(endDate), value: valueAt(endDate) }

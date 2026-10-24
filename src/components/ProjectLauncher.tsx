@@ -143,7 +143,7 @@ export const ProjectLauncher = () => {
               <TrendingUp size={30} />
             </div>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight md:text-4xl">OpenParqet</h1>
+              <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Openfolio</h1>
               <p className="mt-2 text-sm md3-text-muted">Dein Portfolio. Deine Daten. Lokal.</p>
               <div
                 className="mx-auto mt-3 h-1 w-16 rounded-full"
@@ -189,7 +189,7 @@ export const ProjectLauncher = () => {
           </div>
 
           <p className="text-xs leading-relaxed md3-text-muted">
-            OpenParqet speichert alle Daten lokal auf deinem Geraet.
+            Openfolio speichert alle Daten lokal auf deinem Geraet.
             <br />
             Es werden keine Daten an Cloud-Server gesendet.
           </p>

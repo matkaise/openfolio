@@ -2,7 +2,7 @@ import initSqlJs from 'sql.js';
 import { describe, expect, it } from 'vitest';
 import { createEmptyProject, type ProjectData } from '@/types/domain';
 import { createProjectKey, isEncryptedProjectBytes } from '../projectCrypto';
-import { openProjectFile, serializeProjectForFile } from '../projectPersistence';
+import { legacyProjectId, openProjectFile, serializeProjectForFile } from '../projectPersistence';
 
 // Low iteration count keeps the suite fast; production files use the default.
 const TEST_ITERATIONS = 1_000;
@@ -156,5 +156,29 @@ describe('legacy password files (hash only, data in plain text)', () => {
     const row = db.exec("SELECT value FROM project_meta WHERE key = 'password_hash'")[0]?.values?.[0]?.[0];
     db.close();
     expect(row ?? '').toBe('');
+  });
+});
+
+describe('files without a project id (B19)', () => {
+  it('get the same id on every open', async () => {
+    const { data, sqliteSession } = await serializeProjectForFile('Test.openfolio', makeProject(), null, null);
+    sqliteSession?.close();
+    const SQL = await initSqlJs();
+    const db = new SQL.Database(data as Uint8Array);
+    db.run("DELETE FROM project_meta WHERE key = 'id'");
+    const withoutId = db.export();
+    db.close();
+
+    const first = await openProjectFile(toFile(withoutId));
+    const second = await openProjectFile(toFile(withoutId));
+    first.sqliteSession?.close();
+    second.sqliteSession?.close();
+
+    expect(first.project.id).toBe(second.project.id);
+    expect(first.project.id).toMatch(/^legacy-[0-9a-f]{8}$/);
+  });
+
+  it('derives the id from the stored metadata', () => {
+    expect(legacyProjectId({ created: '2024-01-01', name: 'A' })).not.toBe(legacyProjectId({ created: '2024-01-01', name: 'B' }));
   });
 });
