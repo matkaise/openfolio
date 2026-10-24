@@ -19,7 +19,8 @@ import {
   Sun,
   Loader2,
   Sparkles,
-  Settings
+  Settings,
+  ShieldAlert
 } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { ProjectLauncher } from '@/components/ProjectLauncher';
@@ -329,7 +330,7 @@ const MATERIAL_THEMES = {
 const MOBILE_NAV_ITEMS = NAV_ITEMS.slice(0, 4);
 
 export default function PortfolioApp() {
-  const { isLoaded, closeProject, saveProject, project, isModified, updateProject, syncAll, syncMarket, isSyncing, isMarketSyncing, marketSyncProgress, isHydratingProject } = useProject();
+  const { isLoaded, closeProject, saveProject, project, isModified, updateProject, syncAll, syncMarket, isSyncing, isMarketSyncing, marketSyncProgress, isHydratingProject, encryptionStatus } = useProject();
   const [activeTab, setActiveTab] = useState<TabKey>('Dashboard');
   const [visitedTabs, setVisitedTabs] = useState<TabKey[]>(['Dashboard']);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -915,6 +916,18 @@ export default function PortfolioApp() {
 
               </div>
             </div>
+            {encryptionStatus === 'legacy-unencrypted' && (
+              <div className="md3-warning-soft mt-3 flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
+                <ShieldAlert size={18} className="shrink-0" />
+                <span className="flex-1 min-w-[12rem]">
+                  Diese Datei hatte nur eine Zugriffssperre, die Daten lagen unverschlüsselt darin.
+                  Beim nächsten Speichern wird sie mit deinem Passwort verschlüsselt.
+                </span>
+                <button type="button" onClick={() => void saveProject()} className="md3-filled-btn px-3 py-1.5 text-xs font-semibold">
+                  Jetzt verschlüsseln
+                </button>
+              </div>
+            )}
           </header>
 
           <div className="flex-1 overflow-y-auto px-4 pb-[calc(6.8rem+env(safe-area-inset-bottom))] pt-6 md:px-8 md:pb-10 custom-scrollbar">
