@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFlexStatement, FlexServiceError } from '@/lib/brokers/ibkrFlexClient';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('IBKR Flex');
 
 // Fetches an IBKR Flex statement for the browser. The token is only forwarded to IBKR
 // and is never logged or echoed back.
@@ -21,7 +24,7 @@ export async function POST(req: NextRequest) {
                 { status: error.retryable ? 503 : 400 }
             );
         }
-        console.error('[IBKR Flex] Unexpected error');
+        log.error('Unexpected error');
         return NextResponse.json({ error: 'Abruf fehlgeschlagen.' }, { status: 500 });
     }
 }

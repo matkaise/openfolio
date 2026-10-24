@@ -1,5 +1,8 @@
 import { FxData, CurrencyHistory } from '@/types/domain';
 import { parseEcbResponse } from '@/lib/schemas/api';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('CurrencyService');
 
 
 // The 90-day feed covers gaps of up to ~3 months; keep a margin before switching to the full history.
@@ -27,7 +30,7 @@ export const CurrencyService = {
         const today = new Date().toISOString().split('T')[0];
         const mode = chooseEcbSyncMode(currentFx.lastUpdated, today);
 
-        console.log(`[CurrencyService] Starting ${mode} sync...`);
+        log.info(`Starting ${mode} sync...`);
 
         try {
             const res = await fetch(`/api/ecb?mode=${mode}`);
@@ -36,7 +39,7 @@ export const CurrencyService = {
             const result = parseEcbResponse(await res.json());
             if (!result.success) throw new Error('ECB Proxy returned error');
 
-            console.log(`[CurrencyService] Received ${result.count} days of data`);
+            log.info(`Received ${result.count} days of data`);
 
             // Merge data
             // We need to invert the structure: ECB gives [Date -> { USD: 1.1 }]
@@ -72,7 +75,7 @@ export const CurrencyService = {
             };
 
         } catch (error) {
-            console.error('[CurrencyService] Sync failed:', error);
+            log.error('Sync failed:', error);
             throw error;
         }
     }

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ResolveTicker');
 
 export const runtime = 'nodejs';
 
@@ -181,7 +184,7 @@ const loadKursliste = async (): Promise<{ entries: KurslisteEntry[]; index: Kurs
     if (res.ok) {
       raw = await res.text();
     } else {
-      console.warn(`[ResolveTicker] Kursliste URL fetch failed: ${res.status}`);
+      log.warn(`Kursliste URL fetch failed: ${res.status}`);
     }
   }
 

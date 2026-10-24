@@ -11,6 +11,9 @@ import { getCurrencyOptions } from '@/lib/fxUtils';
 import { buildManualPriceHistory } from '@/lib/marketDataService';
 import { applyImportBatch, emptyImportBatch, isEmptyImportBatch, type ImportBatch } from '@/lib/importers/importBatch';
 import { searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('TransactionModal');
 
 interface TransactionModalProps {
     isOpen: boolean;
@@ -156,7 +159,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 setImportStatus('idle');
             }
         } catch (err) {
-            console.error(err);
+            log.error(err);
             notify({ tone: 'error', title: 'Die Datei konnte nicht gelesen werden.' });
             setParsedTx([]);
             setParsedCashBalances([]);
@@ -562,7 +565,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             setGenericStep('mapping');
             setShowGenericPreview(false);
         } catch (e) {
-            console.error(e);
+            log.error(e);
             setGenericFileName(file.name);
             setGenericHeaders([]);
             setGenericRows([]);
@@ -1262,7 +1265,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             if (!res.ok) return null;
             return res.json();
         } catch (e) {
-            console.error(e);
+            log.error(e);
             return null;
         }
     };

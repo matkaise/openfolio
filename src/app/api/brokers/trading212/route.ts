@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchTrading212Data, Trading212Error } from '@/lib/brokers/trading212Client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Trading 212');
 
 // Reads history and positions from Trading 212 for the browser. Credentials are only
 // forwarded to Trading 212 and are never logged or echoed back.
@@ -27,7 +30,7 @@ export async function POST(req: NextRequest) {
             const status = error.status === 401 || error.status === 403 || error.status === 0 ? 400 : 502;
             return NextResponse.json({ error: error.message }, { status });
         }
-        console.error('[Trading 212] Unexpected error');
+        log.error('Unexpected error');
         return NextResponse.json({ error: 'Abruf fehlgeschlagen.' }, { status: 500 });
     }
 }

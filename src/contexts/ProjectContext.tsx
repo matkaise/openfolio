@@ -21,6 +21,9 @@ import {
 import { createProjectKey, type ProjectEncryptionKey } from '@/lib/projectCrypto';
 import { downloadFile, pickFileWithInput, supportsFileSystemAccess } from '@/lib/fileAccess';
 import { useNotifications } from '@/components/ui/notifications';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Project');
 
 const ensurePortfoliosFromData = (project: ProjectData): ProjectData => {
     if ((project.portfolios || []).length > 0) {
@@ -46,7 +49,7 @@ const ensurePortfoliosFromData = (project: ProjectData): ProjectData => {
         name: `Depot ${index + 1}`
     }));
 
-    console.warn(`[ProjectContext] Portfolios were missing in loaded data. Rebuilt ${rebuiltPortfolios.length} entries from transaction/cash references.`);
+    log.warn(`Portfolios were missing in loaded data. Rebuilt ${rebuiltPortfolios.length} entries from transaction/cash references.`);
 
     return {
         ...project,
@@ -183,7 +186,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const performSync = useCallback(async (currentProject: ProjectData) => {
         setIsSyncing(true);
         try {
-            console.log('Auto-syncing FX rates...');
+            log.info('Auto-syncing FX rates...');
             const newFxData = await CurrencyService.syncRates(currentProject.fxData);
 
             if (newFxData.lastUpdated !== currentProject.fxData.lastUpdated) {
@@ -193,12 +196,12 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                     modified: new Date().toISOString()
                 }) : null);
                 markChanged();
-                console.log('FX Sync completed. Updated to:', newFxData.lastUpdated);
+                log.info('FX Sync completed. Updated to:', newFxData.lastUpdated);
             } else {
-                console.log('FX Sync completed. No new data.');
+                log.info('FX Sync completed. No new data.');
             }
         } catch (e) {
-            console.error('FX Sync failed', e);
+            log.error('FX Sync failed', e);
         } finally {
             setIsSyncing(false);
         }
@@ -208,7 +211,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         setIsMarketSyncing(true);
         setMarketSyncProgress({ current: 0, total: 0, stage: 'start' });
         try {
-            console.log('Auto-syncing market data...');
+            log.info('Auto-syncing market data...');
             const patches = await syncSecurityPatches(currentProject, force, (progress) => {
                 setMarketSyncProgress(progress);
             }, full ? { maxPerRun: 0, maxTimeMs: 0 } : undefined);
@@ -223,12 +226,12 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                     };
                 });
                 markChanged();
-                console.log('Market sync completed.');
+                log.info('Market sync completed.');
             } else {
-                console.log('Market sync completed. No new data.');
+                log.info('Market sync completed. No new data.');
             }
         } catch (e) {
-            console.error('Market sync failed', e);
+            log.error('Market sync failed', e);
         } finally {
             setIsMarketSyncing(false);
             setMarketSyncProgress(null);
@@ -362,7 +365,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                         void performSync(hydratedProject);
                     })
                     .catch((error) => {
-                        console.error('Failed to hydrate SQLite heavy payload', error);
+                        log.error('Failed to hydrate SQLite heavy payload', error);
                         void performSync(data);
                     })
                     .finally(() => {
@@ -378,7 +381,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
             const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
-            console.error('Failed to open project:', err);
+            log.error('Failed to open project:', err);
             notify({ tone: 'error', title: 'Datei konnte nicht geöffnet werden', message });
         }
     }, [notify, performSync, setEncryptionKey, setSqliteSession]);
@@ -428,7 +431,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
             const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
-            console.error('Failed to save project:', err);
+            log.error('Failed to save project:', err);
             notify({ tone: 'error', title: 'Speichern fehlgeschlagen', message });
         }
     }, [notify, project, fileName, writeToHandle, serializeForSave]);
@@ -448,7 +451,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             setLastSavedAt(modified);
             if (clean) setIsModified(false);
         } catch (err) {
-            console.error('Failed to save directly:', err);
+            log.error('Failed to save directly:', err);
             const name = err && typeof err === 'object' && 'name' in err ? (err as { name?: string }).name : '';
             if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'NotFoundError' || name === 'InvalidStateError') {
                 // Permission lost or file moved: ask for a new location
@@ -495,7 +498,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         if (project) {
             await performSync(project);
         } else {
-            console.warn('Could not sync FX: No project loaded.');
+            log.warn('Could not sync FX: No project loaded.');
         }
     }, [project, performSync]);
 
@@ -504,13 +507,13 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         if (target) {
             await performMarketSync(target, force, Boolean(options?.full));
         } else {
-            console.warn('Could not sync market data: No project loaded.');
+            log.warn('Could not sync market data: No project loaded.');
         }
     }, [project, performMarketSync]);
 
     const syncAll = useCallback(async (forceMarket: boolean = false) => {
         if (!project) {
-            console.warn('Could not sync: No project loaded.');
+            log.warn('Could not sync: No project loaded.');
             return;
         }
         await Promise.all([
