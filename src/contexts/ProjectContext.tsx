@@ -62,6 +62,8 @@ interface ProjectContextType {
     isHydratingProject: boolean;
     /** 'legacy-unencrypted' means the file on disk is still plain text until the next save. */
     encryptionStatus: ProjectEncryptionStatus;
+    /** When the project was last written to (or read from) its file in this session. */
+    lastSavedAt: string | null;
 
     // Actions
     newProject: (options?: { name?: string; password?: string }) => Promise<void>;
@@ -103,6 +105,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [marketSyncProgress, setMarketSyncProgress] = useState<MarketSyncProgress | null>(null);
     const [isHydratingProject, setIsHydratingProject] = useState(false);
     const [encryptionStatus, setEncryptionStatus] = useState<ProjectEncryptionStatus>('none');
+    const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
 
     const sqliteSessionRef = useRef<SqliteProjectSession | null>(null);
     // Derived AES key (non-extractable). The password itself is never kept.
@@ -232,6 +235,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const newProject = useCallback(async (options?: { name?: string; password?: string }) => {
         const created = createEmptyProject(options?.name || 'Mein Portfolio');
         setProject(created);
+        setLastSavedAt(null);
         setFileHandle(null);
         setFileName('Unbenannt.openfolio');
         setIsModified(true);
@@ -313,6 +317,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             setProject(data);
             setFileHandle(handle);
             setFileName(file.name);
+            setLastSavedAt(new Date(file.lastModified).toISOString());
             // A legacy file is still plain text on disk; flag it so the user saves (= encrypts) it.
             setIsModified(opened.encryption === 'legacy-unencrypted' || data !== loaded);
 
@@ -394,6 +399,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                 setFileName(downloadName);
                 setEncryptionStatus(encryptionKeyRef.current ? 'encrypted' : 'none');
                 setProject((prev) => prev ? { ...prev, modified } : prev);
+                setLastSavedAt(modified);
                 if (clean) setIsModified(false);
                 return;
             }
@@ -417,6 +423,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             setFileName(handle.name);
             // Keep edits made while writing; only the timestamp comes from the save.
             setProject((prev) => prev ? { ...prev, modified } : prev);
+            setLastSavedAt(modified);
             if (clean) setIsModified(false);
         } catch (err: unknown) {
             if (err && typeof err === 'object' && 'name' in err && (err as { name?: string }).name === 'AbortError') {
@@ -440,6 +447,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             const { clean } = await revisionsRef.current.save(() => writeToHandle(fileHandle, { ...project, modified }));
 
             setProject((prev) => prev ? { ...prev, modified } : prev);
+            setLastSavedAt(modified);
             if (clean) setIsModified(false);
         } catch (err) {
             console.error('Failed to save directly:', err);
@@ -517,6 +525,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             marketSyncProgress,
             isHydratingProject,
             encryptionStatus,
+            lastSavedAt,
             newProject,
             openProject,
             saveProject,
