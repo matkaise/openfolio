@@ -11,6 +11,10 @@ export interface Transaction {
     amount: number; // Positive for inflow/dividend, negative for buy/fee
     currency: Currency;
     exchangeRate?: number; // Transaction specific rate
+    fee?: number; // Broker fees, negative = cost, in feeCurrency
+    fxFee?: number; // Currency conversion fee (e.g. DEGIRO AutoFX), negative = cost, in feeCurrency
+    feeCurrency?: Currency; // Defaults to the transaction currency
+    externalId?: string; // Stable id from the import source (order id or row hash), used to skip duplicates
     broker: string;
     portfolioId?: string; // Link to specific portfolio
     originalData?: unknown; // To store raw CSV row for debugging
