@@ -83,10 +83,10 @@ export interface FxData {
     lastUpdated: string; // ISO Date of last sync
 }
 
-/** A source the app reads automatically (currently: a folder with DEGIRO exports). */
+/** A source the app reads automatically: a folder with DEGIRO exports or an IBKR Flex query. */
 export interface BrokerConnection {
     id: string;
-    kind: 'degiro-folder';
+    kind: 'degiro-folder' | 'ibkr-flex';
     label: string; // e.g. the folder name
     portfolioId: string; // where imports go
     createdAt: string;
@@ -94,6 +94,8 @@ export interface BrokerConnection {
     lastImportAt?: string;
     lastFileModified?: number; // newest export already read (ms)
     lastResult?: { added: number; duplicates: number; files: string[] };
+    queryId?: string; // IBKR Flex query id
+    token?: string; // IBKR Flex token; only stored in encrypted project files
 }
 
 export interface ProjectSettings {

@@ -1,0 +1,26 @@
+<FlexQueryResponse queryName="Openfolio Test" type="AF">
+<FlexStatements count="1">
+<FlexStatement accountId="U0000001" fromDate="20240101" toDate="20241231" period="Custom" whenGenerated="20250102;083000">
+<Trades>
+<Trade accountId="U0000001" currency="USD" assetCategory="STK" symbol="ACME" description="ACME CORP" conid="1000001" isin="US0000000001" tradeID="9001" transactionID="7001" tradeDate="20240315" dateTime="20240315;153000" quantity="10" tradePrice="100" proceeds="-1000" ibCommission="-1.25" ibCommissionCurrency="USD" netCash="-1001.25" buySell="BUY" levelOfDetail="EXECUTION" />
+<Trade accountId="U0000001" currency="USD" assetCategory="STK" symbol="ACME" description="ACME CORP" conid="1000001" isin="US0000000001" tradeID="9002" transactionID="7002" tradeDate="20240910" dateTime="20240910;160000" quantity="-4" tradePrice="125" proceeds="500" ibCommission="-1" ibCommissionCurrency="USD" netCash="499" buySell="SELL" levelOfDetail="EXECUTION" />
+<Trade accountId="U0000001" currency="EUR" assetCategory="STK" symbol="WDG" description="EUROWIDGET AG &amp; CO" conid="1000002" isin="DE0000000002" tradeID="9003" transactionID="7003" tradeDate="2024-06-20" dateTime="2024-06-20, 10:00:00" quantity="20" tradePrice="50" proceeds="-1000" ibCommission="-3" ibCommissionCurrency="EUR" netCash="-1003" buySell="BUY" levelOfDetail="EXECUTION" />
+<Trade accountId="U0000001" currency="USD" assetCategory="CASH" symbol="EUR.USD" description="EUR.USD" conid="12087792" isin="" tradeID="9004" transactionID="7004" tradeDate="20240619" dateTime="20240619;090000" quantity="1000" tradePrice="1.08" proceeds="-1080" ibCommission="-2" ibCommissionCurrency="USD" netCash="-1082" buySell="BUY" levelOfDetail="EXECUTION" />
+<Trade accountId="U0000001" currency="USD" assetCategory="OPT" symbol="ACME 240621C00110000" description="ACME 21JUN24 110 C" conid="1000003" isin="" tradeID="9005" transactionID="7005" tradeDate="20240401" dateTime="20240401;100000" quantity="1" tradePrice="2" proceeds="-200" ibCommission="-1" ibCommissionCurrency="USD" netCash="-201" buySell="BUY" levelOfDetail="EXECUTION" />
+</Trades>
+<CashTransactions>
+<CashTransaction accountId="U0000001" currency="USD" assetCategory="" symbol="" description="CASH RECEIPTS / ELECTRONIC FUND TRANSFERS" isin="" dateTime="20240105" settleDate="20240105" amount="5000" type="Deposits/Withdrawals" transactionID="8001" levelOfDetail="DETAIL" />
+<CashTransaction accountId="U0000001" currency="USD" assetCategory="STK" symbol="ACME" description="ACME(US0000000001) CASH DIVIDEND USD 0.50 PER SHARE" isin="US0000000001" dateTime="20240510" settleDate="20240510" amount="5" type="Dividends" transactionID="8002" levelOfDetail="DETAIL" />
+<CashTransaction accountId="U0000001" currency="USD" assetCategory="STK" symbol="ACME" description="ACME(US0000000001) CASH DIVIDEND USD 0.50 PER SHARE - US TAX" isin="US0000000001" dateTime="20240510" settleDate="20240510" amount="-0.75" type="Withholding Tax" transactionID="8003" levelOfDetail="DETAIL" />
+<CashTransaction accountId="U0000001" currency="USD" assetCategory="" symbol="" description="USD DEBIT INT FOR MAR-2024" isin="" dateTime="20240403" settleDate="20240403" amount="-3.21" type="Broker Interest Paid" transactionID="8004" levelOfDetail="DETAIL" />
+<CashTransaction accountId="U0000001" currency="USD" assetCategory="" symbol="" description="M******1:IBKR PRO MARKET DATA" isin="" dateTime="20240703" settleDate="20240703" amount="-1.5" type="Other Fees" transactionID="8005" levelOfDetail="DETAIL" />
+<CashTransaction accountId="U0000001" currency="USD" assetCategory="" symbol="" description="DISBURSEMENT INITIATED BY TEST" isin="" dateTime="20241202" settleDate="20241202" amount="-1000" type="Deposits/Withdrawals" transactionID="8006" levelOfDetail="DETAIL" />
+<CashTransaction accountId="U0000001" currency="USD" assetCategory="" symbol="" description="Total" isin="" dateTime="" settleDate="" amount="4000" type="Deposits/Withdrawals" transactionID="" levelOfDetail="SUMMARY" />
+</CashTransactions>
+<OpenPositions>
+<OpenPosition accountId="U0000001" currency="USD" assetCategory="STK" symbol="ACME" description="ACME CORP" conid="1000001" isin="US0000000001" position="6" markPrice="130" levelOfDetail="SUMMARY" />
+<OpenPosition accountId="U0000001" currency="EUR" assetCategory="STK" symbol="WDG" description="EUROWIDGET AG &amp; CO" conid="1000002" isin="DE0000000002" position="20" markPrice="52" levelOfDetail="SUMMARY" />
+</OpenPositions>
+</FlexStatement>
+</FlexStatements>
+</FlexQueryResponse>
