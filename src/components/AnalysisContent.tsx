@@ -4,7 +4,7 @@ import { AreaChart, Area, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, Lege
 import { calculatePortfolioHistory, calculateTWRSeries, type Holding, type AnalysisMetrics } from '@/lib/portfolioUtils';
 import { calculateAnalysisMetrics } from '@/lib/analysisService';
 import { buildMwrSeries, normalizeInvestedForExplicitCash, smoothPerformanceSeries } from '@/lib/performanceUtils';
-import { filterTransactionsByPortfolio, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
+import { selectCalculationTransactions, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency as convertFxCurrency } from '@/lib/fxUtils';
 import { parseDateOnlyUTC, toDateKeyUTC } from '@/lib/dateUtils';
 import { useProject } from '@/contexts/ProjectContext';
@@ -268,7 +268,7 @@ export const AnalysisContent = ({
 
   // Filter transactions based on selected Portfolio (same as Dashboard)
   const filteredTransactions = useMemo(() => {
-    return filterTransactionsByPortfolio(project, selectedPortfolioIds);
+    return selectCalculationTransactions(project, selectedPortfolioIds);
   }, [project, selectedPortfolioIds]);
   const filteredCashAccounts = useMemo(() => {
     return filterCashAccountsByPortfolio(project, selectedPortfolioIds);

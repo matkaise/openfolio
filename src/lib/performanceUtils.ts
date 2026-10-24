@@ -40,19 +40,11 @@ export const normalizeInvestedForExplicitCash = (
   const toTime = (dateStr: string) => toUtcTime(dateStr);
   const explicitExternalFlows = transactions
     .filter(tx => tx.type === 'Deposit' || tx.type === 'Withdrawal')
-    .map(tx => {
-      const amountBase = convertCurrency(
-        fxData,
-        Math.abs(tx.amount || 0),
-        tx.currency,
-        baseCurrency,
-        tx.date
-      );
-      return {
-        time: toTime(tx.date),
-        flow: tx.type === 'Deposit' ? amountBase : -amountBase
-      };
-    })
+    .map(tx => ({
+      time: toTime(tx.date),
+      // Signed: deposits positive, withdrawals negative
+      flow: convertCurrency(fxData, tx.amount || 0, tx.currency, baseCurrency, tx.date)
+    }))
     .filter((entry) => Number.isFinite(entry.flow) && Math.abs(entry.flow) > 0.0000001);
 
   const sortedHistory = [...sourceHistory].sort((a, b) => a.date.localeCompare(b.date));
@@ -83,6 +75,7 @@ export const normalizeInvestedForExplicitCash = (
         || tx.type === 'Dividend'
         || tx.type === 'Fee'
         || tx.type === 'Tax'
+        || tx.type === 'Interest'
       )
       .forEach((tx) => {
         const amountBase = convertCurrency(

@@ -1,6 +1,6 @@
 ﻿import React, { useMemo, useState } from 'react';
 import { ChevronRight, Wallet } from 'lucide-react';
-import { filterTransactionsByPortfolio, calculateProjectHoldings } from '@/lib/portfolioSelectors';
+import { selectCalculationTransactions, calculateProjectHoldings } from '@/lib/portfolioSelectors';
 import { convertCurrency } from '@/lib/fxUtils';
 import { useProject } from '@/contexts/ProjectContext';
 import { type TransactionLike } from '@/types/portfolioView';
@@ -11,7 +11,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
   const [showClosedPositions, setShowClosedPositions] = useState(false);
 
   const filteredTransactions = useMemo(() => (
-    filterTransactionsByPortfolio(project, selectedPortfolioIds)
+    selectCalculationTransactions(project, selectedPortfolioIds)
   ), [project, selectedPortfolioIds]);
 
   const { holdings } = useMemo(() => {
