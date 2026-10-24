@@ -91,7 +91,7 @@ const TransactionEditModal = ({
             <label className="md3-text-muted text-xs font-bold uppercase tracking-wider">Typ</label>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value)}
+              onChange={(e) => setType(e.target.value as Transaction['type'])}
               className="md3-field w-full px-4 py-3 text-sm outline-none"
             >
               {(typeOptions.length ? typeOptions : ['Buy', 'Sell', 'Dividend', 'Sparplan_Buy']).map((t) => (
@@ -570,8 +570,8 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
                   {summary.lastTx.portfolioId && portfolioNameById[summary.lastTx.portfolioId] ? (
                     <span className="md3-chip-tonal rounded-md px-2 py-0.5 font-semibold">{portfolioNameById[summary.lastTx.portfolioId]}</span>
                   ) : null}
-                  {(summary.lastTx.shares || summary.lastTx.quantity) ? (
-                    <span>{Math.abs(summary.lastTx.shares || summary.lastTx.quantity || 0)} Stk.</span>
+                  {summary.lastTx.shares ? (
+                    <span>{Math.abs(summary.lastTx.shares)} Stk.</span>
                   ) : null}
                 </div>
               </div>
@@ -745,8 +745,8 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
                           <span className="md3-chip-tonal rounded-md px-2 py-0.5 font-semibold">{portfolioNameById[tx.portfolioId]}</span>
                         ) : null}
                         <span>{new Date(tx.date).toLocaleDateString('de-DE')}</span>
-                        {(tx.shares || tx.quantity) ? (
-                          <span>{Math.abs(tx.shares || tx.quantity || 0)} Stk.</span>
+                        {tx.shares ? (
+                          <span>{Math.abs(tx.shares)} Stk.</span>
                         ) : null}
                       </div>
                     </div>

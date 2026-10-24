@@ -287,7 +287,7 @@ export const syncProjectQuotes = async (
             const fetchMissingHistory = !secForFetch.priceHistory || Object.keys(secForFetch.priceHistory).length === 0;
             const fetchMissingDividends = hasMissingDividendData(secForFetch);
             const requiresFullHistory = !secForFetch.lastSync || fetchMissingHistory || fetchMissingDividends;
-            const from = requiresFullHistory ? '1970-01-01' : secForFetch.lastSync.split('T')[0];
+            const from = requiresFullHistory || !secForFetch.lastSync ? '1970-01-01' : secForFetch.lastSync.split('T')[0];
 
             const res = await fetch('/api/yahoo', {
                 method: 'POST',

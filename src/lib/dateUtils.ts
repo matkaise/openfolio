@@ -7,3 +7,7 @@ export const toDateKeyUTC = (date: Date): string => (
 );
 
 export const toUtcTime = (dateStr: string): number => parseDateOnlyUTC(dateStr).getTime();
+
+export const toDateKeyLocal = (date: Date): string => (
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+);

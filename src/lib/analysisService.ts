@@ -28,15 +28,11 @@ export function calculateAnalysisMetrics(
     const includeDividends = options?.includeDividends ?? false;
     const twrSeries = calculateTWRSeries(historyData, includeDividends);
 
-    // Helper to find TWR value at a specific date
-    const twrByDate = new Map<string, number>();
     const indexSeries = twrSeries.map(point => {
         const value = Number.isFinite(point.value) ? point.value : 0;
         const index = 1 + (value / 100);
-        twrByDate.set(point.date, value);
         return { date: point.date, index };
     });
-    const getTwrValue = (d: string) => twrByDate.get(d);
 
     const findFirstPositiveIndexInRange = (start: string, end: string): number | null => {
         for (const point of indexSeries) {
@@ -75,13 +71,17 @@ export function calculateAnalysisMetrics(
         }
     });
 
+    // A month's return runs from the previous month's last index to this month's last index.
+    // Only the very first month starts from its own first point.
+    let previousMonthEndIndex: number | null = null;
     for (let i = 0; i < months.length; i++) {
         const monthKey = months[i];
         const range = monthRanges.get(monthKey);
         if (!range) continue;
 
-        const startIndex = findFirstPositiveIndexInRange(range.start, range.end);
+        const startIndex = previousMonthEndIndex ?? findFirstPositiveIndexInRange(range.start, range.end);
         const endIndex = findLastPositiveIndexInRange(range.start, range.end);
+        if (endIndex) previousMonthEndIndex = endIndex;
         if (!startIndex || !endIndex || startIndex <= 0 || endIndex <= 0) continue;
 
         const monthReturn = ((endIndex / startIndex) - 1) * 100;
