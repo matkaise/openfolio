@@ -3,12 +3,12 @@
 import React, { useState, useMemo } from 'react';
 import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase, Check, ChevronDown } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
-import { Transaction, type CashAccount, type Security, type CashMovement, type Portfolio, type ProjectData } from '@/types/domain';
+import { Transaction, type Security, type Portfolio } from '@/types/domain';
 import { parseFlatexCashBalancesCsv, parseFlatexCashMovementsCsv, parseFlatexCsv, type CashBalanceImportPoint, type CashMovementImportEntry } from '@/lib/csvParser';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
 import { getCurrencyOptions } from '@/lib/fxUtils';
 import { buildManualPriceHistory } from '@/lib/marketDataService';
-import { mergeImportedTransactions } from '@/lib/importMerge';
+import { applyImportBatch, emptyImportBatch, isEmptyImportBatch, type ImportBatch } from '@/lib/importers/importBatch';
 import { searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
 
 interface TransactionModalProps {
@@ -589,121 +589,27 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         return { id: targetPortfolio.id, name: targetPortfolio.name, isNew: false };
     };
 
+    const buildFlatexBatch = (): ImportBatch => ({
+        broker: 'Flatex',
+        transactions: parsedTx,
+        cashMovements: parsedCashMovements,
+        cashBalances: parsedCashBalances
+    });
+
     const commitImport = () => {
         if (!project) return;
-        if (parsedTx.length === 0 && parsedCashBalances.length === 0 && parsedCashMovements.length === 0) return;
+        const batch = buildFlatexBatch();
+        if (isEmptyImportBatch(batch)) return;
 
         // Resolve the target once so every run of the updater below uses the same portfolio id.
         const target = getTargetPortfolioId(project.portfolios || []);
-
-        // Pure: React may run state updaters twice (StrictMode) or later than this function.
-        const applyImport = (prev: ProjectData): ProjectData => {
-            const updatedSecurities = { ...prev.securities };
-            const mergedTransactions = mergeImportedTransactions(prev.transactions, parsedTx, target.id);
-
-            // Extract and merge securities from imported transactions
-            mergedTransactions.added.forEach(tx => {
-                const isin = tx.isin;
-                if (isin && !updatedSecurities[isin]) {
-                    updatedSecurities[isin] = {
-                        isin: isin,
-                        symbol: isin, // May be ISIN, user might need to map later
-                        name: tx.name || isin,
-                        currency: tx.currency,
-                        quoteType: 'Stock', // Default
-                        priceHistory: {}
-                    };
-                }
-            });
-
-            // Handle Portfolio Creation
-            const portfolios = prev.portfolios || [];
-
-            let updatedPortfolios = portfolios;
-            // Only add if it's new AND not already in the list (safety check)
-            if (target.isNew && !updatedPortfolios.find(p => p.id === target.id)) {
-                updatedPortfolios = [...portfolios, { id: target.id, name: target.name }];
-            }
-
-            // Merge imported balances by portfolio + currency + sourceKey
-            const existingCashAccounts = prev.cashAccounts || [];
-            const mergeKeyFor = (account: Pick<CashAccount, 'portfolioId' | 'currency' | 'sourceKey'>) =>
-                `${account.portfolioId || ''}|${account.currency}|${account.sourceKey || ''}`;
-            const cashAccountMap = new Map<string, CashAccount>(
-                existingCashAccounts.map(account => [mergeKeyFor(account), account])
-            );
-
-            parsedCashBalances.forEach(point => {
-                const pointSourceKey = point.accountKey || '';
-                const key = `${target.id}|${point.currency}|${pointSourceKey}`;
-                const existing = cashAccountMap.get(key);
-
-                if (!existing) {
-                    cashAccountMap.set(key, {
-                        id: crypto.randomUUID(),
-                        name: `${target.name} ${point.currency} ${point.accountLabel || 'Konto'}`,
-                        portfolioId: target.id,
-                        currency: point.currency,
-                        sourceKey: pointSourceKey || undefined,
-                        balanceHistory: { [point.date]: point.balance }
-                    });
-                    return;
-                }
-
-                cashAccountMap.set(key, {
-                    ...existing,
-                    balanceHistory: {
-                        ...(existing.balanceHistory || {}),
-                        [point.date]: point.balance
-                    }
-                });
-            });
-
-            const existingCashMovements = prev.cashMovements || [];
-            const movementMap = new Map<string, CashMovement>(
-                existingCashMovements.map((movement) => [
-                    `${movement.portfolioId || ''}|${movement.sourceKey || `${movement.date}|${movement.currency}|${movement.amount}|${movement.description || ''}`}`,
-                    movement
-                ])
-            );
-
-            parsedCashMovements.forEach((movement) => {
-                const sourceKey = movement.sourceKey || `${movement.date}|${movement.currency}|${movement.amount}|${movement.description}`;
-                const dedupeKey = `${target.id}|${sourceKey}`;
-                if (movementMap.has(dedupeKey)) return;
-
-                movementMap.set(dedupeKey, {
-                    id: crypto.randomUUID(),
-                    date: movement.date,
-                    type: movement.type,
-                    amount: movement.amount,
-                    currency: movement.currency,
-                    description: movement.description,
-                    broker: 'Flatex',
-                    portfolioId: target.id,
-                    isInternal: movement.isInternal,
-                    sourceKey,
-                    originalData: movement.originalData
-                });
-            });
-
-            return {
-                ...prev,
-                portfolios: updatedPortfolios,
-                transactions: mergedTransactions.transactions,
-                securities: updatedSecurities,
-                cashAccounts: Array.from(cashAccountMap.values()),
-                cashMovements: Array.from(movementMap.values()),
-                modified: new Date().toISOString()
-            };
-        };
-
-        const nextProject = applyImport(project);
-        const { added, duplicates } = mergeImportedTransactions(project.transactions, parsedTx, target.id);
-        updateProject(applyImport);
+        const { project: nextProject, summary } = applyImportBatch(project, batch, target);
+        // applyImportBatch is pure: safe to run again on the latest state inside the updater.
+        updateProject(prev => applyImportBatch(prev, batch, target).project);
         void syncMarket(true, { full: true, projectOverride: nextProject });
 
-        setImportResult({ added: added.length, duplicates });
+        const duplicates = summary.duplicateTransactions + summary.duplicateMovements;
+        setImportResult({ added: summary.addedTransactions + summary.addedMovements, duplicates });
         setImportStatus('success');
         setTimeout(() => {
             onClose();
@@ -1266,81 +1172,10 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 return;
             }
 
-            updateProject(prev => {
-                const portfolios = prev.portfolios || [];
-                const target = getTargetPortfolioId(portfolios);
-                let updatedPortfolios = portfolios;
-                if (target.isNew && !updatedPortfolios.find(p => p.id === target.id)) {
-                    updatedPortfolios = [...portfolios, { id: target.id, name: target.name }];
-                }
-
-                const existingCashAccounts = prev.cashAccounts || [];
-                const mergeKeyFor = (account: Pick<CashAccount, 'portfolioId' | 'currency' | 'sourceKey'>) =>
-                    `${account.portfolioId || ''}|${account.currency}|${account.sourceKey || ''}`;
-                const cashAccountMap = new Map<string, CashAccount>(
-                    existingCashAccounts.map(account => [mergeKeyFor(account), account])
-                );
-                const existingCashMovements = prev.cashMovements || [];
-                const movementMap = new Map<string, CashMovement>(
-                    existingCashMovements.map((movement) => [
-                        `${movement.portfolioId || ''}|${movement.sourceKey || `${movement.date}|${movement.currency}|${movement.amount}|${movement.description || ''}`}`,
-                        movement
-                    ])
-                );
-
-                cashPoints.forEach(point => {
-                    const pointSourceKey = point.accountKey || '';
-                    const key = `${target.id}|${point.currency}|${pointSourceKey}`;
-                    const existing = cashAccountMap.get(key);
-                    if (!existing) {
-                        cashAccountMap.set(key, {
-                            id: crypto.randomUUID(),
-                            name: `${target.name} ${point.currency} ${point.accountLabel || 'Konto'}`,
-                            portfolioId: target.id,
-                            currency: point.currency,
-                            sourceKey: pointSourceKey || undefined,
-                            balanceHistory: { [point.date]: point.balance }
-                        });
-                        return;
-                    }
-
-                    cashAccountMap.set(key, {
-                        ...existing,
-                        balanceHistory: {
-                            ...(existing.balanceHistory || {}),
-                            [point.date]: point.balance
-                        }
-                    });
-                });
-
-                cashMovements.forEach((movement) => {
-                    const sourceKey = movement.sourceKey || `${movement.date}|${movement.currency}|${movement.amount}|${movement.description || ''}`;
-                    const dedupeKey = `${target.id}|${sourceKey}`;
-                    if (movementMap.has(dedupeKey)) return;
-
-                    movementMap.set(dedupeKey, {
-                        id: crypto.randomUUID(),
-                        date: movement.date,
-                        type: movement.type,
-                        amount: movement.amount,
-                        currency: movement.currency,
-                        description: movement.description,
-                        broker: 'CSV',
-                        portfolioId: target.id,
-                        isInternal: movement.isInternal,
-                        sourceKey,
-                        originalData: movement.originalData
-                    });
-                });
-
-                return {
-                    ...prev,
-                    portfolios: updatedPortfolios,
-                    cashAccounts: Array.from(cashAccountMap.values()),
-                    cashMovements: Array.from(movementMap.values()),
-                    modified: new Date().toISOString()
-                };
-            });
+            if (!project) return;
+            const cashTarget = getTargetPortfolioId(project.portfolios || []);
+            const cashBatch: ImportBatch = { ...emptyImportBatch('CSV'), cashMovements, cashBalances: cashPoints };
+            updateProject(prev => applyImportBatch(prev, cashBatch, cashTarget).project);
 
             setGenericImportSummary({
                 imported: cashPoints.length,
@@ -1363,60 +1198,14 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
         if (!project) return;
         const target = getTargetPortfolioId(project.portfolios || []);
-        const importable = transactions.filter((tx) => Boolean(tx.isin));
-
-        // Pure, see commitImport.
-        const applyGenericImport = (prev: ProjectData): ProjectData => {
-            const portfolios = prev.portfolios || [];
-            let updatedPortfolios = portfolios;
-            if (target.isNew && !updatedPortfolios.find(p => p.id === target.id)) {
-                updatedPortfolios = [...portfolios, { id: target.id, name: target.name }];
-            }
-
-            const merged = mergeImportedTransactions(prev.transactions, importable, target.id);
-            const updatedSecurities = { ...prev.securities };
-
-            merged.added.forEach((tx) => {
-                const securityKey = tx.isin;
-                if (!securityKey) return;
-
-                const existing = updatedSecurities[securityKey];
-
-                updatedSecurities[securityKey] = {
-                    isin: securityKey,
-                    symbol: existing?.symbol || securityKey,
-                    name: existing?.name || tx.name || securityKey,
-                    currency: existing?.currency || tx.currency,
-                    quoteType: existing?.quoteType || 'Stock',
-                    priceHistory: existing?.priceHistory || {},
-                    symbolStatus: existing?.symbolStatus,
-                    symbolSource: existing?.symbolSource,
-                    symbolLastTried: existing?.symbolLastTried,
-                    ignoreMarketData: existing?.ignoreMarketData,
-                    dividendHistory: existing?.dividendHistory || [],
-                    upcomingDividends: existing?.upcomingDividends || [],
-                    dividendHistorySynced: existing?.dividendHistorySynced
-                };
-            });
-
-            return {
-                ...prev,
-                portfolios: updatedPortfolios,
-                transactions: merged.transactions,
-                securities: updatedSecurities,
-                modified: new Date().toISOString()
-            };
-        };
-
-        const nextProject = applyGenericImport(project);
-        const { added, duplicates } = mergeImportedTransactions(project.transactions, importable, target.id);
-        updateProject(applyGenericImport);
+        const batch: ImportBatch = { ...emptyImportBatch('CSV'), transactions: transactions.filter((tx) => Boolean(tx.isin)) };
+        const { project: nextProject, summary } = applyImportBatch(project, batch, target);
+        updateProject(prev => applyImportBatch(prev, batch, target).project);
         void syncMarket(true, { full: true, projectOverride: nextProject });
-
         setGenericImportSummary({
-            imported: added.length,
-            skipped: genericRows.length - added.length,
-            duplicates,
+            imported: summary.addedTransactions,
+            skipped: genericRows.length - summary.addedTransactions,
+            duplicates: summary.duplicateTransactions,
             errors: errors.slice(0, 3)
         });
     };
@@ -1424,9 +1213,10 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     if (!isOpen) return null;
 
     // Preview of the Flatex import: how many trades are already in the target portfolio.
-    const importPreviewDuplicates = importStatus === 'ready' && project && targetPortfolio && parsedTx.length > 0
-        ? mergeImportedTransactions(project.transactions, parsedTx, targetPortfolio.id).duplicates
-        : 0;
+    const importPreview = importStatus === 'ready' && project && targetPortfolio
+        ? applyImportBatch(project, buildFlatexBatch(), targetPortfolio).summary
+        : null;
+    const importPreviewDuplicates = importPreview ? importPreview.duplicateTransactions + importPreview.duplicateMovements : 0;
 
     const normalizeIdentifier = (value: string) => value.trim().toUpperCase();
     const isIsin = (value: string) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value);
