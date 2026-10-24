@@ -23,6 +23,8 @@ import {
 import { reconcilePositions } from '@/lib/brokers/reconcile';
 import { parseIbkrFlexXml } from '@/lib/importers/ibkrFlex';
 import { parseTrading212Data, type Trading212Data } from '@/lib/importers/trading212';
+import { parseComdirectData, type ComdirectData } from '@/lib/importers/comdirect';
+import type { ComdirectChallenge } from '@/lib/brokers/comdirectClient';
 import { applyImportBatch, type ImportBatch, type ImportSummary } from '@/lib/importers/importBatch';
 import type { BrokerConnection, ProjectData } from '@/types/domain';
 
@@ -32,6 +34,8 @@ export type ConnectionStatus =
     | { state: 'ok'; message: string; warnings?: string[] }
     | { state: 'needs-permission' }
     | { state: 'needs-token' }
+    | { state: 'needs-login' }
+    | { state: 'awaiting-tan' }
     | { state: 'missing-folder' }
     | { state: 'error'; message: string };
 
@@ -40,18 +44,39 @@ export type PendingImport = {
     batch: ImportBatch;
     summary: ImportSummary;
     source: { files: string[]; newestModified: number };
-    /** E.g. positions that differ from the broker's snapshot. */
+    /** Positions that differ from the broker's snapshot. */
     warnings: string[];
+    /** Importer notes, e.g. depot transfers that need manual entry. */
+    notes: string[];
 };
 
 type PortfolioTarget = { portfolioId: string; portfolioName: string; isNew: boolean };
 
-/** Credentials of API connections: IBKR uses `token`, Trading 212 `apiKey` + `apiSecret`. */
-export type ConnectionSecrets = { token?: string; apiKey?: string; apiSecret?: string };
+/**
+ * Credentials of API connections: IBKR `token`, Trading 212 `apiKey` + `apiSecret`,
+ * comdirect `clientId` + `clientSecret` + `username` (the PIN is asked at every login).
+ */
+export type ConnectionSecrets = {
+    token?: string;
+    apiKey?: string;
+    apiSecret?: string;
+    clientId?: string;
+    clientSecret?: string;
+    username?: string;
+};
 
-const hasSecrets = (connection: BrokerConnection, secrets: ConnectionSecrets) => (
-    connection.kind === 'trading212' ? Boolean(secrets.apiKey && secrets.apiSecret) : Boolean(secrets.token)
-);
+const SECRET_KEYS: (keyof ConnectionSecrets)[] = ['token', 'apiKey', 'apiSecret', 'clientId', 'clientSecret', 'username'];
+
+const hasSecrets = (connection: BrokerConnection, secrets: ConnectionSecrets) => {
+    switch (connection.kind) {
+        case 'trading212': return Boolean(secrets.apiKey && secrets.apiSecret);
+        case 'comdirect': return Boolean(secrets.clientId && secrets.clientSecret && secrets.username);
+        case 'ibkr-flex': return Boolean(secrets.token);
+        default: return true;
+    }
+};
+
+export type TanRequest = { connection: BrokerConnection; flowId: string; challenge: ComdirectChallenge };
 
 interface BrokerSyncContextType {
     /** Folder access (DEGIRO watcher) is available in this browser. */
@@ -63,8 +88,17 @@ interface BrokerSyncContextType {
         target: PortfolioTarget,
         credentials: { apiKey: string; apiSecret: string; environment: 'live' | 'demo'; remember: boolean }
     ) => void;
+    connectComdirect: (
+        target: PortfolioTarget,
+        credentials: { clientId: string; clientSecret: string; username: string; remember: boolean }
+    ) => void;
     /** Credentials for this session (or stored, in encrypted projects) when they were not saved. */
     provideSecrets: (connection: BrokerConnection, secrets: ConnectionSecrets, remember: boolean) => void;
+    /** comdirect: log in with the PIN and request a TAN challenge. */
+    startComdirectLogin: (connection: BrokerConnection, pin: string) => Promise<void>;
+    tanRequest: TanRequest | null;
+    submitTan: (tan?: string) => Promise<void>;
+    cancelTan: () => void;
     canStoreTokens: boolean;
     checkConnection: (connection: BrokerConnection) => Promise<void>;
     removeConnection: (connection: BrokerConnection) => Promise<void>;
@@ -105,6 +139,17 @@ const fetchTrading212 = async (secrets: ConnectionSecrets, environment: 'live' |
     return data.data;
 };
 
+const comdirectRequest = async <T,>(body: Record<string, unknown>): Promise<T> => {
+    const res = await fetch('/api/brokers/comdirect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({})) as T & { error?: string };
+    if (!res.ok) throw new Error(data.error || `Abruf fehlgeschlagen (HTTP ${res.status}).`);
+    return data;
+};
+
 /** Re-read a week before the last check, so late bookings are not missed (duplicates are skipped). */
 const sinceDate = (lastCheckedAt?: string) => {
     if (!lastCheckedAt) return undefined;
@@ -127,6 +172,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
     const { project, updateProject, syncMarket, isHydratingProject, encryptionStatus } = useProject();
     const [statuses, setStatuses] = useState<Record<string, ConnectionStatus>>({});
     const [pending, setPending] = useState<PendingImport | null>(null);
+    const [tanRequest, setTanRequest] = useState<TanRequest | null>(null);
     // Only rendered after a project is open (client side), so no hydration mismatch
     const [supported] = useState(() => supportsFolderAccess());
     const autoCheckedProjectRef = useRef<string | null>(null);
@@ -135,11 +181,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
     const sessionSecretsRef = useRef<Record<string, ConnectionSecrets>>({});
     const secretsOf = useCallback((connection: BrokerConnection): ConnectionSecrets => {
         const session = sessionSecretsRef.current[connection.id] || {};
-        return {
-            token: connection.token || session.token,
-            apiKey: connection.apiKey || session.apiKey,
-            apiSecret: connection.apiSecret || session.apiSecret
-        };
+        return Object.fromEntries(SECRET_KEYS.map((key) => [key, connection[key] || session[key]])) as ConnectionSecrets;
     }, []);
     const canStoreTokens = encryptionStatus === 'encrypted';
 
@@ -157,10 +199,12 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         connection: BrokerConnection,
         batch: ImportBatch,
         source: { files: string[]; newestModified: number },
-        positions?: { isin: string; symbol?: string; quantity: number }[]
+        positions?: { isin: string; symbol?: string; quantity: number }[],
+        extraWarnings: string[] = []
     ) => {
         const now = new Date().toISOString();
         const applied = applyImportBatch(current, batch, connectionTarget(current, connection));
+        const notes = extraWarnings;
         const warnings = positions
             ? reconcilePositions(applied.project, connection.portfolioId, positions).map((m) => (
                 `${m.symbol || m.isin}: Broker ${m.expected}, Openfolio ${m.actual}`
@@ -176,13 +220,13 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             setStatus(connection.id, {
                 state: 'ok',
                 message: source.files.length > 0 ? `Keine neuen Buchungen (${describeSummary(applied.summary)})` : 'Keine neuen Exporte',
-                ...(warnings.length > 0 ? { warnings } : {})
+                ...(warnings.length + notes.length > 0 ? { warnings: [...notes, ...warnings] } : {})
             });
             return;
         }
 
         setStatus(connection.id, { state: 'ok', message: `Neue Buchungen gefunden: ${describeSummary(applied.summary)}` });
-        setPending({ connection, batch, summary: applied.summary, source, warnings });
+        setPending({ connection, batch, summary: applied.summary, source, warnings, notes });
     }, [setStatus, updateProject]);
 
     /**
@@ -194,6 +238,12 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         if (!current) return;
         setStatus(connection.id, { state: 'checking' });
         try {
+            if (connection.kind === 'comdirect') {
+                // Every login needs the PIN and a TAN: wait for the user
+                setStatus(connection.id, { state: hasSecrets(connection, secretsOf(connection)) ? 'needs-login' : 'needs-token' });
+                return;
+            }
+
             if (connection.kind === 'trading212') {
                 const secrets = secretsOf(connection);
                 if (!hasSecrets(connection, secrets)) {
@@ -242,7 +292,8 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         autoCheckedProjectRef.current = project.id;
         getBrokerConnections(project).forEach((connection) => {
             if (connection.kind === 'degiro-folder' && !supported) return;
-            // API connections only run on open when their credentials are stored
+            // API connections only run on open when their credentials are stored; comdirect needs a TAN
+            if (connection.kind === 'comdirect') return;
             if (connection.kind !== 'degiro-folder' && !hasSecrets(connection, connection)) return;
             void runCheck(connection, false);
         });
@@ -266,7 +317,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         setStatus(pending.connection.id, {
             state: 'ok',
             message: `Importiert: ${describeSummary(pending.summary)}`,
-            ...(pending.warnings.length > 0 ? { warnings: pending.warnings } : {})
+            ...(pending.warnings.length + pending.notes.length > 0 ? { warnings: [...pending.notes, ...pending.warnings] } : {})
         });
         setPending(null);
     }, [pending, setStatus, syncMarket, updateProject]);
@@ -325,6 +376,75 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         setTimeout(() => void runCheck(connection, true), 0);
     }, [canStoreTokens, runCheck, updateProject]);
 
+    const connectComdirect = useCallback((
+        target: PortfolioTarget,
+        credentials: { clientId: string; clientSecret: string; username: string; remember: boolean }
+    ) => {
+        const store = credentials.remember && canStoreTokens;
+        const secrets = {
+            clientId: credentials.clientId.trim(),
+            clientSecret: credentials.clientSecret.trim(),
+            username: credentials.username.trim()
+        };
+        const connection: BrokerConnection = {
+            id: crypto.randomUUID(),
+            kind: 'comdirect',
+            label: `Zugang ${secrets.username.slice(0, 2)}••••${secrets.username.slice(-2)}`,
+            portfolioId: target.portfolioId,
+            createdAt: new Date().toISOString(),
+            ...(store ? secrets : {})
+        };
+        if (!store) sessionSecretsRef.current[connection.id] = secrets;
+        updateProject((prev) => addBrokerConnection(addPortfolioIfNew(prev, target), connection));
+        setStatus(connection.id, { state: 'needs-login' });
+    }, [canStoreTokens, setStatus, updateProject]);
+
+    const startComdirectLoginFlow = useCallback(async (connection: BrokerConnection, pin: string) => {
+        const secrets = secretsOf(connection);
+        if (!hasSecrets(connection, secrets)) {
+            setStatus(connection.id, { state: 'needs-token' });
+            return;
+        }
+        setStatus(connection.id, { state: 'checking' });
+        try {
+            const { flowId, challenge } = await comdirectRequest<{ flowId: string; challenge: ComdirectChallenge }>({
+                action: 'start',
+                clientId: secrets.clientId,
+                clientSecret: secrets.clientSecret,
+                username: secrets.username,
+                pin
+            });
+            setTanRequest({ connection, flowId, challenge });
+            setStatus(connection.id, { state: 'awaiting-tan' });
+        } catch (error) {
+            setStatus(connection.id, { state: 'error', message: error instanceof Error ? error.message : 'Anmeldung fehlgeschlagen' });
+        }
+    }, [secretsOf, setStatus]);
+
+    const submitTan = useCallback(async (tan?: string) => {
+        const request = tanRequest;
+        if (!request) return;
+        setTanRequest(null); // one attempt per challenge: comdirect locks after wrong TANs
+        setStatus(request.connection.id, { state: 'checking' });
+        try {
+            const { data } = await comdirectRequest<{ data: ComdirectData }>({ action: 'complete', flowId: request.flowId, tan });
+            const parsed = parseComdirectData(data);
+            const current = projectRef.current;
+            if (!current) return;
+            handleBatch(current, request.connection, parsed.batch, { files: [`Depot ${data.depot.depotDisplayId || ''}`.trim()], newestModified: 0 }, parsed.positions, parsed.warnings);
+        } catch (error) {
+            setStatus(request.connection.id, { state: 'error', message: error instanceof Error ? error.message : 'Abruf fehlgeschlagen' });
+        }
+    }, [handleBatch, setStatus, tanRequest]);
+
+    const cancelTan = useCallback(() => {
+        const request = tanRequest;
+        if (!request) return;
+        setTanRequest(null);
+        void comdirectRequest({ action: 'cancel', flowId: request.flowId }).catch(() => undefined);
+        setStatus(request.connection.id, { state: 'needs-login' });
+    }, [setStatus, tanRequest]);
+
     const provideSecrets = useCallback((connection: BrokerConnection, secrets: ConnectionSecrets, remember: boolean) => {
         const cleaned: ConnectionSecrets = Object.fromEntries(
             Object.entries(secrets).map(([key, value]) => [key, (value || '').trim()]).filter(([, value]) => value)
@@ -334,7 +454,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             updateProject((prev) => updateBrokerConnection(prev, connection.id, cleaned));
             void runCheck({ ...connection, ...cleaned }, true);
         } else {
-            sessionSecretsRef.current[connection.id] = cleaned;
+            sessionSecretsRef.current[connection.id] = { ...sessionSecretsRef.current[connection.id], ...cleaned };
             void runCheck(connection, true);
         }
     }, [canStoreTokens, runCheck, updateProject]);
@@ -361,7 +481,12 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             connectDegiroFolder,
             connectIbkrFlex,
             connectTrading212,
+            connectComdirect,
             provideSecrets,
+            startComdirectLogin: startComdirectLoginFlow,
+            tanRequest,
+            submitTan,
+            cancelTan,
             checkConnection,
             removeConnection,
             confirmPending,

@@ -42,6 +42,7 @@ import { TransactionsContent } from '@/components/TransactionsContent';
 import { PortfolioList } from '@/components/PortfolioList';
 import { BrokersContent } from '@/components/brokers/BrokersContent';
 import { PendingImportDialog } from '@/components/brokers/PendingImportDialog';
+import { TanDialog } from '@/components/brokers/TanDialog';
 
 const NAV_ITEMS = [
   { key: 'Dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -1017,6 +1018,7 @@ export default function PortfolioApp() {
       </div>
 
       <PendingImportDialog />
+      <TanDialog />
 
       {startupSyncModalVisible && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] p-4">

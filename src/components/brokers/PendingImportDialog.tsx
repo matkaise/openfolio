@@ -2,7 +2,15 @@
 
 import React from 'react';
 import { FolderSync, X } from 'lucide-react';
+import type { BrokerConnection } from '@/types/domain';
 import { useBrokerSync } from './BrokerSyncContext';
+
+const BROKER_NAMES: Record<BrokerConnection['kind'], string> = {
+    'degiro-folder': 'DEGIRO',
+    'ibkr-flex': 'Interactive Brokers',
+    trading212: 'Trading 212',
+    comdirect: 'comdirect'
+};
 
 /** Preview of new broker exports. Rendered inside the themed app shell. */
 export const PendingImportDialog = () => {
@@ -28,9 +36,7 @@ export const PendingImportDialog = () => {
                         <div id="pending-import-title" className="text-sm font-semibold md3-text-main">
                             {pending.connection.kind === 'degiro-folder'
                                 ? `Neue DEGIRO-Exporte in „${pending.connection.label}“`
-                                : pending.connection.kind === 'trading212'
-                                    ? `Neue Buchungen von ${pending.connection.label}`
-                                    : `Neue Buchungen von Interactive Brokers (${pending.connection.label})`}
+                                : `Neue Buchungen von ${BROKER_NAMES[pending.connection.kind]}${pending.connection.kind === 'trading212' ? '' : ` (${pending.connection.label})`}`}
                         </div>
                         <div className="mt-0.5 text-xs md3-text-muted">{pending.source.files.join(', ')}</div>
                     </div>
@@ -45,6 +51,14 @@ export const PendingImportDialog = () => {
                         {pending.summary.duplicateTransactions + pending.summary.duplicateMovements} bereits vorhanden (werden übersprungen)
                     </li>
                 </ul>
+                {pending.notes.length > 0 && (
+                    <div className="mt-3 rounded-2xl px-3 py-2 text-xs md3-warning-soft">
+                        <div className="font-semibold">Hinweise:</div>
+                        <ul className="mt-1 space-y-0.5">
+                            {pending.notes.map((note) => <li key={note}>{note}</li>)}
+                        </ul>
+                    </div>
+                )}
                 {pending.warnings.length > 0 && (
                     <div className="mt-3 rounded-2xl px-3 py-2 text-xs md3-warning-soft">
                         <div className="font-semibold">Bestand weicht vom Broker ab:</div>
