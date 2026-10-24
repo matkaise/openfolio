@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildManualPriceHistory, mergeDividendHistory, syncProjectQuotes } from '@/lib/marketDataService';
+import { applySecurityPatches, buildManualPriceHistory, mergeDividendHistory, removeLegacySplitTransactions, syncProjectQuotes, syncSecurityPatches } from '@/lib/marketDataService';
 import { createEmptyProject, type ProjectData, type Transaction } from '@/types/domain';
 
 const originalFetch = globalThis.fetch;
@@ -307,5 +307,81 @@ describe('mergeDividendHistory (B12)', () => {
       { date: '2024-09-15', amount: 2.0 },
       { date: '2024-12-15', amount: 0.5 }
     ]);
+  });
+});
+
+describe('patch-based market sync (B4)', () => {
+  const isin = 'US0000000001';
+  const otherIsin = 'DE0000000002';
+  const snapshot = (): ProjectData => ({
+    ...createEmptyProject(),
+    securities: {
+      [isin]: {
+        isin, name: 'ACME', symbol: 'ACME', symbolStatus: 'resolved', currency: 'USD',
+        priceHistory: { '2025-01-10': 50 }, dividendHistory: [], upcomingDividends: [],
+        dividendHistorySynced: true, lastSync: '2025-01-10T15:30:00.000Z'
+      },
+      [otherIsin]: { isin: otherIsin, name: 'Widget', symbol: 'WDG', currency: 'EUR', ignoreMarketData: true, symbolStatus: 'ignored' }
+    }
+  });
+
+  const mockYahoo = () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ history: { '2025-01-11': 51 }, splits: {}, currency: 'USD', symbol: 'ACME', longName: 'ACME Corp', dividendHistory: [], upcomingDividends: [] })
+    } as Response) as unknown as typeof fetch;
+  };
+
+  it('returns only patches and leaves the snapshot untouched', async () => {
+    mockYahoo();
+    const before = snapshot();
+    const patches = await syncSecurityPatches(before, true, undefined, { maxPerRun: 0, maxTimeMs: 0, delayMs: 0 });
+
+    expect(Object.keys(patches)).toEqual([isin]);
+    expect(patches[isin].priceHistory).toEqual({ '2025-01-10': 50, '2025-01-11': 51 });
+    expect(before.securities[isin].priceHistory).toEqual({ '2025-01-10': 50 });
+  });
+
+  it('keeps changes made while the sync was running', async () => {
+    mockYahoo();
+    const before = snapshot();
+    const patches = await syncSecurityPatches(before, true, undefined, { maxPerRun: 0, maxTimeMs: 0, delayMs: 0 });
+
+    // Meanwhile: a new transaction, a renamed security, a new ticker mapping elsewhere
+    const current: ProjectData = {
+      ...before,
+      transactions: [{ id: 'new', date: '2025-01-11', type: 'Buy', isin, shares: 1, amount: -51, currency: 'USD', broker: 'Manual' }],
+      securities: {
+        ...before.securities,
+        [isin]: { ...before.securities[isin], name: 'My ACME' },
+        [otherIsin]: { ...before.securities[otherIsin], symbol: 'WDG.DE' }
+      }
+    };
+
+    const merged = applySecurityPatches(current, patches, before.securities);
+
+    expect(merged.transactions).toHaveLength(1);
+    expect(merged.securities[otherIsin].symbol).toBe('WDG.DE');
+    expect(merged.securities[isin].name).toBe('My ACME'); // user edit wins over longName from Yahoo
+    expect(merged.securities[isin].priceHistory?.['2025-01-11']).toBe(51);
+  });
+
+  it('drops patches for securities deleted during the sync', () => {
+    const before = snapshot();
+    const current = { ...before, securities: { [otherIsin]: before.securities[otherIsin] } };
+    const merged = applySecurityPatches(current, { [isin]: { lastSync: 'x' } }, before.securities);
+    expect(merged.securities[isin]).toBeUndefined();
+  });
+});
+
+describe('legacy split cleanup', () => {
+  it('removes old system split transactions when a project is loaded', () => {
+    const project = createEmptyProject();
+    project.transactions = [
+      { id: '1', date: '2024-01-01', type: 'Split', isin: 'X', amount: 0, currency: 'USD', broker: 'System' },
+      { id: '2', date: '2024-01-01', type: 'Buy', isin: 'X', shares: 1, amount: -1, currency: 'USD', broker: 'Manual' }
+    ];
+    expect(removeLegacySplitTransactions(project).transactions.map((t) => t.id)).toEqual(['2']);
   });
 });

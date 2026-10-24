@@ -163,10 +163,11 @@ export const DataSourcesContent = () => {
     ) => {
         const next = symbol.trim().toUpperCase();
         if (!next) return;
+        if (!project) return;
         const now = new Date().toISOString();
-        let updatedProject: ProjectData | null = null;
 
-        updateProject(prev => {
+        // Pure: used for the state update and, on the current project, for the sync below.
+        const applyTicker = (prev: ProjectData): ProjectData => {
             const current = prev.securities[sec.isin];
             if (!current) return prev;
 
@@ -202,7 +203,7 @@ export const DataSourcesContent = () => {
                 industry: undefined
             };
 
-            updatedProject = {
+            return {
                 ...prev,
                 securities: {
                     ...prev.securities,
@@ -210,12 +211,10 @@ export const DataSourcesContent = () => {
                 },
                 modified: now
             };
-            return updatedProject;
-        });
+        };
 
-        if (updatedProject) {
-            void syncMarket(true, { projectOverride: updatedProject });
-        }
+        updateProject(applyTicker);
+        void syncMarket(true, { projectOverride: applyTicker(project) });
     };
 
     const handleIgnoreSecurity = (sec: Security) => {

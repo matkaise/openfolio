@@ -155,7 +155,57 @@ const resolveSecuritySymbol = async (input: string, currency?: string, isin?: st
     }
 };
 
-export const syncProjectQuotes = async (
+export type SecurityPatches = Record<string, Partial<Security>>;
+
+/** Removes the "System" split transactions older versions created; splits live on the security now. */
+export const removeLegacySplitTransactions = (project: ProjectData): ProjectData => {
+    const transactions = project.transactions.filter(t => t.type !== 'Split' || t.broker !== 'System');
+    return transactions.length === project.transactions.length ? project : { ...project, transactions };
+};
+
+/**
+ * Applies sync results to the *current* project. A field that changed since the sync
+ * started (baseline) was edited meanwhile and is kept; securities deleted meanwhile stay deleted.
+ */
+export const applySecurityPatches = (
+    current: ProjectData,
+    patches: SecurityPatches,
+    baseline: Record<string, Security>
+): ProjectData => {
+    let securities: Record<string, Security> | null = null;
+    Object.entries(patches).forEach(([isin, patch]) => {
+        const target = (securities || current.securities)[isin];
+        if (!target) return;
+        const base = baseline[isin];
+        const next: Security = { ...target };
+        let changed = false;
+        (Object.keys(patch) as (keyof Security)[]).forEach((key) => {
+            if (base && target[key] !== base[key]) return; // edited during the sync
+            (next as unknown as Record<string, unknown>)[key] = patch[key];
+            changed = true;
+        });
+        if (!changed) return;
+        securities = { ...(securities || current.securities), [isin]: next };
+    });
+    return securities ? { ...current, securities } : current;
+};
+
+const diffSecurity = (before: Security | undefined, after: Security): Partial<Security> | null => {
+    const patch: Partial<Security> = {};
+    let changed = false;
+    (Object.keys(after) as (keyof Security)[]).forEach((key) => {
+        if (before && before[key] === after[key]) return;
+        (patch as Record<string, unknown>)[key] = after[key];
+        changed = true;
+    });
+    return changed ? patch : null;
+};
+
+/**
+ * Fetches market data for the project's securities and returns the changes per ISIN.
+ * The project is not modified; apply the result with applySecurityPatches.
+ */
+export const syncSecurityPatches = async (
     project: ProjectData,
     force: boolean = false,
     onProgress?: (progress: MarketSyncProgress) => void,
@@ -166,7 +216,7 @@ export const syncProjectQuotes = async (
         concurrency?: number;
         retryDelaysMs?: number[];
     }
-): Promise<ProjectData> => {
+): Promise<SecurityPatches> => {
     const retryDelaysMs = options?.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
     const now = new Date();
     const securities = { ...project.securities };
@@ -190,14 +240,7 @@ export const syncProjectQuotes = async (
         ? Math.floor(concurrencyRaw as number)
         : (fullSyncMode ? FULL_SYNC_CONCURRENCY : SYNC_CONCURRENCY);
 
-    // Filter out old "System" split transactions as we now store them in Security
-    // This is a one-time migration/cleanup
-    const transactions = project.transactions.filter(t => t.type !== 'Split' || t.broker !== 'System');
-
-    if (transactions.length !== project.transactions.length) {
-        console.log(`[MarketData] Removed ${project.transactions.length - transactions.length} legacy split transactions.`);
-        hasChanges = true;
-    }
+    const transactions = project.transactions;
 
     let syncedCount = 0;
     let attemptedCount = 0;
@@ -420,16 +463,26 @@ export const syncProjectQuotes = async (
         console.log(`[MarketData] Synced ${syncedCount} securities (attempted ${attemptedCount}).`);
     }
 
+    const patches: SecurityPatches = {};
     if (hasChanges) {
-        return {
-            ...project,
-            securities,
-            transactions,
-            modified: now.toISOString()
-        };
+        Object.entries(securities).forEach(([isin, sec]) => {
+            const patch = diffSecurity(project.securities[isin], sec);
+            if (patch) patches[isin] = patch;
+        });
     }
+    return patches;
+};
 
-    return project;
+/** Convenience for callers that own the project: sync and apply in one step. */
+export const syncProjectQuotes = async (
+    project: ProjectData,
+    force: boolean = false,
+    onProgress?: (progress: MarketSyncProgress) => void,
+    options?: Parameters<typeof syncSecurityPatches>[3]
+): Promise<ProjectData> => {
+    const patches = await syncSecurityPatches(project, force, onProgress, options);
+    if (Object.keys(patches).length === 0) return project;
+    return { ...applySecurityPatches(project, patches, project.securities), modified: new Date().toISOString() };
 };
 
 // Start Repair Validation
