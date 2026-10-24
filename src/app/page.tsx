@@ -25,6 +25,7 @@ import { SecurityDetailModal } from '@/components/SecurityDetailModal';
 import { repairProjectSecurities, securityNeedsSync } from '@/lib/marketDataService';
 import { findMissingFxCurrencies } from '@/lib/domain/fx/rates';
 import { applyThemePreference, resolveThemePreference, THEME_LABELS, type ThemePreference } from '@/lib/theme';
+import { DEFAULT_NUMBER_LOCALE, NUMBER_LOCALES, type NumberLocale } from '@/lib/format';
 import { normalizeWealthGoalSettings } from '@/lib/wealthGoalUtils';
 import { type AnalysisCache } from '@/types/portfolioView';
 import { AppSidebar, type ShellNavItem } from '@/components/shell/AppSidebar';
@@ -79,7 +80,7 @@ export default function PortfolioApp() {
   // Reference time for the greeting; taken once per mount to keep rendering pure.
   const [shellNow] = useState(() => new Date());
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-  const [timeRange, setTimeRange] = useState('1M');
+  const [timeRange, setTimeRange] = useState('1J');
   const [selectedPortfolioIds, setSelectedPortfolioIds] = useState<string[]>([]);
   const [selectedSecurity, setSelectedSecurity] = useState<{ isin: string; currency?: string } | null>(null);
   const [analysisCache, setAnalysisCache] = useState<AnalysisCache | null>(null);
@@ -230,8 +231,10 @@ export default function PortfolioApp() {
             timeRange={timeRange}
             setTimeRange={setTimeRange}
             selectedPortfolioIds={selectedPortfolioIds}
+            onSelectPortfolios={setSelectedPortfolioIds}
             onSelectSecurity={(isin, currency) => setSelectedSecurity({ isin, currency })}
             onShowPortfolio={() => handleTabChange('Portfolio')}
+            onShowBrokers={() => handleTabChange('Broker')}
             includeDividends={includeDividendsInPerformance}
             onToggleDividends={() => setIncludeDividendsInPerformance((v) => !v)}
           />
@@ -295,6 +298,22 @@ export default function PortfolioApp() {
                   </button>
                 ))}
               </div>
+
+              <label className="mt-6 block max-w-sm text-sm font-semibold">
+                Zahlenformat
+                <select
+                  value={project?.settings?.numberLocale || DEFAULT_NUMBER_LOCALE}
+                  onChange={(e) => {
+                    const numberLocale = e.target.value as NumberLocale;
+                    updateProject((prev) => ({ ...prev, settings: { ...prev.settings, numberLocale } }));
+                  }}
+                  className="md3-field mt-2 w-full px-3 text-sm outline-none"
+                >
+                  {NUMBER_LOCALES.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             <div className="md3-card p-6">
