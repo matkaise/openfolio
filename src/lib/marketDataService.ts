@@ -71,7 +71,11 @@ const fetchYahooWithRetry = async (
 
 type DividendHistoryItem = { date: string; amount: number };
 
-const mergeDividendHistory = (
+/**
+ * One entry per payment date; incoming (newer) data wins. Yahoo restates past amounts,
+ * e.g. after a split, so keying by date+amount would count the same dividend twice.
+ */
+export const mergeDividendHistory = (
     existing: DividendHistoryItem[] | undefined,
     incoming: DividendHistoryItem[] | undefined
 ): DividendHistoryItem[] => {
@@ -83,18 +87,14 @@ const mergeDividendHistory = (
             if (!item || !item.date) continue;
             const amount = Number(item.amount);
             if (!Number.isFinite(amount) || amount <= 0) continue;
-            const key = `${item.date}|${amount}`;
-            merged.set(key, { date: item.date, amount });
+            merged.set(item.date, { date: item.date, amount });
         }
     };
 
     add(existing);
     add(incoming);
 
-    return Array.from(merged.values()).sort((a, b) => {
-        if (a.date === b.date) return a.amount - b.amount;
-        return a.date.localeCompare(b.date);
-    });
+    return Array.from(merged.values()).sort((a, b) => a.date.localeCompare(b.date));
 };
 
 const hasMissingDividendData = (sec: Security): boolean => {

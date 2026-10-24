@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildManualPriceHistory, syncProjectQuotes } from '@/lib/marketDataService';
+import { buildManualPriceHistory, mergeDividendHistory, syncProjectQuotes } from '@/lib/marketDataService';
 import { createEmptyProject, type ProjectData, type Transaction } from '@/types/domain';
 
 const originalFetch = globalThis.fetch;
@@ -291,5 +291,21 @@ describe('syncProjectQuotes', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(updated.securities[isin].symbolStatus).toBe('unresolved');
     });
+  });
+});
+
+describe('mergeDividendHistory (B12)', () => {
+  it('keeps one entry per date and lets the newer amount win', () => {
+    // Yahoo restates past dividends after a split: same date, new amount
+    const merged = mergeDividendHistory(
+      [{ date: '2024-06-15', amount: 2.0 }, { date: '2024-09-15', amount: 2.0 }],
+      [{ date: '2024-06-15', amount: 0.5 }, { date: '2024-12-15', amount: 0.5 }]
+    );
+
+    expect(merged).toEqual([
+      { date: '2024-06-15', amount: 0.5 },
+      { date: '2024-09-15', amount: 2.0 },
+      { date: '2024-12-15', amount: 0.5 }
+    ]);
   });
 });
