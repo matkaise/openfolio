@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { applyImportBatch, parseDegiroFiles } from '../importBatch';
+import { applyImportBatch, emptyImportBatch, parseDegiroFiles } from '../importBatch';
+import { tradeEntry } from '../entries';
 import { createEmptyProject } from '@/types/domain';
 import { getCashMovements, getLedger, getTransactions } from '@/lib/domain/ledger/store';
 
@@ -13,8 +14,8 @@ const target = { id: 'p1', name: 'DEGIRO', isNew: true };
 describe('parseDegiroFiles', () => {
   it('recognises both DEGIRO exports by their header', () => {
     const batch = parseDegiroFiles([accountCsv, tradesCsv]);
-    expect(batch.transactions).toHaveLength(4);
-    expect(batch.cashMovements.length).toBeGreaterThan(0);
+    expect(batch.entries.filter((e) => e.kind === 'buy' || e.kind === 'sell')).toHaveLength(4);
+    expect(batch.entries.filter((e) => e.kind !== 'buy' && e.kind !== 'sell').length).toBeGreaterThan(0);
     expect(batch.cashBalances.length).toBeGreaterThan(0);
   });
 });
@@ -58,5 +59,23 @@ describe('applyImportBatch', () => {
     base.securities = { US0000000001: { isin: 'US0000000001', name: 'My ACME', symbol: 'ACME', currency: 'USD', symbolStatus: 'resolved' } };
     const { project } = applyImportBatch(base, parseDegiroFiles([tradesCsv]), target);
     expect(project.securities.US0000000001).toMatchObject({ name: 'My ACME', symbol: 'ACME', symbolStatus: 'resolved' });
+  });
+});
+
+describe('applyImportBatch dedupe (B3)', () => {
+  it('assigns the target portfolio and imports the same trades into another portfolio', () => {
+    const first = applyImportBatch(createEmptyProject(), parseDegiroFiles([tradesCsv]), target);
+    expect(first.project.ledger.every((entry) => entry.portfolioId === 'p1')).toBe(true);
+
+    const other = applyImportBatch(first.project, parseDegiroFiles([tradesCsv]), { id: 'p2', name: 'Zweitdepot', isNew: true });
+    expect(other.summary.addedTransactions).toBe(4);
+  });
+
+  it('never dedupes manual entries: two identical manual entries are intentional', () => {
+    const manual = tradeEntry({ source: 'Manual', date: '2024-01-02', side: 'buy', isin: 'DE0000000002', quantity: 3, amount: -150, currency: 'EUR' });
+    const batch = { ...emptyImportBatch('Manual'), entries: [manual, manual] };
+    const once = applyImportBatch(createEmptyProject(), batch, target);
+    const twice = applyImportBatch(once.project, batch, { ...target, isNew: false });
+    expect(getLedger(twice.project)).toHaveLength(4);
   });
 });

@@ -5,11 +5,11 @@ import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase, Check, C
 import { useProject } from '@/contexts/ProjectContext';
 import { useNotifications } from '@/components/ui/notifications';
 import { Transaction, type Security, type Portfolio } from '@/types/domain';
-import { parseFlatexCashBalancesCsv, parseFlatexCashMovementsCsv, parseFlatexCsv, type CashBalanceImportPoint, type CashMovementImportEntry } from '@/lib/csvParser';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
 import { getCurrencyOptions } from '@/lib/fxUtils';
 import { buildManualPriceHistory } from '@/lib/marketDataService';
-import { applyImportBatch, emptyImportBatch, isEmptyImportBatch, type ImportBatch } from '@/lib/importers/importBatch';
+import { applyImportBatch, emptyImportBatch, isEmptyImportBatch, parseDegiroFiles, type ImportBatch } from '@/lib/importers/importBatch';
+import { isTradeEntry } from '@/lib/importers/entries';
 import { searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
 import { createLogger } from '@/lib/logger';
 import { buildGenericCashBalances, buildGenericTransactions, guessCsvMapping, parseGenericCsv, type CsvDateFormat, type CsvMapping } from '@/lib/importers/genericCsv';
@@ -73,9 +73,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     const [importMode, setImportMode] = useState<'generic' | 'template'>('generic');
     const [selectedBroker, setSelectedBroker] = useState('');
     const [isDragging, setIsDragging] = useState(false);
-    const [parsedTx, setParsedTx] = useState<Transaction[]>([]);
-    const [parsedCashBalances, setParsedCashBalances] = useState<CashBalanceImportPoint[]>([]);
-    const [parsedCashMovements, setParsedCashMovements] = useState<CashMovementImportEntry[]>([]);
+    const [parsedBatch, setParsedBatch] = useState<ImportBatch>(() => emptyImportBatch('Flatex'));
     const [importStatus, setImportStatus] = useState<'idle' | 'processing' | 'ready' | 'success'>('idle');
     const [genericHeaders, setGenericHeaders] = useState<string[]>([]);
     const [genericRows, setGenericRows] = useState<string[][]>([]);
@@ -133,28 +131,20 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         try {
             const text = await file.text();
             // In future: Switch parser based on selectedBroker
-            const txs = parseFlatexCsv(text);
-            const cashBalances = parseFlatexCashBalancesCsv(text);
-            const cashMovements = parseFlatexCashMovementsCsv(text);
+            const batch = parseDegiroFiles([text]);
 
-            if (txs.length > 0 || cashBalances.length > 0 || cashMovements.length > 0) {
-                setParsedTx(txs);
-                setParsedCashBalances(cashBalances);
-                setParsedCashMovements(cashMovements);
+            if (!isEmptyImportBatch(batch)) {
+                setParsedBatch(batch);
                 setImportStatus('ready');
             } else {
                 notify({ tone: 'error', title: 'Keine Daten gefunden', message: 'Die Datei enthält keine erkennbaren DEGIRO-Buchungen. Bitte Export prüfen.' });
-                setParsedTx([]);
-                setParsedCashBalances([]);
-                setParsedCashMovements([]);
+                setParsedBatch(emptyImportBatch('Flatex'));
                 setImportStatus('idle');
             }
         } catch (err) {
             log.error(err);
             notify({ tone: 'error', title: 'Die Datei konnte nicht gelesen werden.' });
-            setParsedTx([]);
-            setParsedCashBalances([]);
-            setParsedCashMovements([]);
+            setParsedBatch(emptyImportBatch('Flatex'));
             setImportStatus('idle');
         }
     };
@@ -211,12 +201,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         return { id: targetPortfolio.id, name: targetPortfolio.name, isNew: false };
     };
 
-    const buildFlatexBatch = (): ImportBatch => ({
-        broker: 'Flatex',
-        transactions: parsedTx,
-        cashMovements: parsedCashMovements,
-        cashBalances: parsedCashBalances
-    });
+    const buildFlatexBatch = (): ImportBatch => parsedBatch;
 
     const commitImport = () => {
         if (!project) return;
@@ -272,8 +257,8 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     const commitGenericImport = () => {
         const genericInput = { headers: genericHeaders, rows: genericRows, mapping: genericMapping, dateFormat: genericDateFormat, defaultCurrency: genericDefaultCurrency };
         if (genericImportType === 'cash') {
-            const { cashPoints, cashMovements, errors, processedRows } = buildGenericCashBalances(genericInput);
-            if (cashPoints.length === 0 && cashMovements.length === 0) {
+            const { cashPoints, entries, errors, processedRows } = buildGenericCashBalances(genericInput);
+            if (cashPoints.length === 0 && entries.length === 0) {
                 setGenericImportSummary({
                     imported: 0,
                     importedMovements: 0,
@@ -285,20 +270,20 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
             if (!project) return;
             const cashTarget = getTargetPortfolioId(project.portfolios || []);
-            const cashBatch: ImportBatch = { ...emptyImportBatch('CSV'), cashMovements, cashBalances: cashPoints };
+            const cashBatch: ImportBatch = { ...emptyImportBatch('CSV'), entries, cashBalances: cashPoints };
             updateProject(prev => applyImportBatch(prev, cashBatch, cashTarget).project);
 
             setGenericImportSummary({
                 imported: cashPoints.length,
-                importedMovements: cashMovements.length,
+                importedMovements: entries.length,
                 skipped: Math.max(0, genericRows.length - processedRows),
                 errors: errors.slice(0, 3)
             });
             return;
         }
 
-        const { transactions, errors } = buildGenericTransactions(genericInput);
-        if (transactions.length === 0) {
+        const { entries, errors } = buildGenericTransactions(genericInput);
+        if (entries.length === 0) {
             setGenericImportSummary({
                 imported: 0,
                 skipped: genericRows.length,
@@ -309,7 +294,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
         if (!project) return;
         const target = getTargetPortfolioId(project.portfolios || []);
-        const batch: ImportBatch = { ...emptyImportBatch('CSV'), transactions: transactions.filter((tx) => Boolean(tx.isin)) };
+        const batch: ImportBatch = { ...emptyImportBatch('CSV'), entries: entries.filter((entry) => Boolean(entry.isin)) };
         const { project: nextProject, summary } = applyImportBatch(project, batch, target);
         updateProject(prev => applyImportBatch(prev, batch, target).project);
         void syncMarket(true, { full: true, projectOverride: nextProject });
@@ -1044,7 +1029,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     </div>
                                     <h3 className="text-sm font-semibold md3-text-main">
                                         {importStatus === 'ready'
-                                            ? `${parsedTx.length} Transaktionen${importPreviewDuplicates > 0 ? ` (${importPreviewDuplicates} bereits vorhanden)` : ''}, ${parsedCashBalances.length} Kontostaende, ${parsedCashMovements.length} Kontobewegungen erkannt`
+                                            ? `${parsedBatch.entries.filter(isTradeEntry).length} Transaktionen${importPreviewDuplicates > 0 ? ` (${importPreviewDuplicates} bereits vorhanden)` : ''}, ${parsedBatch.cashBalances.length} Kontostaende, ${parsedBatch.entries.filter((entry) => !isTradeEntry(entry)).length} Kontobewegungen erkannt`
                                             : 'Datei hier ablegen'}
                                     </h3>
                                     <p className="text-xs md3-text-muted mt-1">

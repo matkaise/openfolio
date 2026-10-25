@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseFlatexCashBalancesCsv, parseFlatexCashMovementsCsv, parseFlatexCsv } from '../csvParser';
+import { parseDegiroAccountCsv, parseDegiroTradesCsv, parseFlatexCashBalancesCsv } from '../csvParser';
 
 describe('parseFlatexCashBalancesCsv', () => {
   it('keeps the end-of-day balance per currency even for reverse-chronological rows', () => {
@@ -61,7 +61,7 @@ describe('parseFlatexCashBalancesCsv', () => {
   });
 });
 
-describe('parseFlatexCashMovementsCsv', () => {
+describe('parseDegiroAccountCsv', () => {
   it('extracts deposit and withdrawal movements from account csv', () => {
     const csv = [
       'Datum,Uhrze,Valutadatum,Produkt,ISIN,Beschreibung,FX,\u00c4nderung,,Saldo,,Order-ID',
@@ -69,10 +69,10 @@ describe('parseFlatexCashMovementsCsv', () => {
       '04-01-2024,10:00,04-01-2024,,,Auszahlung von Ihrem Geldkonto bei der flatexDEGIRO Bank: 250.00 CHF,,,CHF,750.00,'
     ].join('\n');
 
-    const movements = parseFlatexCashMovementsCsv(csv);
+    const movements = parseDegiroAccountCsv(csv);
     expect(movements).toHaveLength(2);
-    expect(movements[0]).toMatchObject({ type: 'Deposit', amount: 1000, currency: 'CHF' });
-    expect(movements[1]).toMatchObject({ type: 'Withdrawal', amount: -250, currency: 'CHF' });
+    expect(movements[0]).toMatchObject({ kind: 'deposit', amount: 1000, currency: 'CHF' });
+    expect(movements[1]).toMatchObject({ kind: 'withdrawal', amount: -250, currency: 'CHF' });
   });
 
   it('marks fx exchange as internal transfer and ignores buy/sell rows', () => {
@@ -82,24 +82,25 @@ describe('parseFlatexCashMovementsCsv', () => {
       '03-01-2024,09:00,03-01-2024,ABC,US0000000001,Kauf 1 zu je 100 USD (US0000000001),,USD,-100.00,USD,-100.00,'
     ].join('\n');
 
-    const movements = parseFlatexCashMovementsCsv(csv);
+    const movements = parseDegiroAccountCsv(csv);
     expect(movements).toHaveLength(1);
-    expect(movements[0]).toMatchObject({ type: 'Transfer', isInternal: true, currency: 'CHF', amount: -100 });
+    expect(movements[0]).toMatchObject({ kind: 'fx', internal: true, currency: 'CHF', amount: -100 });
   });
 });
 
-describe('parseFlatexCsv (trades)', () => {
+describe('parseDegiroTradesCsv', () => {
   const TRADES_HEADER = 'Datum,Uhrzeit,Produkt,ISIN,Referenzbörse,Ausführungsort,Anzahl,Kurs,,Wert in Lokalwährung,,Wert CHF,Wechselkurs,AutoFX-Gebühr,Transaktionsgebühren und/oder Fremdkosten,Gesamt CHF,Order-ID,';
   const fixture = readFileSync(path.join(__dirname, 'fixtures', 'degiro-transactions.csv'), 'utf-8');
 
   it('keeps fees and the AutoFX fee in the account currency (B15)', () => {
-    const txs = parseFlatexCsv(fixture);
+    const txs = parseDegiroTradesCsv(fixture);
     const firstBuy = txs.find((tx) => tx.date === '2024-03-15');
 
     expect(txs).toHaveLength(4);
     expect(firstBuy).toMatchObject({
-      type: 'Buy',
-      shares: 10,
+      kind: 'buy',
+      quantity: 10,
+      orderId: '11111111-1111-4111-8111-111111111111',
       amount: -1000,
       currency: 'USD',
       fee: -1,
@@ -109,8 +110,8 @@ describe('parseFlatexCsv (trades)', () => {
   });
 
   it('gives every trade a stable external id built from the order id (B3)', () => {
-    const first = parseFlatexCsv(fixture);
-    const second = parseFlatexCsv(fixture);
+    const first = parseDegiroTradesCsv(fixture);
+    const second = parseDegiroTradesCsv(fixture);
 
     expect(first.map((tx) => tx.externalId)).toEqual(second.map((tx) => tx.externalId));
     expect(first.find((tx) => tx.date === '2024-03-15')?.externalId)
@@ -126,7 +127,7 @@ describe('parseFlatexCsv (trades)', () => {
       '15-03-2024,15:30,ACME CORP,US0000000001,NDQ,XNAS,6,100.0000,USD,-600.00,USD,-528.00,1.1364,-1.32,0.00,-528.00,,order-a'
     ].join('\n');
 
-    const ids = parseFlatexCsv(csv).map((tx) => tx.externalId);
+    const ids = parseDegiroTradesCsv(csv).map((tx) => tx.externalId);
     expect(new Set(ids).size).toBe(3);
   });
 
@@ -136,8 +137,8 @@ describe('parseFlatexCsv (trades)', () => {
       '01-12-2025,13:43,ACME CORP,US0000000001,TDG,XGAT,"122,5","17,5559",EUR,"-2.150,60",EUR,"-2.024,67","1,0622","-5,06","-3,90","-2.028,57",,order-b'
     ].join('\n');
 
-    const [tx] = parseFlatexCsv(csv);
-    expect(tx.shares).toBeCloseTo(122.5, 6);
+    const [tx] = parseDegiroTradesCsv(csv);
+    expect(tx.quantity).toBeCloseTo(122.5, 6);
     expect(tx.amount).toBeCloseTo(-2150.6, 6);
     expect(tx.fee).toBeCloseTo(-3.9, 6);
     expect(tx.fxFee).toBeCloseTo(-5.06, 6);
@@ -149,8 +150,8 @@ describe('parseFlatexCsv (trades)', () => {
       '01-12-2025,13:43,ACME CORP,US0000000001,TDG,XGAT,"1,000",1.2346,USD,"-1,234.57",USD,"-1,086.36",1.1364,0.00,-1.00,"-1,087.36",,order-c'
     ].join('\n');
 
-    const [tx] = parseFlatexCsv(csv);
-    expect(tx.shares).toBe(1000);
+    const [tx] = parseDegiroTradesCsv(csv);
+    expect(tx.quantity).toBe(1000);
     expect(tx.amount).toBeCloseTo(-1234.57, 6);
   });
 });

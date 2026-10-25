@@ -1,5 +1,5 @@
-import type { Transaction } from '@/types/domain';
-import type { CashBalanceImportPoint, CashMovementImportEntry } from '@/lib/csvParser';
+import type { CashBalanceImportPoint } from '@/lib/csvParser';
+import { statementEntry, tradeEntry, type ImportEntry, type StatementType } from './entries';
 
 // Generic CSV import (any broker or bank): split the file, guess the column mapping and
 // build transactions or cash balances/movements from a mapping the user confirmed.
@@ -403,17 +403,17 @@ const parseDateValue = (value: string, format: CsvDateFormat): string | null => 
     return tryYmd(trimmed) || tryDmy(trimmed) || tryMdy(trimmed);
 };
 
-export const buildGenericTransactions = (input: GenericCsvInput): { transactions: Transaction[]; errors: string[] } => {
+export const buildGenericTransactions = (input: GenericCsvInput): { entries: ImportEntry[]; errors: string[] } => {
     const { headers, rows, mapping, dateFormat, defaultCurrency } = input;
     const errors: string[] = [];
     if (!headers.length || !rows.length) {
         errors.push('Keine CSV-Daten geladen.');
-        return { transactions: [], errors };
+        return { entries: [], errors };
     }
 
     if (!mapping.date || !mapping.identifier || !mapping.shares || !mapping.price) {
         errors.push('Bitte Datum, Identifier, Anzahl und Preis zuordnen.');
-        return { transactions: [], errors };
+        return { entries: [], errors };
     }
 
     const dateIdx = headers.indexOf(mapping.date);
@@ -424,7 +424,7 @@ export const buildGenericTransactions = (input: GenericCsvInput): { transactions
     const usedIdx = new Set<number>([dateIdx, identifierIdx, sharesIdx, priceIdx, currencyIdx].filter((v) => v >= 0));
     const nameIdx = detectNameHeaderIndex(headers, usedIdx);
 
-    const transactions: Transaction[] = [];
+    const entries: ImportEntry[] = [];
 
     rows.forEach((row, index) => {
         const dateRaw = row[dateIdx] ?? '';
@@ -458,35 +458,35 @@ export const buildGenericTransactions = (input: GenericCsvInput): { transactions
 
         const signedAmount = isSell ? absShares * (priceValue || 0) : -(absShares * priceValue);
 
-        transactions.push({
-            id: crypto.randomUUID(),
+        // No id in a generic file: applyImportBatch dedupes by content
+        entries.push(tradeEntry({
+            source: 'CSV',
             date: dateValue,
-            type: isSell ? 'Sell' : 'Buy',
+            side: isSell ? 'sell' : 'buy',
             isin: identifierValue,
             name: nameValue || identifierValue,
-            shares: isSell ? -absShares : absShares,
+            quantity: absShares,
             amount: signedAmount,
             currency: currencyValue || defaultCurrency,
-            broker: 'Manual',
-            originalData: { manualEntry: true, pricePerShare: priceValue, csvRow: row }
-        });
+            raw: { pricePerShare: priceValue, csvRow: row }
+        }));
     });
 
-    return { transactions, errors };
+    return { entries, errors };
 };
 
-export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: CashBalanceImportPoint[]; cashMovements: CashMovementImportEntry[]; errors: string[]; processedRows: number } => {
+export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: CashBalanceImportPoint[]; entries: ImportEntry[]; errors: string[]; processedRows: number } => {
     const { headers, rows, mapping, dateFormat, defaultCurrency } = input;
     const errors: string[] = [];
     let processedRows = 0;
     if (!headers.length || !rows.length) {
         errors.push('Keine CSV-Daten geladen.');
-        return { cashPoints: [], cashMovements: [], errors, processedRows };
+        return { cashPoints: [], entries: [], errors, processedRows };
     }
 
     if (!mapping.date || (!mapping.amount && !mapping.balance)) {
         errors.push('Bitte Datum und Betrag oder Saldo zuordnen.');
-        return { cashPoints: [], cashMovements: [], errors, processedRows };
+        return { cashPoints: [], entries: [], errors, processedRows };
     }
 
     const dateIdx = headers.indexOf(mapping.date);
@@ -688,7 +688,7 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
             .replace(/\u00e2\u20ac\u2122/g, "'");
     };
 
-    const resolveTypeFromToken = (token: string): CashMovementImportEntry['type'] | null => {
+    const resolveTypeFromToken = (token: string): StatementType | null => {
         if (!token) return null;
         if (token.includes('deposit') || token.includes('einzahlung')) return 'Deposit';
         if (token.includes('withdrawal') || token.includes('auszahlung')) return 'Withdrawal';
@@ -705,7 +705,7 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
         descriptionRaw: string,
         typeRaw: string,
         amount: number
-    ): { type: CashMovementImportEntry['type']; isInternal?: boolean } | null => {
+    ): { type: StatementType; isInternal?: boolean } | null => {
         const description = foldMovementText(descriptionRaw);
         const explicitType = foldMovementText(typeRaw);
         const combined = `${explicitType} ${description}`.trim();
@@ -754,7 +754,7 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
         return { type: 'Adjustment' };
     };
 
-    const cashMovements: CashMovementImportEntry[] = [];
+    const entries: ImportEntry[] = [];
     if (amountIdx >= 0) {
         rows.forEach((row) => {
             const dateValue = parseEffectiveDate(row);
@@ -789,23 +789,21 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
                 row.join('|')
             ];
 
-            cashMovements.push({
+            entries.push(statementEntry({
+                source: 'CSV',
+                externalId: sourceParts.join('|'),
                 date: dateValue,
                 type: classification.type,
                 amount: normalizedAmount,
                 currency: currencyValue,
                 description: description || rawType || classification.type,
-                isInternal: classification.isInternal,
-                sourceKey: sourceParts.join('|'),
-                originalData: row
-            });
+                internal: classification.isInternal,
+                raw: row
+            }));
         });
     }
 
-    cashMovements.sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        return (a.sourceKey || '').localeCompare(b.sourceKey || '');
-    });
+    entries.sort((a, b) => a.date.localeCompare(b.date) || (a.externalId || '').localeCompare(b.externalId || ''));
 
     let firstTimestamp: number | null = null;
     let lastTimestamp: number | null = null;
@@ -872,7 +870,7 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
             if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
             return a.date.localeCompare(b.date);
         });
-        return { cashPoints, cashMovements, errors, processedRows };
+        return { cashPoints, entries, errors, processedRows };
     }
 
     const grouped: Record<string, Record<string, number>> = {};
@@ -913,5 +911,5 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
         });
     });
 
-    return { cashPoints, cashMovements, errors, processedRows };
+    return { cashPoints, entries, errors, processedRows };
 };

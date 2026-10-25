@@ -1,5 +1,4 @@
-import type { CashMovementImportEntry } from '@/lib/csvParser';
-import type { Transaction } from '@/types/domain';
+import { statementEntry, tradeEntry, type StatementType } from './entries';
 import { emptyImportBatch, type ImportBatch } from './importBatch';
 
 // comdirect REST API (brokerage v3, banking v1). Shapes follow the official
@@ -64,7 +63,7 @@ const ISIN_PATTERN = /\b[A-Z]{2}[A-Z0-9]{9}\d\b/;
  * Settlement account bookings. Security purchases and sales ("Wertpapier", "Sparplan")
  * are skipped: the trade comes from the depot transactions.
  */
-const classifyAccountBooking = (category: string, text: string, value: number): CashMovementImportEntry['type'] | null => {
+const classifyAccountBooking = (category: string, text: string, value: number): StatementType | null => {
     const normalized = category.toLowerCase();
     if (normalized.includes('wertpapier') || normalized.includes('sparplan') || normalized.includes('securities') || normalized.includes('saving plan')) return null;
     if (normalized.includes('zinsen') || normalized.includes('dividend') || normalized.includes('interest')) {
@@ -103,20 +102,18 @@ export const parseComdirectData = (data: ComdirectData): ComdirectParseResult =>
         const value = Math.abs(amount(row.transactionValue));
         if (!date || !shares) return;
 
-        const transaction: Transaction = {
-            id: `comdirect:${depotId}:${row.transactionId}`,
+        batch.entries.push(tradeEntry({
+            source: 'comdirect',
+            externalId: `comdirect:${depotId}:${row.transactionId}`,
             date,
-            type: type === 'SELL' ? 'Sell' : 'Buy',
+            side: type === 'SELL' ? 'sell' : 'buy',
             isin: row.instrument?.isin || row.instrument?.wkn || '',
             name,
-            shares,
+            quantity: shares,
             amount: type === 'SELL' ? value : -value,
             currency: row.transactionValue?.unit || 'EUR',
-            externalId: `comdirect:${depotId}:${row.transactionId}`,
-            broker: 'comdirect',
-            originalData: { source: 'comdirect', wkn: row.instrument?.wkn, pricePerShare: amount(row.executionPrice) || undefined }
-        };
-        batch.transactions.push(transaction);
+            raw: { source: 'comdirect', wkn: row.instrument?.wkn, pricePerShare: amount(row.executionPrice) || undefined }
+        }));
     });
 
     data.accountTransactions.forEach((row) => {
@@ -132,17 +129,18 @@ export const parseComdirectData = (data: ComdirectData): ComdirectParseResult =>
         const type = classifyAccountBooking(row.transactionType?.text || row.transactionType?.key || '', text, value);
         if (!type) return;
         const isin = type === 'Dividend' ? ISIN_PATTERN.exec(text)?.[0] : undefined;
-        batch.cashMovements.push({
+        batch.entries.push(statementEntry({
+            source: 'comdirect',
+            externalId: `comdirect:${data.depot.defaultSettlementAccountId || ''}:${row.reference || `${date}|${value}|${text}`}`,
             date,
             type,
             amount: value,
             currency,
             description: text || row.transactionType?.text || type,
-            ...(isin ? { isin } : {}),
-            ...(type === 'Transfer' ? { isInternal: true } : {}),
-            sourceKey: `comdirect:${data.depot.defaultSettlementAccountId || ''}:${row.reference || `${date}|${value}|${text}`}`,
-            originalData: { source: 'comdirect', category: row.transactionType?.text }
-        });
+            isin,
+            internal: type === 'Transfer',
+            raw: { source: 'comdirect', category: row.transactionType?.text }
+        }));
     });
 
     const positions = data.positions

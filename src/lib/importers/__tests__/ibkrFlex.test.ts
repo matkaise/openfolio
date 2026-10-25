@@ -2,8 +2,12 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseFlexStatementResponse, parseIbkrFlexXml } from '../ibkrFlex';
-import { applyImportBatch } from '../importBatch';
+import { applyImportBatch, type ImportBatch } from '../importBatch';
+import { isTradeEntry } from '../entries';
 import { createEmptyProject } from '@/types/domain';
+
+const trades = (batch: ImportBatch) => batch.entries.filter(isTradeEntry);
+const statement = (batch: ImportBatch) => batch.entries.filter((e) => !isTradeEntry(e));
 
 const xml = readFileSync(path.join(__dirname, '..', '..', '__tests__', 'fixtures', 'ibkr-flex.xml'), 'utf-8');
 
@@ -11,26 +15,27 @@ describe('parseIbkrFlexXml', () => {
   const result = parseIbkrFlexXml(xml);
 
   it('reads stock trades with sign, fees and stable ids; skips FX and options', () => {
-    expect(result.batch.broker).toBe('IBKR');
-    expect(result.batch.transactions).toHaveLength(3);
-    expect(result.batch.transactions[0]).toMatchObject({
-      date: '2024-03-15', type: 'Buy', isin: 'US0000000001', name: 'ACME CORP', shares: 10, amount: -1000,
+    const txs = trades(result.batch);
+    expect(result.batch.source).toBe('IBKR');
+    expect(txs).toHaveLength(3);
+    expect(txs[0]).toMatchObject({
+      date: '2024-03-15', kind: 'buy', isin: 'US0000000001', name: 'ACME CORP', quantity: 10, amount: -1000,
       currency: 'USD', fee: -1.25, feeCurrency: 'USD', externalId: 'ibkr:U0000001:trade:7001'
     });
-    expect(result.batch.transactions[1]).toMatchObject({ type: 'Sell', shares: 4, amount: 500 });
-    expect(result.batch.transactions[2]).toMatchObject({ date: '2024-06-20', name: 'EUROWIDGET AG & CO', currency: 'EUR' });
+    expect(txs[1]).toMatchObject({ kind: 'sell', quantity: -4, amount: 500 });
+    expect(txs[2]).toMatchObject({ date: '2024-06-20', name: 'EUROWIDGET AG & CO', currency: 'EUR' });
     expect(result.skipped).toEqual({ fx: 1, unsupported: 1 });
   });
 
   it('classifies cash transactions with their sign and ignores summary rows', () => {
-    const byType = (type: string) => result.batch.cashMovements.filter((m) => m.type === type).map((m) => m.amount);
-    expect(byType('Deposit')).toEqual([5000]);
-    expect(byType('Withdrawal')).toEqual([-1000]);
-    expect(byType('Dividend')).toEqual([5]);
-    expect(byType('Tax')).toEqual([-0.75]);
-    expect(byType('Interest')).toEqual([-3.21]);
-    expect(byType('Fee')).toEqual([-1.5]);
-    expect(result.batch.cashMovements.find((m) => m.type === 'Dividend')).toMatchObject({ isin: 'US0000000001', date: '2024-05-10' });
+    const byKind = (...kinds: string[]) => statement(result.batch).filter((m) => kinds.includes(m.kind)).map((m) => m.amount);
+    expect(byKind('deposit')).toEqual([5000]);
+    expect(byKind('withdrawal')).toEqual([-1000]);
+    expect(byKind('dividend')).toEqual([5]);
+    expect(byKind('tax', 'withholding_tax')).toEqual([-0.75]);
+    expect(byKind('interest')).toEqual([-3.21]);
+    expect(byKind('fee')).toEqual([-1.5]);
+    expect(statement(result.batch).find((m) => m.kind === 'dividend')).toMatchObject({ isin: 'US0000000001', date: '2024-05-10' });
   });
 
   it('returns the open positions for reconciliation', () => {

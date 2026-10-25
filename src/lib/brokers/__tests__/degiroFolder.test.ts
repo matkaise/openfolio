@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isDegiroExportName, scanDegiroFolder, type DirectoryLike } from '../degiroFolder';
+import { isTradeEntry } from '@/lib/importers/entries';
 
 const fixtureDir = path.join(__dirname, '..', '..', '__tests__', 'fixtures');
 const accountCsv = readFileSync(path.join(fixtureDir, 'degiro-account.csv'), 'utf-8');
@@ -35,8 +36,8 @@ describe('scanDegiroFolder', () => {
     ]));
 
     expect(result.files).toEqual(['Account.csv', 'Transactions (1).csv']);
-    expect(result.batch.transactions).toHaveLength(4);
-    expect(result.batch.cashMovements.length).toBeGreaterThan(0);
+    expect(result.batch.entries.filter(isTradeEntry)).toHaveLength(4);
+    expect(result.batch.entries.filter((e) => !isTradeEntry(e)).length).toBeGreaterThan(0);
     expect(result.newestModified).toBe(3000);
   });
 
@@ -47,7 +48,7 @@ describe('scanDegiroFolder', () => {
     ]), { modifiedAfter: 2000 });
 
     expect(result.files).toEqual(['Transactions.csv']);
-    expect(result.batch.cashMovements).toHaveLength(0);
+    expect(result.batch.entries.filter((e) => !isTradeEntry(e))).toHaveLength(0);
   });
 
   it('ignores CSVs with the right name but foreign content', async () => {
