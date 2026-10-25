@@ -62,6 +62,18 @@ const TAB_PRELOAD_SEQUENCE: TabKey[] = [
   'Import'
 ];
 
+/** Header of every page except the dashboard, which greets with the date. */
+const PAGE_HEADINGS: Partial<Record<TabKey, { title: string; sub: string }>> = {
+  Portfolio: { title: 'Wertpapiere', sub: 'Offene und geschlossene Positionen' },
+  Analyse: { title: 'Analyse', sub: 'Risiko, Rendite und Aufteilung' },
+  Dividenden: { title: 'Dividenden', sub: 'Erhaltene und erwartete Ausschüttungen' },
+  Transaktionen: { title: 'Transaktionen', sub: 'Alle Buchungen deiner Depots' },
+  Datenquellen: { title: 'Datenquellen', sub: 'Kurse, Wechselkurse und Depots' },
+  Broker: { title: 'Broker', sub: 'Automatischer Import deiner Buchungen' },
+  Einstellungen: { title: 'Einstellungen', sub: 'Darstellung und Berechnung' },
+  Import: { title: 'Import', sub: 'Depot wählen und Buchungen hinzufügen' }
+};
+
 const MOBILE_LABELS: Partial<Record<TabKey, string>> = {
   Dashboard: 'Übersicht',
   Portfolio: 'Positionen',
@@ -280,7 +292,7 @@ export default function PortfolioApp() {
                 <div className="space-y-1">
                   <h2 className="text-xl font-semibold">Performance</h2>
                   <p className="text-sm" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                    Waehle, wie Renditen berechnet werden sollen.
+                    Wähle, wie Renditen berechnet werden sollen.
                   </p>
                 </div>
               </div>
@@ -315,12 +327,12 @@ export default function PortfolioApp() {
                   </button>
                 </div>
                 <p className="text-xs" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                  MWR beruecksichtigt Ein- und Auszahlungen, TWR zeigt die reine Anlagestrategie ohne Cashflow-Effekte.
+                  MWR berücksichtigt Ein- und Auszahlungen, TWR zeigt die reine Anlagestrategie ohne Cashflow-Effekte.
                 </p>
 
                 <div className="flex flex-col gap-2">
                   <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                    Glaettung
+                    Glättung
                   </span>
                   <div className="md3-segment flex w-fit p-1">
                     <button
@@ -364,7 +376,7 @@ export default function PortfolioApp() {
                     </button>
                   </div>
                   <p className="text-xs" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                    Wir glätten nur die Darstellung der Performance-Charts. Kennzahlen bleiben unveraendert.
+                    Wir glätten nur die Darstellung der Performance-Charts. Kennzahlen bleiben unverändert.
                   </p>
                 </div>
               </div>
@@ -429,8 +441,8 @@ export default function PortfolioApp() {
       <main className="app-main">
         <header className="app-bar anim-in">
           <div className="app-hello">
-            <span className="app-hello-sub">{shellNow.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-            <span className="app-hello-title">{greeting}</span>
+            <span className="app-hello-sub">{PAGE_HEADINGS[activeTab]?.sub ?? shellNow.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+            <h1 className="app-hello-title">{PAGE_HEADINGS[activeTab]?.title ?? greeting}</h1>
           </div>
           <div className="app-bar-actions">
             <SecuritySearch

@@ -79,7 +79,7 @@ const TransactionEditModal = ({
             <h3 className="md3-text-main text-xl font-bold">Transaktion bearbeiten</h3>
             <p className="md3-text-muted mt-1 text-xs">{transaction.name || transaction.isin}</p>
           </div>
-          <button type="button" onClick={onClose} className="md3-icon-btn" aria-label="Schliessen">
+          <button type="button" onClick={onClose} className="md3-icon-btn" aria-label="Schließen">
             <X size={18} />
           </button>
         </div>
@@ -109,7 +109,7 @@ const TransactionEditModal = ({
           </div>
 
           <div className="space-y-2">
-            <label className="md3-text-muted text-xs font-bold uppercase tracking-wider">Stueck</label>
+            <label className="md3-text-muted text-xs font-bold uppercase tracking-wider">Stück</label>
             <input
               type="number"
               step="0.0001"
@@ -141,7 +141,7 @@ const TransactionEditModal = ({
           </div>
 
           <div className="space-y-2">
-            <label className="md3-text-muted text-xs font-bold uppercase tracking-wider">Waehrung</label>
+            <label className="md3-text-muted text-xs font-bold uppercase tracking-wider">Währung</label>
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
@@ -170,7 +170,7 @@ const TransactionEditModal = ({
             }}
             className="md3-negative-soft rounded-2xl px-4 py-2 text-sm font-semibold transition hover:brightness-105"
           >
-            Loeschen
+            Löschen
           </button>
 
           <div className="flex items-center gap-3">
@@ -219,16 +219,16 @@ const DeletedTransactionsModal = ({
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <h3 className="md3-text-main text-xl font-bold">Papierkorb</h3>
-            <p className="md3-text-muted mt-1 text-xs">{items.length} Eintraege</p>
+            <p className="md3-text-muted mt-1 text-xs">{items.length} Einträge</p>
           </div>
-          <button type="button" onClick={onClose} className="md3-icon-btn" aria-label="Schliessen">
+          <button type="button" onClick={onClose} className="md3-icon-btn" aria-label="Schließen">
             <X size={18} />
           </button>
         </div>
 
         <div className="custom-scrollbar max-h-[60vh] space-y-2 overflow-y-auto pr-1">
           {items.length === 0 ? (
-            <div className="md3-list-item p-6 text-center text-sm md3-text-muted">Keine geloeschten Transaktionen.</div>
+            <div className="md3-list-item p-6 text-center text-sm md3-text-muted">Keine gelöschten Transaktionen.</div>
           ) : (
             items.map((entry) => (
               <div key={entry.tx.id} className="md3-list-item flex items-center justify-between gap-4 p-3.5">
@@ -251,7 +251,7 @@ const DeletedTransactionsModal = ({
                     onClick={() => onPurge(entry)}
                     className="md3-negative-soft rounded-xl px-3 py-1.5 text-xs font-semibold"
                   >
-                    Endgueltig loeschen
+                    Endgültig löschen
                   </button>
                 </div>
               </div>
@@ -496,16 +496,16 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
             </div>
             <div className="mt-2 flex items-baseline gap-3">
               <span className="md3-text-main text-4xl font-bold">{summary.count}</span>
-              <span className="md3-text-muted text-sm">Eintraege</span>
+              <span className="md3-text-muted text-sm">Einträge</span>
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              <span className="md3-segment rounded-full px-3 py-1 text-[11px] font-semibold">Kaeufe {summary.buyCount}</span>
-              <span className="md3-segment rounded-full px-3 py-1 text-[11px] font-semibold">Verkaeufe {summary.sellCount}</span>
+              <span className="md3-segment rounded-full px-3 py-1 text-[11px] font-semibold">Käufe {summary.buyCount}</span>
+              <span className="md3-segment rounded-full px-3 py-1 text-[11px] font-semibold">Verkäufe {summary.sellCount}</span>
               {summary.dividendCount > 0 && (
                 <span className="md3-segment rounded-full px-3 py-1 text-[11px] font-semibold">Dividenden {summary.dividendCount}</span>
               )}
               {summary.feeCount > 0 && (
-                <span className="md3-segment rounded-full px-3 py-1 text-[11px] font-semibold">Gebuehren {summary.feeCount}</span>
+                <span className="md3-segment rounded-full px-3 py-1 text-[11px] font-semibold">Gebühren {summary.feeCount}</span>
               )}
             </div>
             <div className="mt-5">
@@ -631,7 +631,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
               <span className="md3-segment rounded-full px-3 py-1.5 text-xs font-semibold">
                 {visibleTransactions.length}
                 {visibleTransactions.length !== filteredTransactions.length ? ` / ${filteredTransactions.length}` : ''}
-                {' '}Eintraege
+                {' '}Einträge
               </span>
             ) : (
               <>
@@ -647,7 +647,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
                 <span className="md3-segment rounded-full px-3 py-1.5 text-xs font-semibold">
                   {visibleCashMovements.length}
                   {visibleCashMovements.length !== filteredCashMovements.length ? ` / ${filteredCashMovements.length}` : ''}
-                  {' '}Eintraege
+                  {' '}Einträge
                 </span>
               </>
             )}
@@ -661,7 +661,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
               type="text"
               value={txSearch}
               onChange={(e) => setTxSearch(e.target.value)}
-              placeholder={activeTab === 'transactions' ? 'ISIN, Name oder Typ suchen...' : 'Beschreibung, Typ oder Waehrung suchen...'}
+              placeholder={activeTab === 'transactions' ? 'ISIN, Name oder Typ suchen...' : 'Beschreibung, Typ oder Währung suchen...'}
               className="h-12 w-full border-none bg-transparent pl-9 pr-3 text-sm outline-none"
             />
           </div>
@@ -711,7 +711,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
             }}
             className="md3-chip-tonal rounded-2xl px-4 py-2 text-sm font-semibold lg:ml-auto"
           >
-            Filter zuruecksetzen
+            Filter zurücksetzen
           </button>
         </div>
 
@@ -859,13 +859,13 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
       {toastEntry ? (
         <div className="fixed bottom-6 right-6 z-50">
           <div className="md3-card flex items-center gap-3 rounded-2xl px-4 py-3">
-            <div className="md3-text-main text-sm">Transaktion geloescht</div>
+            <div className="md3-text-main text-sm">Transaktion gelöscht</div>
             <button
               type="button"
               onClick={() => handleRestoreTransaction(toastEntry)}
               className="md3-chip-tonal rounded-xl px-3 py-1.5 text-xs font-semibold"
             >
-              Rueckgaengig
+              Rückgängig
             </button>
             <button
               type="button"

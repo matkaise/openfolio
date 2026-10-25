@@ -123,3 +123,81 @@ export const Kpi = ({ label, value, sub, icon, tone, valueTone }: {
         {sub && <span className="ui-kpi-sub">{sub}</span>}
     </div>
 );
+
+export type ButtonVariant = 'primary' | 'tonal' | 'ghost' | 'danger';
+
+/** Buttons of design v2: primary (violet with glow), tonal (surface), ghost (text) and danger. */
+export const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: ButtonVariant;
+    size?: 'sm' | 'md';
+    icon?: React.ReactNode;
+}>(({ variant = 'tonal', size = 'md', icon, className = '', children, type = 'button', ...rest }, ref) => (
+    <button ref={ref} type={type} className={`ui-btn is-${variant} is-${size} ${className}`} {...rest}>
+        {icon && <span className="ui-btn-icon" aria-hidden="true">{icon}</span>}
+        {children}
+    </button>
+));
+Button.displayName = 'Button';
+
+export const IconButton = ({ label, className = '', children, type = 'button', ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) => (
+    <button type={type} className={`ui-icon-btn ${className}`} aria-label={label} title={label} {...rest}>{children}</button>
+);
+
+/** Label above a form control, with an optional hint below. */
+export const Field = ({ label, hint, className = '', children }: { label: React.ReactNode; hint?: React.ReactNode; className?: string; children: React.ReactNode }) => (
+    <label className={`ui-field ${className}`}>
+        <span className="ui-field-label">{label}</span>
+        {children}
+        {hint && <span className="ui-field-hint">{hint}</span>}
+    </label>
+);
+
+export const TextInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+    ({ className = '', ...rest }, ref) => <input ref={ref} className={`ui-input ${className}`} {...rest} />
+);
+TextInput.displayName = 'TextInput';
+
+export const SelectInput = ({ className = '', children, ...rest }: React.SelectHTMLAttributes<HTMLSelectElement>) => (
+    <select className={`ui-input ui-select ${className}`} {...rest}>{children}</select>
+);
+
+/**
+ * List row of design v2: leading element (avatar, icon), title with meta line, trailing values.
+ * Clickable when onClick is set.
+ */
+export const ListRow = ({ leading, title, meta, trailing, onClick, className = '' }: {
+    leading?: React.ReactNode;
+    title: React.ReactNode;
+    meta?: React.ReactNode;
+    trailing?: React.ReactNode;
+    onClick?: () => void;
+    className?: string;
+}) => {
+    const content = (
+        <>
+            {leading && <span className="ui-row-lead">{leading}</span>}
+            <span className="ui-row-main">
+                <span className="ui-row-title">{title}</span>
+                {meta && <span className="ui-row-meta">{meta}</span>}
+            </span>
+            {trailing && <span className="ui-row-trail">{trailing}</span>}
+        </>
+    );
+    return onClick
+        ? <button type="button" className={`ui-row is-clickable ${className}`} onClick={onClick}>{content}</button>
+        : <div className={`ui-row ${className}`}>{content}</div>;
+};
+
+/** Round icon tile in a tone colour (list leading element, card icons). */
+export const IconTile = ({ tone = 'accent', size = 40, children }: { tone?: KpiTone | 'loss' | 'neutral'; size?: number; children: React.ReactNode }) => (
+    <span className={`ui-icon-tile is-${tone}`} style={{ width: size, height: size }} aria-hidden="true">{children}</span>
+);
+
+export const EmptyState = ({ icon, title, text, action }: { icon?: React.ReactNode; title: string; text?: React.ReactNode; action?: React.ReactNode }) => (
+    <div className="ui-empty">
+        {icon && <IconTile tone="neutral" size={48}>{icon}</IconTile>}
+        <span className="ui-empty-title">{title}</span>
+        {text && <span className="ui-empty-text">{text}</span>}
+        {action}
+    </div>
+);

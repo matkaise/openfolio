@@ -95,7 +95,7 @@ export const ImportContent = ({ onContinue }: ImportContentProps) => {
                                         {isSelected && (
                                             <span className="md3-chip-accent inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
                                                 <CheckCircle2 size={12} />
-                                                Ausgewaehlt
+                                                Ausgewählt
                                             </span>
                                         )}
                                     </button>
@@ -131,7 +131,7 @@ export const ImportContent = ({ onContinue }: ImportContentProps) => {
                         {isNewPortfolio && (
                             <span className="md3-chip-accent inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
                                 <CheckCircle2 size={12} />
-                                Ausgewaehlt
+                                Ausgewählt
                             </span>
                         )}
                     </div>

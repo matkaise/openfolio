@@ -317,9 +317,9 @@ export const DataSourcesContent = () => {
                         <div className="space-y-1">
                             <div className="flex items-center gap-2">
                                 <Globe size={18} className="md3-accent" />
-                                <h3 className="font-semibold md3-text-main">EZB Waehrungskurse</h3>
+                                <h3 className="font-semibold md3-text-main">EZB Währungskurse</h3>
                             </div>
-                            <p className="text-sm md3-text-muted">Offizielle Referenzkurse der Europaeischen Zentralbank.</p>
+                            <p className="text-sm md3-text-muted">Offizielle Referenzkurse der Europäischen Zentralbank.</p>
                         </div>
                         <div className="flex items-center gap-2">
                             {isSyncing ? (
@@ -431,7 +431,7 @@ export const DataSourcesContent = () => {
                             </ResponsiveContainer>
                         ) : (
                             <div className="h-full flex items-center justify-center md3-text-muted text-sm">
-                                Keine Daten verfuegbar. Bitte synchronisieren.
+                                Keine Daten verfügbar. Bitte synchronisieren.
                             </div>
                         )}
                     </div>
@@ -445,7 +445,7 @@ export const DataSourcesContent = () => {
                                     <BarChart3 size={18} className="md3-accent" />
                                     <h3 className="font-semibold md3-text-main">Marktdaten (Yahoo)</h3>
                                 </div>
-                                <p className="text-sm md3-text-muted">Automatische Schlusskurse fuer Aktien & ETFs.</p>
+                                <p className="text-sm md3-text-muted">Automatische Schlusskurse für Aktien & ETFs.</p>
                             </div>
                             <div className="flex items-center gap-2">
                                 {isMarketSyncing ? (
@@ -558,7 +558,7 @@ export const DataSourcesContent = () => {
                                 Fehlende Ticker ({unresolvedSecurities.length})
                             </h3>
                             <p className="text-sm md3-text-muted">
-                                Wir konnten fuer diese Titel keinen gueltigen Yahoo-Ticker finden. Du kannst ihn manuell setzen oder die Marktdaten ignorieren.
+                                Wir konnten für diese Titel keinen gültigen Yahoo-Ticker finden. Du kannst ihn manuell setzen oder die Marktdaten ignorieren.
                             </p>
                         </div>
 
@@ -588,7 +588,7 @@ export const DataSourcesContent = () => {
                     <div className="space-y-1">
                         <h3 className="font-semibold md3-text-main">Depots verwalten</h3>
                         <p className="text-sm md3-text-muted">
-                            Loesche einzelne Depots inklusive zugehoeriger Transaktionen und Konten.
+                            Lösche einzelne Depots inklusive zugehöriger Transaktionen und Konten.
                         </p>
                     </div>
 
@@ -608,8 +608,8 @@ export const DataSourcesContent = () => {
                                         type="button"
                                         onClick={() => setPortfolioToDelete(portfolio)}
                                         className="md3-icon-btn h-9 w-9 md3-negative-soft"
-                                        aria-label={`Depot ${portfolio.name} loeschen`}
-                                        title="Depot loeschen"
+                                        aria-label={`Depot ${portfolio.name} löschen`}
+                                        title="Depot löschen"
                                     >
                                         <Trash2 size={16} />
                                     </button>
@@ -643,10 +643,10 @@ export const DataSourcesContent = () => {
                                     className="mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold md3-chip-tonal"
                                 >
                                     <PencilLine size={12} />
-                                    Ticker aendern
+                                    Ticker ändern
                                 </button>
                             </div>
-                            <button type="button" onClick={() => setSelectedSecurity(null)} className="md3-icon-btn" aria-label="Schliessen">
+                            <button type="button" onClick={() => setSelectedSecurity(null)} className="md3-icon-btn" aria-label="Schließen">
                                 <X size={20} />
                             </button>
                         </div>
@@ -681,7 +681,7 @@ export const DataSourcesContent = () => {
                             ) : (
                                 <div className="h-full flex items-center justify-center flex-col md3-text-muted">
                                     <BarChart3 size={48} className="mb-2 opacity-50" />
-                                    <p>Keine historischen Daten verfuegbar</p>
+                                    <p>Keine historischen Daten verfügbar</p>
                                     <p className="text-xs mt-2">Klicke auf &quot;Jetzt aktualisieren&quot;</p>
                                 </div>
                             )}
@@ -689,7 +689,7 @@ export const DataSourcesContent = () => {
 
                         <div className="mt-6 flex justify-end">
                             <button type="button" onClick={() => setSelectedSecurity(null)} className="md3-text-muted px-4 py-2 font-semibold hover:opacity-80">
-                                Schliessen
+                                Schließen
                             </button>
                         </div>
                     </div>
@@ -703,10 +703,10 @@ export const DataSourcesContent = () => {
                             <div>
                                 <h3 className="text-base font-semibold md3-text-main">Ticker zuweisen</h3>
                                 <p className="text-xs md3-text-muted">
-                                    Fuer: {activeSearchSecurity.name || activeSearchSecurity.isin}
+                                    Für: {activeSearchSecurity.name || activeSearchSecurity.isin}
                                 </p>
                             </div>
-                            <button type="button" onClick={closeCompanySearch} className="md3-icon-btn" aria-label="Schliessen">
+                            <button type="button" onClick={closeCompanySearch} className="md3-icon-btn" aria-label="Schließen">
                                 <X size={18} />
                             </button>
                         </div>
@@ -765,8 +765,8 @@ export const DataSourcesContent = () => {
                                                 type="button"
                                                 onClick={() => handleSelectCompanyMatch(match)}
                                                 className="md3-icon-btn h-10 w-10 md3-positive-soft border border-emerald-300/40"
-                                                aria-label="Uebernehmen"
-                                                title="Uebernehmen"
+                                                aria-label="Übernehmen"
+                                                title="Übernehmen"
                                             >
                                                 <Check size={18} className="text-emerald-500" />
                                             </button>
@@ -789,7 +789,7 @@ export const DataSourcesContent = () => {
                                 Ignorieren
                             </button>
                             <button type="button" onClick={closeCompanySearch} className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80">
-                                Schliessen
+                                Schließen
                             </button>
                         </div>
                     </div>
@@ -805,13 +805,13 @@ export const DataSourcesContent = () => {
                                     <Trash2 size={18} />
                                 </div>
                                 <div>
-                                    <h3 className="text-base font-semibold md3-text-main">Depot loeschen</h3>
+                                    <h3 className="text-base font-semibold md3-text-main">Depot löschen</h3>
                                     <p className="text-xs md3-text-muted">
-                                        {portfolioToDelete.name} wird inklusive Transaktionen und Konten geloescht.
+                                        {portfolioToDelete.name} wird inklusive Transaktionen und Konten gelöscht.
                                     </p>
                                 </div>
                             </div>
-                            <button type="button" onClick={() => setPortfolioToDelete(null)} className="md3-icon-btn" aria-label="Schliessen">
+                            <button type="button" onClick={() => setPortfolioToDelete(null)} className="md3-icon-btn" aria-label="Schließen">
                                 <X size={18} />
                             </button>
                         </div>
@@ -841,7 +841,7 @@ export const DataSourcesContent = () => {
                                     onClick={() => handleDeletePortfolio(portfolioToDelete.id)}
                                     className="md3-filled-btn px-4 py-2 text-sm font-semibold"
                                 >
-                                    Loeschen
+                                    Löschen
                                 </button>
                         </div>
                     </div>

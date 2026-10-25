@@ -117,7 +117,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
 
     const serializeForSave = useCallback(async (targetName: string, data: ProjectData) => {
         if (encryptionKeyRef.current && !isSqliteFileName(targetName)) {
-            throw new Error('Verschluesselte Projekte koennen nur als .openfolio/.sqlite gespeichert werden.');
+            throw new Error('Verschlüsselte Projekte können nur als .openfolio/.sqlite gespeichert werden.');
         }
         const serialized = await serializeProjectForFile(
             targetName,

@@ -446,13 +446,13 @@ export const buildGenericTransactions = (input: GenericCsvInput): { entries: Imp
         const isSell = sharesValue < 0;
         const absShares = Math.abs(sharesValue);
         if (!absShares) {
-            errors.push(`Zeile ${index + 2}: Preis oder Anzahl ungueltig.`);
+            errors.push(`Zeile ${index + 2}: Preis oder Anzahl ungültig.`);
             return;
         }
 
         const hasExplicitPrice = priceRaw.length > 0;
         if (!hasExplicitPrice) {
-            errors.push(`Zeile ${index + 2}: Preis oder Anzahl ungueltig.`);
+            errors.push(`Zeile ${index + 2}: Preis oder Anzahl ungültig.`);
             return;
         }
 
@@ -825,18 +825,18 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
         rows.forEach((row, index) => {
             const dateValue = parseEffectiveDate(row);
             if (!dateValue) {
-                errors.push(`Zeile ${index + 2}: Datum ungueltig.`);
+                errors.push(`Zeile ${index + 2}: Datum ungültig.`);
                 return;
             }
             const currencyValue = resolveCurrencyValue(row);
             if (!currencyValue) {
-                errors.push(`Zeile ${index + 2}: Waehrung ungueltig.`);
+                errors.push(`Zeile ${index + 2}: Währung ungültig.`);
                 return;
             }
             const balanceRaw = row[balanceIdx] ?? '';
             const balanceValue = parseNumberStrict(balanceRaw);
             if (!Number.isFinite(balanceValue)) {
-                errors.push(`Zeile ${index + 2}: Saldo ungueltig.`);
+                errors.push(`Zeile ${index + 2}: Saldo ungültig.`);
                 return;
             }
             processedRows += 1;
@@ -878,18 +878,18 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
         if (amountIdx < 0) return;
         const dateValue = parseEffectiveDate(row);
         if (!dateValue) {
-            errors.push(`Zeile ${index + 2}: Datum ungueltig.`);
+            errors.push(`Zeile ${index + 2}: Datum ungültig.`);
             return;
         }
         const currencyValue = resolveCurrencyValue(row);
         if (!currencyValue) {
-            errors.push(`Zeile ${index + 2}: Waehrung ungueltig.`);
+            errors.push(`Zeile ${index + 2}: Währung ungültig.`);
             return;
         }
         const amountRaw = row[amountIdx] ?? '';
         const amountValue = parseNumberStrict(amountRaw);
         if (!Number.isFinite(amountValue)) {
-            errors.push(`Zeile ${index + 2}: Betrag ungueltig.`);
+            errors.push(`Zeile ${index + 2}: Betrag ungültig.`);
             return;
         }
 
