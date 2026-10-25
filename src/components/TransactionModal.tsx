@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase, Check, ChevronDown } from 'lucide-react';
+import { Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase, Check, ChevronDown } from 'lucide-react';
 import { useProjectActions, useProjectData, useProjectStoreShallow } from '@/contexts/ProjectContext';
 import { useNotifications } from '@/components/ui/notifications';
 import { Transaction, type Security, type Portfolio } from '@/types/domain';
@@ -12,6 +12,8 @@ import { applyImportBatch, emptyImportBatch, isEmptyImportBatch, parseDegiroFile
 import { isTradeEntry } from '@/lib/importers/entries';
 import { searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
 import { createLogger } from '@/lib/logger';
+import { Modal } from '@/components/ui/Modal';
+import { Button, Field, ListRow, Pill, Segmented, TextInput } from '@/components/ui/primitives';
 import { buildGenericCashBalances, buildGenericTransactions, guessCsvMapping, parseGenericCsv, type CsvDateFormat, type CsvMapping } from '@/lib/importers/genericCsv';
 import { addTransactions, getTransactions } from '@/lib/domain/ledger/store';
 
@@ -582,57 +584,23 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
 
     // --- STEP 2: Import / Manual Action View ---
-    const renderContent = () => (
-        <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between p-6 border-b md3-divider">
-                <div className="flex items-center gap-3">
-                    <div>
-                        <h2 className="text-xl font-semibold md3-text-main leading-tight">Transaktionen hinzufügen</h2>
-                        <p className="text-xs md3-text-muted mt-0.5 flex items-center gap-1">
-                            <Briefcase size={10} className="md3-text-muted" />
-                            {targetPortfolio?.name || 'Unbekanntes Depot'}
-                        </p>
-                    </div>
-                </div>
-                <button type="button" onClick={onClose} className="md3-icon-btn" aria-label="Schließen">
-                    <X size={20} />
-                </button>
-            </div>
+    const renderBody = () => (
+        <>
+            <Segmented
+                options={[{ value: 'import', label: 'Datei importieren' }, { value: 'manual', label: 'Manuell erfassen' }]}
+                value={activeTab}
+                onChange={setActiveTab}
+                ariaLabel="Art der Erfassung"
+            />
 
-            <div className="px-6 pt-4">
-                <div className="md3-segment flex w-full items-center gap-1 p-1">
-                    <button
-                        type="button"
-                        onClick={() => setActiveTab('import')}
-                        className={`flex-1 px-3 py-2 text-xs font-semibold transition-all ${activeTab === 'import'
-                            ? 'md3-chip-tonal'
-                            : 'md3-text-muted hover:opacity-90'
-                            }`}
-                    >
-                        Datei Import (CSV/PDF)
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setActiveTab('manual')}
-                        className={`flex-1 px-3 py-2 text-xs font-semibold transition-all ${activeTab === 'manual'
-                            ? 'md3-chip-tonal'
-                            : 'md3-text-muted hover:opacity-90'
-                            }`}
-                    >
-                        Manuell erfassen
-                    </button>
-                </div>
-            </div>
-
-            <div className="p-5 pt-4 flex-1 overflow-y-auto custom-scrollbar">
                 {activeTab === 'import' ? (
                     <div className="space-y-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="text-xs font-semibold uppercase tracking-wider md3-text-muted">Importtyp</div>
+                            <div className="ui-field-label">Importart</div>
                             <select
                                 value={importMode}
                                 onChange={(e) => setImportMode(e.target.value as 'generic' | 'template')}
-                                className="md3-field w-full sm:w-auto px-3 py-2 text-xs font-semibold outline-none"
+                                className="ui-input w-full sm:w-auto"
                             >
                                 <option value="generic">CSV mit Spaltenzuordnung</option>
                                 <option value="template">Broker Templates</option>
@@ -659,7 +627,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                         <button
                                             type="button"
                                             onClick={() => setGenericStep('mapping')}
-                                            className="md3-filled-btn px-3 py-1.5 text-xs font-semibold"
+                                            className="ui-btn is-primary is-md"
                                         >
                                             Zuordnung starten
                                         </button>
@@ -709,7 +677,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 )}
 
                                 {genericStep === 'mapping' && genericHeaders.length > 0 && (
-                                    <div className="md3-list-item p-4 space-y-4">
+                                    <div className="ui-info-card p-4 space-y-4">
                                         <div className="space-y-1">
                                             <div className="text-sm font-semibold md3-text-main">Spalten zuordnen</div>
                                             <div className="text-xs md3-text-muted">{genericFileName}</div>
@@ -740,11 +708,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                         {genericImportType === 'security' ? (
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Datum *</label>
+                                                    <label className="ui-field-label">Datum *</label>
                                                     <select
                                                         value={genericMapping.date || ''}
                                                         onChange={(e) => updateMapping('date', e.target.value)}
-                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                        className="ui-input w-full"
                                                     >
                                                         <option value="">Bitte wählen...</option>
                                                         {headerOptions.map((h) => (
@@ -753,11 +721,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">WKN / ISIN / Ticker *</label>
+                                                    <label className="ui-field-label">WKN / ISIN / Ticker *</label>
                                                     <select
                                                         value={genericMapping.identifier || ''}
                                                         onChange={(e) => updateMapping('identifier', e.target.value)}
-                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                        className="ui-input w-full"
                                                     >
                                                         <option value="">Bitte wählen...</option>
                                                         {headerOptions.map((h) => (
@@ -766,11 +734,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Anzahl *</label>
+                                                    <label className="ui-field-label">Anzahl *</label>
                                                     <select
                                                         value={genericMapping.shares || ''}
                                                         onChange={(e) => updateMapping('shares', e.target.value)}
-                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                        className="ui-input w-full"
                                                     >
                                                         <option value="">Bitte wählen...</option>
                                                         {headerOptions.map((h) => (
@@ -779,11 +747,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Preis pro Stück *</label>
+                                                    <label className="ui-field-label">Preis pro Stück *</label>
                                                     <select
                                                         value={genericMapping.price || ''}
                                                         onChange={(e) => updateMapping('price', e.target.value)}
-                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                        className="ui-input w-full"
                                                     >
                                                         <option value="">Bitte wählen...</option>
                                                         {headerOptions.map((h) => (
@@ -795,11 +763,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                         ) : (
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Datum *</label>
+                                                    <label className="ui-field-label">Datum *</label>
                                                     <select
                                                         value={genericMapping.date || ''}
                                                         onChange={(e) => updateMapping('date', e.target.value)}
-                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                        className="ui-input w-full"
                                                     >
                                                         <option value="">Bitte wählen...</option>
                                                         {headerOptions.map((h) => (
@@ -808,11 +776,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Änderung (optional bei Saldo)</label>
+                                                    <label className="ui-field-label">Änderung (optional bei Saldo)</label>
                                                     <select
                                                         value={genericMapping.amount || ''}
                                                         onChange={(e) => updateMapping('amount', e.target.value)}
-                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                        className="ui-input w-full"
                                                     >
                                                         <option value="">Nicht verwendet</option>
                                                         {headerOptions.map((h) => (
@@ -821,11 +789,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Saldo (optional bei Änderung)</label>
+                                                    <label className="ui-field-label">Saldo (optional bei Änderung)</label>
                                                     <select
                                                         value={genericMapping.balance || ''}
                                                         onChange={(e) => updateMapping('balance', e.target.value)}
-                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                        className="ui-input w-full"
                                                     >
                                                         <option value="">Nicht verwendet</option>
                                                         {headerOptions.map((h) => (
@@ -834,11 +802,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Währung (optional)</label>
+                                                    <label className="ui-field-label">Währung (optional)</label>
                                                     <select
                                                         value={genericMapping.currency || ''}
                                                         onChange={(e) => updateMapping('currency', e.target.value)}
-                                                        className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                        className="ui-input w-full"
                                                     >
                                                         <option value="">Nicht verwendet</option>
                                                         {headerOptions.map((h) => (
@@ -863,11 +831,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                     {genericImportType === 'security' && (
                                                         <div className="space-y-1">
-                                                            <label className="text-[11px] uppercase tracking-wider md3-text-muted">Währung (optional)</label>
+                                                            <label className="ui-field-label">Währung (optional)</label>
                                                             <select
                                                                 value={genericMapping.currency || ''}
                                                                 onChange={(e) => updateMapping('currency', e.target.value)}
-                                                                className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                                className="ui-input w-full"
                                                             >
                                                                 <option value="">Nicht verwendet</option>
                                                                 {headerOptions.map((h) => (
@@ -878,11 +846,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     )}
                                                     {genericImportType === 'cash' && (
                                                         <div className="space-y-1">
-                                                            <label className="text-[11px] uppercase tracking-wider md3-text-muted">Beschreibung (optional)</label>
+                                                            <label className="ui-field-label">Beschreibung (optional)</label>
                                                             <select
                                                                 value={genericMapping.description || ''}
                                                                 onChange={(e) => updateMapping('description', e.target.value)}
-                                                                className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                                className="ui-input w-full"
                                                             >
                                                                 <option value="">Nicht verwendet</option>
                                                                 {headerOptions.map((h) => (
@@ -893,11 +861,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     )}
                                                     {genericImportType === 'cash' && (
                                                         <div className="space-y-1">
-                                                            <label className="text-[11px] uppercase tracking-wider md3-text-muted">Bewegungstyp (optional)</label>
+                                                            <label className="ui-field-label">Bewegungstyp (optional)</label>
                                                             <select
                                                                 value={genericMapping.type || ''}
                                                                 onChange={(e) => updateMapping('type', e.target.value)}
-                                                                className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                                className="ui-input w-full"
                                                             >
                                                                 <option value="">Nicht verwendet</option>
                                                                 {headerOptions.map((h) => (
@@ -907,11 +875,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                         </div>
                                                     )}
                                                     <div className="space-y-1">
-                                                        <label className="text-[11px] uppercase tracking-wider md3-text-muted">Standard Währung</label>
+                                                        <label className="ui-field-label">Standardwährung</label>
                                                         <select
                                                             value={genericDefaultCurrency}
                                                             onChange={(e) => setGenericDefaultCurrency(e.target.value)}
-                                                            className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                            className="ui-input w-full"
                                                         >
                                                             {currencies.map((c) => (
                                                                 <option key={`def_${c}`} value={c}>{c}</option>
@@ -919,11 +887,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                         </select>
                                                     </div>
                                                     <div className="space-y-1">
-                                                        <label className="text-[11px] uppercase tracking-wider md3-text-muted">Datumsformat</label>
+                                                        <label className="ui-field-label">Datumsformat</label>
                                                         <select
                                                             value={genericDateFormat}
                                                             onChange={(e) => setGenericDateFormat(e.target.value as 'auto' | 'ymd' | 'dmy' | 'mdy')}
-                                                            className="md3-field w-full px-3 py-2 text-sm outline-none"
+                                                            className="ui-input w-full"
                                                         >
                                                             <option value="auto">Auto</option>
                                                             <option value="ymd">YYYY-MM-DD</option>
@@ -985,7 +953,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 )}
 
                                 {genericImportSummary && (
-                                    <div className="md3-list-item p-3 text-xs md3-text-muted">
+                                    <div className="ui-info-card p-3 text-xs md3-text-muted">
                                         Importiert: {genericImportSummary.imported} {genericImportType === 'cash' ? 'Kontostände' : 'Transaktionen'}
                                         {genericImportType === 'cash' && (
                                             <> - Kontobewegungen: {genericImportSummary.importedMovements || 0}</>
@@ -1001,11 +969,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                         ) : (
                             <div className="space-y-5">
                                 <div className="space-y-2">
-                                    <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Broker auswählen</label>
+                                    <label className="ui-field-label">Broker</label>
                                     <select
                                         value={selectedBroker}
                                         onChange={(e) => setSelectedBroker(e.target.value)}
-                                        className="md3-field w-full px-4 py-3 text-sm outline-none"
+                                        className="ui-input w-full"
                                     >
                                         <option value="" disabled>Bitte wählen...</option>
                                         <option value="Flatex">Flatex</option>
@@ -1042,7 +1010,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     </p>
                                 </div>
 
-                                <div className="md3-list-item flex gap-3 p-4">
+                                <div className="ui-info-card flex gap-3 p-4">
                                     <div className="mt-0.5 md3-text-muted">
                                         <Search size={18} />
                                     </div>
@@ -1056,14 +1024,14 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 ) : (
                     <div className="space-y-5">
                         <div className="space-y-2">
-                            <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Holding Typ</label>
+                            <label className="ui-field-label">Art der Buchung</label>
                             <select
                                 value={manualHoldingType}
                                 onChange={(e) => setManualHoldingType(e.target.value as ManualHoldingType)}
-                                className="md3-field w-full px-4 py-3 text-sm outline-none"
+                                className="ui-input w-full"
                             >
                                 <option value="security">Wertpapier</option>
-                                <option value="cash">Cash</option>
+                                <option value="cash">Kontobewegung (Einzahlung, Dividende, Gebühr …)</option>
                             </select>
                         </div>
 
@@ -1094,7 +1062,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="space-y-2">
-                                        <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">WKN / ISIN / Ticker</label>
+                                        <label className="ui-field-label">WKN / ISIN / Ticker</label>
                                         <div className="relative">
                                             <Hash size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                             <input
@@ -1108,7 +1076,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     setCompanyMatches([]);
                                                 }}
                                                 placeholder="z.B. US0378331005"
-                                                className="md3-field w-full pl-10 pr-4 py-3 text-sm outline-none"
+                                                className="ui-input w-full pl-10"
                                             />
                                         </div>
                                         {resolveStatus === 'unresolved' && manualHoldingType === 'security' && (
@@ -1117,7 +1085,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                 <button
                                                     type="button"
                                                     onClick={() => setIsCompanySearchOpen(true)}
-                                                    className="md3-filled-btn px-3 py-1.5 text-xs font-semibold"
+                                                    className="ui-btn is-primary is-md"
                                                 >
                                                     Firmensuche
                                                 </button>
@@ -1126,20 +1094,20 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Datum</label>
+                                        <label className="ui-field-label">Datum</label>
                                         <div className="relative">
                                             <Calendar size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                             <input
                                                 type="date"
                                                 value={date}
                                                 onChange={(e) => setDate(e.target.value)}
-                                                className="md3-field w-full pl-10 pr-4 py-3 text-sm outline-none"
+                                                className="ui-input w-full pl-10"
                                             />
                                         </div>
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Anzahl</label>
+                                        <label className="ui-field-label">Anzahl</label>
                                         <div className="relative">
                                             <Tag size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                             <input
@@ -1148,13 +1116,13 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                 onChange={(e) => setShares(e.target.value)}
                                                 placeholder="0.00"
                                                 step="0.0001"
-                                                className="md3-field w-full pl-10 pr-4 py-3 text-sm outline-none"
+                                                className="ui-input w-full pl-10"
                                             />
                                         </div>
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Preis pro Stück</label>
+                                        <label className="ui-field-label">Preis pro Stück</label>
                                         <div className="relative">
                                             <DollarSign size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                             <input
@@ -1163,17 +1131,17 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                 onChange={(e) => setPrice(e.target.value)}
                                                 placeholder="0.00"
                                                 step="0.01"
-                                                className="md3-field w-full pl-10 pr-4 py-3 text-sm outline-none"
+                                                className="ui-input w-full pl-10"
                                             />
                                         </div>
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Währung</label>
+                                        <label className="ui-field-label">Währung</label>
                                         <select
                                             value={currency}
                                             onChange={(e) => setCurrency(e.target.value)}
-                                            className="md3-field w-full px-4 py-3 text-sm outline-none"
+                                            className="ui-input w-full"
                                         >
                                             {currencies.map(c => (
                                                 <option key={c} value={c}>{c}</option>
@@ -1185,11 +1153,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Cash Typ</label>
+                                    <label className="ui-field-label">Art der Kontobewegung</label>
                                     <select
                                         value={cashType}
                                         onChange={(e) => setCashType(e.target.value as ManualCashType)}
-                                        className="md3-field w-full px-4 py-3 text-sm outline-none"
+                                        className="ui-input w-full"
                                     >
                                         <option value="Deposit">Einzahlung</option>
                                         <option value="Withdrawal">Auszahlung</option>
@@ -1200,20 +1168,20 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Datum</label>
+                                    <label className="ui-field-label">Datum</label>
                                     <div className="relative">
                                         <Calendar size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                         <input
                                             type="date"
                                             value={date}
                                             onChange={(e) => setDate(e.target.value)}
-                                            className="md3-field w-full pl-10 pr-4 py-3 text-sm outline-none"
+                                            className="ui-input w-full pl-10"
                                         />
                                     </div>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Betrag</label>
+                                    <label className="ui-field-label">Betrag</label>
                                     <div className="relative">
                                         <DollarSign size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                         <input
@@ -1222,17 +1190,17 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                             onChange={(e) => setCashAmount(e.target.value)}
                                             placeholder="0.00"
                                             step="0.01"
-                                            className="md3-field w-full pl-10 pr-4 py-3 text-sm outline-none"
+                                            className="ui-input w-full pl-10"
                                         />
                                     </div>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Währung</label>
+                                    <label className="ui-field-label">Währung</label>
                                     <select
                                         value={currency}
                                         onChange={(e) => setCurrency(e.target.value)}
-                                        className="md3-field w-full px-4 py-3 text-sm outline-none"
+                                        className="ui-input w-full"
                                     >
                                         {currencies.map(c => (
                                             <option key={c} value={c}>{c}</option>
@@ -1243,11 +1211,10 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                         )}
                     </div>
                 )}
-            </div>
-
+            
             {showMarketSyncProgress && (
                 <div className="px-6 pb-3">
-                    <div className="md3-list-item p-3 text-xs md3-text-muted">
+                    <div className="ui-info-card p-3 text-xs md3-text-muted">
                         <div className="flex items-center justify-between">
                             <span>Marktdaten werden aktualisiert</span>
                             <span>{marketSyncProgress!.current}/{marketSyncProgress!.total}</span>
@@ -1265,7 +1232,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 </div>
             )}
 
-            <div className="p-6 border-t md3-divider flex justify-end gap-3 shrink-0">
+        </>
+    );
+
+    const renderFooter = () => (
+        <>
                 <button type="button" onClick={onClose} className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80">Abbrechen</button>
                 {activeTab === 'import' ? (
                     importMode === 'generic' ? (
@@ -1273,7 +1244,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                             type="button"
                             onClick={commitGenericImport}
                             disabled={!isGenericMappingReady}
-                            className="md3-filled-btn px-6 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="ui-btn is-primary is-md"
                         >
                             CSV importieren
                         </button>
@@ -1282,7 +1253,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                             type="button"
                             onClick={commitImport}
                             disabled={importStatus !== 'ready'}
-                            className="md3-filled-btn px-6 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="ui-btn is-primary is-md"
                         >
                             {importStatus === 'success'
                                 ? (importResult && importResult.duplicates > 0
@@ -1320,7 +1291,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                             ignoreMarketData: true
                                         });
                                     }}
-                                    className="md3-filled-btn px-6 text-sm font-semibold"
+                                    className="ui-btn is-primary is-md"
                                 >
                                     Ignorieren &amp; speichern
                                 </button>
@@ -1330,105 +1301,75 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 type="button"
                                 onClick={handleSaveManual}
                                 disabled={isResolving}
-                                className="md3-filled-btn px-6 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="ui-btn is-primary is-md"
                             >
                                 {isResolving ? 'Prüfe Ticker...' : 'Transaktion speichern'}
                             </button>
                         )}
                     </>
                 )}
-            </div>
-        </div>
+            
+        </>
     );
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-sm">
-            <div className="md3-card w-full max-w-5xl overflow-hidden flex flex-col min-h-[70vh] max-h-[92vh] rounded-[28px]">
-                {renderContent()}
-            </div>
-            {isCompanySearchOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setIsCompanySearchOpen(false)}>
-                    <div className="md3-card w-full max-w-lg rounded-[24px] p-5" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="text-base font-semibold md3-text-main">Ticker zuweisen</h3>
-                                <p className="text-xs md3-text-muted">Wähle den passenden Treffer aus.</p>
-                            </div>
-                            <button type="button" onClick={() => setIsCompanySearchOpen(false)} className="md3-icon-btn" aria-label="Schließen">
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
-                            <input
-                                type="text"
-                                value={companyQuery}
-                                onChange={(e) => {
-                                    setCompanyQuery(e.target.value);
-                                    setCompanySearchMessage(null);
-                                    setCompanyMatches([]);
-                                }}
-                                placeholder="Ticker oder Firmenname (z.B. AAPL oder Apple)"
-                                className="md3-field w-full px-3 py-2 text-sm outline-none"
+        <>
+            <Modal
+                open
+                onClose={onClose}
+                size="xl"
+                title="Transaktionen hinzufügen"
+                subtitle={targetPortfolio?.name ? `Depot „${targetPortfolio.name}“` : 'Unbekanntes Depot'}
+                icon={<Briefcase size={20} />}
+                footer={renderFooter()}
+            >
+                {renderBody()}
+            </Modal>
+            <Modal
+                open={isCompanySearchOpen}
+                onClose={() => setIsCompanySearchOpen(false)}
+                title="Ticker zuweisen"
+                subtitle="Wähle den passenden Treffer aus"
+                icon={<Search size={20} />}
+                footer={<Button onClick={() => setIsCompanySearchOpen(false)}>Schließen</Button>}
+            >
+                <form className="ui-inline-form" onSubmit={(e) => { e.preventDefault(); void handleCompanySearch(); }}>
+                    <Field label="Ticker oder Firmenname">
+                        <TextInput
+                            value={companyQuery}
+                            onChange={(e) => {
+                                setCompanyQuery(e.target.value);
+                                setCompanySearchMessage(null);
+                                setCompanyMatches([]);
+                            }}
+                            placeholder="z. B. AAPL oder Apple"
+                            autoFocus
+                        />
+                    </Field>
+                    <Button type="submit" variant="primary" icon={<Search size={16} className={isCompanySearching ? 'animate-spin' : ''} />} disabled={isCompanySearching || !companyQuery.trim()}>
+                        Suchen
+                    </Button>
+                </form>
+                {companySearchMessage && <p className="ui-field-hint">{companySearchMessage}</p>}
+                {companyMatches.length > 0 && (
+                    <div className="ui-rows ui-scroll" style={{ maxHeight: 300 }}>
+                        {companyMatches.map((match) => (
+                            <ListRow
+                                key={match.symbol}
+                                title={match.name || match.symbol}
+                                meta={(
+                                    <>
+                                        <Pill>{match.symbol}</Pill>
+                                        {match.exchange && <Pill>{match.exchange}</Pill>}
+                                        {match.currency && <Pill>{match.currency}</Pill>}
+                                    </>
+                                )}
+                                trailing={<Button size="sm" variant="primary" icon={<Check size={14} />} onClick={() => handleSelectCompanyMatch(match)}>Übernehmen</Button>}
                             />
-                            <button
-                                type="button"
-                                onClick={handleCompanySearch}
-                                disabled={isCompanySearching || !companyQuery.trim()}
-                                className="md3-icon-btn h-10 w-10 disabled:opacity-60 disabled:cursor-not-allowed"
-                                aria-label="Suchen"
-                                title="Suchen"
-                            >
-                                <Search size={16} className={isCompanySearching ? 'animate-spin' : ''} />
-                            </button>
-                        </div>
-
-                        {companySearchMessage && (
-                            <div className="mt-3 text-xs md3-text-muted">{companySearchMessage}</div>
-                        )}
-
-                        {companyMatches.length > 0 && (
-                            <div className="mt-5 rounded-2xl border border-white/10 bg-black/5 p-3">
-                                <div className="max-h-72 space-y-3 overflow-y-auto pr-2 [scrollbar-width:thin]">
-                                    {companyMatches.map(match => (
-                                        <div key={match.symbol} className="md3-list-item flex items-start justify-between gap-4 rounded-2xl px-4 py-3">
-                                            <div className="min-w-0">
-                                                <div className="text-sm md3-text-main font-semibold leading-snug truncate">
-                                                    {match.name || match.symbol}
-                                                </div>
-                                                <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] md3-text-muted">
-                                                    <span className="md3-chip-tonal px-2 py-0.5 rounded-full">{match.symbol}</span>
-                                                    {match.exchange && (
-                                                        <span className="md3-chip-tonal px-2 py-0.5 rounded-full">{match.exchange}</span>
-                                                    )}
-                                                    {match.currency && (
-                                                        <span className="md3-chip-tonal px-2 py-0.5 rounded-full">{match.currency}</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleSelectCompanyMatch(match)}
-                                                className="md3-icon-btn h-10 w-10 md3-positive-soft border border-emerald-300/40"
-                                                aria-label="Übernehmen"
-                                                title="Übernehmen"
-                                            >
-                                                <Check size={18} className="text-emerald-500" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="mt-4 flex justify-end">
-                            <button type="button" onClick={() => setIsCompanySearchOpen(false)} className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80">
-                                Schließen
-                            </button>
-                        </div>
+                        ))}
                     </div>
-                </div>
-            )}
-        </div>
+                )}
+            </Modal>
+        </>
     );
 };

@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useCallback, useRef, useState } from 'react';
-import { FolderOpen, Lock, Plus, TrendingUp, X } from 'lucide-react';
+import { FolderOpen, Lock, Plus, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
+import { Button, Field, IconTile, TextInput } from '@/components/ui/primitives';
 import { useProjectActions } from '@/contexts/ProjectContext';
 import { createDemoProject } from '@/lib/demoProject';
 import { useNotifications } from '@/components/ui/notifications';
@@ -80,218 +82,100 @@ export const ProjectLauncher = () => {
   };
 
   return (
-    <div
-      className="theme-md3 md3-app relative flex min-h-screen w-full items-center justify-center px-4 py-12"
-    >
+    <div className="theme-md3 md3-app ui-launcher">
       <div className="app-glow app-glow-1" aria-hidden="true" />
       <div className="app-glow app-glow-2" aria-hidden="true" />
 
-      <div className="relative z-10 w-full max-w-xl">
-        <div
-          className="md3-card space-y-8 px-6 py-8 text-center md:px-8 md:py-10"
-          style={{ borderRadius: 28 }}
-        >
-          <div className="flex flex-col items-center gap-4">
-            <div
-              className="flex h-16 w-16 items-center justify-center rounded-3xl"
-              style={{
-                background: 'linear-gradient(135deg, var(--c1), var(--c3))',
-                color: 'oklch(0.99 0 0)',
-                boxShadow: 'var(--accent-glow)'
-              }}
-            >
-              <TrendingUp size={30} />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Openfolio</h1>
-              <p className="mt-2 text-sm md3-text-muted">Dein Portfolio. Deine Daten. Lokal.</p>
-              <div
-                className="mx-auto mt-3 h-1 w-16 rounded-full"
-                style={{ background: 'color-mix(in srgb, var(--md3-primary) 70%, white 30%)' }}
-              />
-            </div>
-          </div>
+      <main className="ui-launcher-card glass">
+        <div className="ui-launcher-brand">
+          <span className="ui-launcher-mark" aria-hidden="true"><TrendingUp size={28} /></span>
+          <h1 className="ui-launcher-title">Openfolio</h1>
+          <p className="ui-launcher-sub">Dein Portfolio. Deine Daten. Lokal.</p>
+        </div>
 
-          <div className="grid gap-4 text-left">
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="md3-list-item flex items-center gap-5 p-5 rounded-[28px]! transition-transform active:scale-[0.98]"
-            >
-              <span
-                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
-                style={{
-                  background: 'var(--md3-primary-container)',
-                  color: 'var(--md3-on-primary-container)'
-                }}
-              >
-                <Plus size={24} />
+        <div className="ui-options">
+          <button type="button" className="ui-option" onClick={openCreateModal}>
+            <IconTile tone="accent" size={48}><Plus size={22} /></IconTile>
+            <span className="ui-option-text">
+              <span className="ui-row-title">Neues Portfolio erstellen</span>
+              <span className="ui-row-meta">Leeres Projekt, optional mit Passwort verschlüsselt</span>
+            </span>
+          </button>
+          <button type="button" className="ui-option" onClick={handleOpenProject}>
+            <IconTile tone="teal" size={48}><FolderOpen size={22} /></IconTile>
+            <span className="ui-option-text">
+              <span className="ui-row-title">Portfolio öffnen</span>
+              <span className="ui-row-meta">.openfolio-Datei von deinem Gerät</span>
+            </span>
+          </button>
+        </div>
+
+        <Button variant="ghost" icon={<Sparkles size={16} />} onClick={() => void newProject({ data: createDemoProject(), fileName: 'Demo.openfolio' })}>
+          Demo ansehen (Beispieldaten, ohne Konto)
+        </Button>
+
+        <p className="ui-launcher-note">
+          <ShieldCheck size={14} aria-hidden="true" />
+          Alle Daten bleiben auf deinem Gerät. Openfolio sendet nichts an Cloud-Server.
+        </p>
+      </main>
+
+      <Modal
+        open={isCreateModalOpen}
+        onClose={closeCreateModal}
+        title="Neues Portfolio"
+        icon={<Plus size={20} />}
+        footer={(
+          <>
+            <Button variant="ghost" onClick={closeCreateModal}>Abbrechen</Button>
+            <Button type="submit" form="create-project" variant="primary">Erstellen</Button>
+          </>
+        )}
+      >
+        <form id="create-project" className="ui-stack" onSubmit={(e) => { e.preventDefault(); submitCreateModal(); }}>
+          <Field label="Projektname">
+            <TextInput value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Mein Portfolio" autoFocus />
+          </Field>
+          <div className="ui-info-card">
+            <div className="ui-row" style={{ padding: 0, marginBottom: 12 }}>
+              <span className="ui-row-lead"><IconTile tone="accent" size={36}><Lock size={16} /></IconTile></span>
+              <span className="ui-row-main">
+                <span className="ui-row-title">Verschlüsselung (optional)</span>
+                <span className="ui-row-meta">AES-256. Ohne Passwort lässt sich die Datei nicht wiederherstellen.</span>
               </span>
-              <span className="text-base font-bold md3-text-main">Neues Portfolio erstellen</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleOpenProject}
-              className="md3-list-item flex items-center gap-5 p-5 rounded-[28px]! transition-transform active:scale-[0.98]"
-            >
-              <span
-                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
-                style={{
-                  background: 'var(--md3-secondary-container)',
-                  color: 'var(--md3-on-secondary-container)'
-                }}
-              >
-                <FolderOpen size={24} />
-              </span>
-              <span className="text-base font-bold md3-text-main">Portfolio öffnen</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void newProject({ data: createDemoProject(), fileName: 'Demo.openfolio' })}
-              className="mx-auto px-3 py-2 text-sm font-semibold md3-text-muted underline-offset-4 hover:underline"
-            >
-              Demo ansehen (Beispieldaten, ohne Konto)
-            </button>
-          </div>
-
-          <p className="text-xs leading-relaxed md3-text-muted">
-            Openfolio speichert alle Daten lokal auf deinem Gerät.
-            <br />
-            Es werden keine Daten an Cloud-Server gesendet.
-          </p>
-        </div>
-      </div>
-
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] p-4">
-          <div className="md3-card w-full max-w-md rounded-3xl p-6 border" style={{ borderColor: 'var(--md3-outline)' }}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold md3-text-main">Neues Portfolio</h3>
-              </div>
-              <button type="button" onClick={closeCreateModal} className="md3-icon-btn" aria-label="Schließen">
-                <X size={16} />
-              </button>
             </div>
-
-            <div className="mt-5 space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider md3-text-muted">Projektname</label>
-                <input
-                  type="text"
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      submitCreateModal();
-                    }
-                  }}
-                  className="md3-field w-full px-3 py-2 text-sm outline-none"
-                  placeholder="Mein Portfolio"
-                />
-              </div>
-
-              <div
-                className="rounded-2xl border p-3"
-                style={{
-                  background: 'var(--md3-surface-container-high)',
-                  borderColor: 'color-mix(in srgb, var(--md3-outline) 22%, transparent 78%)'
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className="flex h-8 w-8 items-center justify-center rounded-xl"
-                    style={{
-                      background: 'var(--md3-primary-container)',
-                      color: 'var(--md3-on-primary-container)'
-                    }}
-                  >
-                    <Lock size={14} />
-                  </span>
-                  <div>
-                    <div className="text-sm font-semibold md3-text-main">Verschlüsselung</div>
-                    <div className="text-xs md3-text-muted">AES-256. Ohne Passwort lässt sich die Datei nicht wiederherstellen.</div>
-                  </div>
-                </div>
-                <div className="mt-3 space-y-2">
-                  <input
-                    type="password"
-                    value={projectPassword}
-                    onChange={(e) => setProjectPassword(e.target.value)}
-                    className="md3-field w-full px-3 py-2 text-sm outline-none"
-                    placeholder="Passwort (optional)"
-                  />
-                  <input
-                    type="password"
-                    value={projectPasswordConfirm}
-                    onChange={(e) => setProjectPasswordConfirm(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        submitCreateModal();
-                      }
-                    }}
-                    className="md3-field w-full px-3 py-2 text-sm outline-none"
-                    placeholder="Passwort bestätigen (optional)"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={closeCreateModal} className="md3-text-muted px-3 py-2 text-sm font-semibold">Abbrechen</button>
-              <button type="button" onClick={submitCreateModal} className="md3-filled-btn px-4 py-2 text-sm font-semibold">Erstellen</button>
+            <div className="ui-grid-2">
+              <Field label="Passwort">
+                <TextInput type="password" autoComplete="new-password" value={projectPassword} onChange={(e) => setProjectPassword(e.target.value)} />
+              </Field>
+              <Field label="Passwort bestätigen">
+                <TextInput type="password" autoComplete="new-password" value={projectPasswordConfirm} onChange={(e) => setProjectPasswordConfirm(e.target.value)} />
+              </Field>
             </div>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
-      {passwordPromptReason && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] p-4">
-          <div className="md3-card w-full max-w-md rounded-3xl p-6 border" style={{ borderColor: 'var(--md3-outline)' }}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold md3-text-main">Passwort eingeben</h3>
-                <p className="text-xs md3-text-muted">
-                  {passwordPromptReason === 'invalid'
-                    ? 'Falsches Passwort. Bitte erneut versuchen.'
-                    : 'Dieses Projekt braucht ein Passwort.'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => resolvePasswordPrompt(null)}
-                className="md3-icon-btn"
-                aria-label="Schließen"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              <input
-                type="password"
-                value={openPasswordInput}
-                onChange={(e) => setOpenPasswordInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    resolvePasswordPrompt(openPasswordInput);
-                  }
-                }}
-                autoFocus
-                className="md3-field w-full px-3 py-2 text-sm outline-none"
-                placeholder="Passwort"
-              />
-            </div>
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => resolvePasswordPrompt(null)} className="md3-text-muted px-3 py-2 text-sm font-semibold">Abbrechen</button>
-              <button type="button" onClick={() => resolvePasswordPrompt(openPasswordInput)} className="md3-filled-btn px-4 py-2 text-sm font-semibold">Öffnen</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={Boolean(passwordPromptReason)}
+        onClose={() => resolvePasswordPrompt(null)}
+        size="sm"
+        title="Passwort eingeben"
+        subtitle={passwordPromptReason === 'invalid' ? 'Falsches Passwort. Bitte erneut versuchen.' : 'Dieses Projekt ist verschlüsselt.'}
+        icon={<Lock size={20} />}
+        footer={(
+          <>
+            <Button variant="ghost" onClick={() => resolvePasswordPrompt(null)}>Abbrechen</Button>
+            <Button type="submit" form="open-password" variant="primary">Öffnen</Button>
+          </>
+        )}
+      >
+        <form id="open-password" onSubmit={(e) => { e.preventDefault(); resolvePasswordPrompt(openPasswordInput); }}>
+          <Field label="Passwort">
+            <TextInput type="password" autoComplete="current-password" value={openPasswordInput} onChange={(e) => setOpenPasswordInput(e.target.value)} autoFocus aria-invalid={passwordPromptReason === 'invalid'} />
+          </Field>
+        </form>
+      </Modal>
     </div>
   );
 };

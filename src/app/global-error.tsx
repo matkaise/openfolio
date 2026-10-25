@@ -1,5 +1,6 @@
 'use client';
 
+// Replaces the root layout, so the app stylesheet is not loaded: inline styles only.
 export default function GlobalError({
     error: _error,
     reset,
@@ -9,18 +10,19 @@ export default function GlobalError({
 }) {
     void _error;
     return (
-        <html>
-            <body className="bg-slate-900 text-slate-200">
-                <div className="flex flex-col items-center justify-center min-h-screen p-4">
-                    <h2 className="text-xl font-bold mb-4">Kritischer Fehler</h2>
-                    <p className="text-slate-400 mb-6">Die Anwendung konnte nicht geladen werden.</p>
+        <html lang="de">
+            <body style={{ margin: 0, minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'oklch(0.145 0.012 285)', color: 'oklch(0.97 0.005 285)', fontFamily: 'system-ui, sans-serif' }}>
+                <main style={{ textAlign: 'center', padding: 24 }}>
+                    <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 8px' }}>Kritischer Fehler</h1>
+                    <p style={{ margin: '0 0 20px', color: 'oklch(0.76 0.012 285)' }}>Openfolio konnte nicht geladen werden. Deine Projektdatei wurde nicht verändert.</p>
                     <button
+                        type="button"
                         onClick={() => reset()}
-                        className="px-4 py-2 bg-emerald-500 text-white rounded hover:bg-emerald-600 transition"
+                        style={{ height: 42, padding: '0 18px', border: 0, borderRadius: 14, background: 'oklch(0.72 0.19 295)', color: 'oklch(0.16 0.03 295)', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
                     >
                         Neu laden
                     </button>
-                </div>
+                </main>
             </body>
         </html>
     );

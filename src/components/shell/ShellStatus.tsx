@@ -5,6 +5,8 @@ import { Loader2, LogOut, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useProjectActions, useProjectData, useProjectStore, useProjectStoreShallow } from '@/contexts/ProjectContext';
 import { findMissingFxCurrencies } from '@/lib/domain/fx/rates';
 import { repairProjectSecurities, securityNeedsSync } from '@/lib/marketDataService';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/primitives';
 
 // Parts of the app shell that show fast-changing status (file state, sync progress).
 // Each subscribes to its own slice of the project store, so a progress tick or a save
@@ -62,7 +64,7 @@ export const SyncButton = () => {
         <button
             type="button"
             onClick={() => syncAll(true)}
-            className="md3-icon-btn"
+            className="ui-icon-btn"
             aria-label="Kurse und Wechselkurse aktualisieren"
             disabled={busy}
             title="Kurse und Wechselkurse aktualisieren"
@@ -145,51 +147,22 @@ export const StartupMarketSync = () => {
         : 0;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] p-4">
-            <div
-                className="w-full max-w-md rounded-3xl p-6 shadow-2xl border"
-                style={{
-                    background: 'var(--md3-surface)',
-                    borderColor: 'var(--md3-outline)'
-                }}
-            >
-                <div className="flex items-center gap-3">
-                    <div
-                        className="flex h-11 w-11 items-center justify-center rounded-2xl"
-                        style={{
-                            background: 'var(--md3-primary-container)',
-                            color: 'var(--md3-on-primary-container)'
-                        }}
-                    >
-                        <Loader2 size={20} className="animate-spin" />
-                    </div>
-                    <div className="min-w-0">
-                        <div className="text-sm font-semibold" style={{ color: 'var(--md3-on-surface)' }}>
-                            Marktdaten werden synchronisiert
-                        </div>
-                        <div className="text-xs mt-0.5" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                            Projektstart-Update
-                        </div>
-                    </div>
+        <Modal
+            open
+            size="sm"
+            onClose={() => setShowDialog(false)}
+            title="Kurse werden aktualisiert"
+            subtitle="Beim Öffnen des Projekts · läuft im Hintergrund weiter, wenn du schließt"
+            icon={<Loader2 size={20} className="animate-spin" />}
+            footer={<Button variant="ghost" onClick={() => setShowDialog(false)}>Im Hintergrund fortsetzen</Button>}
+        >
+            <div className="ui-progress-block" style={{ marginBottom: 0 }}>
+                <div className="ui-progress-meta">
+                    <span>{marketSyncProgress && marketSyncProgress.total > 0 ? `${marketSyncProgress.current} von ${marketSyncProgress.total} Wertpapieren` : 'Vorbereitung …'}</span>
+                    <span>{marketSyncProgress?.symbol || ''}</span>
                 </div>
-
-                <div className="mt-5 space-y-2">
-                    <div className="flex items-center justify-between text-xs font-semibold" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                        <span>
-                            {marketSyncProgress && marketSyncProgress.total > 0
-                                ? `Markt ${marketSyncProgress.current}/${marketSyncProgress.total}`
-                                : 'Vorbereitung...'}
-                        </span>
-                        <span>{marketSyncProgress?.symbol || ''}</span>
-                    </div>
-                    <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--md3-surface-container-highest)' }}>
-                        <div
-                            className="h-full rounded-full transition-all duration-300"
-                            style={{ width: `${percent}%`, background: 'var(--md3-primary)' }}
-                        />
-                    </div>
-                </div>
+                <div className="ui-progress"><span style={{ width: `${percent}%` }} /></div>
             </div>
-        </div>
+        </Modal>
     );
 };

@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { Button, EmptyState } from '@/components/ui/primitives';
 
 const log = createLogger('App');
 
@@ -17,15 +19,16 @@ export default function Error({
     }, [error]);
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 text-slate-200 p-4">
-            <h2 className="text-xl font-bold mb-4">Etwas ist schief gelaufen!</h2>
-            <p className="text-slate-400 mb-6">{error.message || 'Ein unbekannter Fehler ist aufgetreten.'}</p>
-            <button
-                onClick={() => reset()}
-                className="px-4 py-2 bg-emerald-500 text-white rounded hover:bg-emerald-600 transition"
-            >
-                Erneut versuchen
-            </button>
+        <div className="theme-md3 md3-app ui-launcher">
+            <div className="app-glow app-glow-1" aria-hidden="true" />
+            <main className="ui-launcher-card glass">
+                <EmptyState
+                    icon={<AlertTriangle size={22} />}
+                    title="Etwas ist schiefgelaufen"
+                    text={error.message || 'Ein unbekannter Fehler ist aufgetreten. Deine Projektdatei wurde nicht verändert.'}
+                    action={<Button variant="primary" onClick={() => reset()}>Erneut versuchen</Button>}
+                />
+            </main>
         </div>
     );
 }

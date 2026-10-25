@@ -1,8 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Globe, BarChart3, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Modal } from './ui/Modal';
+import { Avatar, Pill, Segmented, toneOf } from './ui/primitives';
+import { useFormatters } from './ui/useFormatters';
+import { quoteTypeLabel } from '@/lib/labels';
 import { SimpleAreaChart } from './SimpleAreaChart';
 import { Security, Transaction } from '@/types/domain';
 import { getRangeStartDate, toDateKeyLocal } from '@/lib/dateUtils';
+
+const RANGE_OPTIONS = ['1M', '6M', '1J', '3J', '5J', 'MAX'].map((value) => ({ value, label: value }));
 
 interface SecurityDetailModalProps {
     isOpen: boolean;
@@ -16,14 +22,7 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
     const [timeRange, setTimeRange] = useState('1J');
     const normalizedCurrencyFilter = currencyFilter?.trim().toUpperCase();
 
-    // Close on escape
-    React.useEffect(() => {
-        const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
-        };
-        window.addEventListener('keydown', handleEsc);
-        return () => window.removeEventListener('keydown', handleEsc);
-    }, [onClose]);
+    const formatters = useFormatters();
 
     // Prepare Chart Data
     const chartData = useMemo(() => {
@@ -60,194 +59,87 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
     const change = latestPrice - startPrice;
     const changePercent = startPrice > 0 ? (change / startPrice) * 100 : 0;
     const isPositive = change >= 0;
-
-    if (!isOpen) return null;
+    const money = (value: number) => formatters.moneyIn(value, security.currency);
+    const ratio = (value: number | undefined) => (value === undefined || !Number.isFinite(value) ? '–' : formatters.number(value, 2));
+    const billions = (value: number | undefined) => (value ? `${formatters.number(value / 1e9, 2)} Mrd. ${security.currency}` : '–');
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-            <div
-                className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200"
-                onClick={e => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="p-6 border-b border-slate-800 flex justify-between items-start bg-slate-900/50">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-lg font-bold text-white border border-slate-700">
-                            {security.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-white">{security.name}</h2>
-                            <div className="flex items-center gap-2 text-sm text-slate-400 mt-0.5">
-                                <span className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700/50">{security.quoteType || 'Aktie'}</span>
-                                <span>{security.symbol}</span>
-                                {security.isin && <span className="text-slate-500 font-mono text-xs">{security.isin}</span>}
-                                {normalizedCurrencyFilter && (
-                                  <span className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700/50 text-xs">
-                                    Trades: {normalizedCurrencyFilter}
-                                  </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="text-right">
-                        <div className="text-2xl font-bold text-white">
-                            {latestPrice.toLocaleString('de-DE', { style: 'currency', currency: security.currency })}
-                        </div>
-                        <div className={`flex items-center justify-end text-sm font-medium ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {isPositive ? <ArrowUpRight size={16} className="mr-1" /> : <ArrowDownRight size={16} className="mr-1" />}
-                            {change.toLocaleString('de-DE', { style: 'currency', currency: security.currency })} ({changePercent.toFixed(2)}%)
-                        </div>
-                    </div>
-                </div>
+        <Modal
+            open={isOpen}
+            onClose={onClose}
+            size="xl"
+            title={security.name}
+            subtitle={[quoteTypeLabel(security.quoteType), security.symbol, security.isin, normalizedCurrencyFilter ? `Trades in ${normalizedCurrencyFilter}` : null].filter(Boolean).join(' · ')}
+            icon={<Avatar seed={security.isin} label={security.name} size={44} />}
+        >
+            <div className="ui-price-head">
+                <span className="ui-price-value">{money(latestPrice)}</span>
+                <Pill tone={toneOf(change)}>
+                    {isPositive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                    {formatters.moneyIn(change, security.currency, { sign: true })} · {formatters.percent(changePercent, { sign: true })}
+                </Pill>
+                <span className="ui-price-range">
+                    <Segmented options={RANGE_OPTIONS} value={timeRange} onChange={setTimeRange} ariaLabel="Zeitraum" size="sm" />
+                </span>
+            </div>
 
-                <div className="overflow-y-auto overflow-x-hidden custom-scrollbar flex-1">
-                    {/* Chart Section */}
-                    <div className="p-6 pb-2">
-                        <div className="flex justify-end mb-4 gap-2">
-                            {['1M', '6M', '1J', '3J', '5J', 'MAX'].map((range) => (
-                                <button
-                                    key={range}
-                                    onClick={() => setTimeRange(range)}
-                                    className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${timeRange === range
-                                        ? 'bg-slate-700 text-white shadow-sm'
-                                        : 'text-slate-500 hover:text-slate-300'
-                                        }`}
-                                >
-                                    {range}
-                                </button>
+            <div>
+                <SimpleAreaChart
+                    data={chartData}
+                    currency={security.currency}
+                    timeRange={timeRange}
+                    color={isPositive ? 'var(--gain)' : 'var(--loss)'}
+                    showAxes={true}
+                    markers={markers}
+                />
+                {markers.length > 0 && (
+                    <div className="ui-legend">
+                        <span><i style={{ background: 'var(--gain)' }} /> Kauf</span>
+                        <span><i style={{ background: 'var(--loss)' }} /> Verkauf</span>
+                    </div>
+                )}
+            </div>
+
+            <div className="ui-info-grid">
+                <section className="ui-info-card">
+                    <h3 className="ui-info-title">Profil</h3>
+                    <dl className="ui-dl">
+                        <dt>Land</dt><dd>{security.country || '–'}</dd>
+                        <dt>Sektor</dt><dd>{security.sector || '–'}</dd>
+                        <dt>Branche</dt><dd title={security.industry}>{security.industry || '–'}</dd>
+                        <dt>Marktkapitalisierung</dt><dd>{billions(security.marketCap)}</dd>
+                    </dl>
+                </section>
+
+                <section className="ui-info-card">
+                    <h3 className="ui-info-title">Kennzahlen</h3>
+                    <div className="ui-metric-grid">
+                        <div><span className="ui-label">KGV</span><span className="ui-metric">{ratio(security.trailingPE)}</span></div>
+                        <div><span className="ui-label">KGV erwartet</span><span className="ui-metric">{ratio(security.forwardPE)}</span></div>
+                        <div><span className="ui-label">Gewinn je Aktie</span><span className="ui-metric">{ratio(security.epsTrailingTwelveMonths)}</span></div>
+                        <div><span className="ui-label">Umsatz</span><span className="ui-metric">{security.totalRevenue ? `${formatters.number(security.totalRevenue / 1e9, 2)} Mrd.` : '–'}</span></div>
+                    </div>
+                </section>
+
+                <section className="ui-info-card is-wide">
+                    <h3 className="ui-info-title">Dividenden</h3>
+                    <div className="ui-metric-grid is-3">
+                        <div><span className="ui-label">Dividendenrendite</span><span className="ui-metric is-up">{formatters.percent((security.dividendYield || 0) * 100)}</span></div>
+                        <div><span className="ui-label">Jährlich (Prognose)</span><span className="ui-metric">{security.annualDividendRate ? money(security.annualDividendRate) : '–'}</span></div>
+                        <div><span className="ui-label">Nächster Ex-Tag</span><span className="ui-metric">{security.upcomingDividends?.[0]?.exDate || '–'}</span></div>
+                    </div>
+                    {security.dividendHistory && security.dividendHistory.length > 0 && (
+                        <div className="ui-chips">
+                            {security.dividendHistory.slice(-5).reverse().map((div) => (
+                                <span key={div.date} className="ui-chip-stat">
+                                    <span className="ui-sub">{div.date}</span>
+                                    <strong>{money(div.amount)}</strong>
+                                </span>
                             ))}
                         </div>
-                        <div className="h-72 w-full">
-                            <SimpleAreaChart
-                                data={chartData}
-                                currency={security.currency}
-                                timeRange={timeRange}
-                                color={isPositive ? 'var(--gain)' : 'var(--loss)'}
-                                showAxes={true}
-                                markers={markers}
-                            />
-                        </div>
-                        {/* Legend */}
-                        <div className="flex justify-center gap-6 mt-2 text-xs text-slate-500">
-                            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Kauf</div>
-                            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-rose-500"></div> Verkauf</div>
-                        </div>
-                    </div>
-
-                    {/* Details Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 pt-0">
-                        {/* Profile Card */}
-                        <div className="bg-slate-800/50 rounded-xl p-5 border border-slate-700/50">
-                            <h3 className="text-sm font-medium text-slate-300 mb-4 flex items-center gap-2">
-                                <Globe size={16} className="text-blue-400" /> Unternehmensprofil
-                            </h3>
-                            <div className="space-y-3">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">Land</span>
-                                    <span className="text-white">{security.country || '-'}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">Sektor</span>
-                                    <span className="text-white">{security.sector || '-'}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">Industrie</span>
-                                    <span className="text-white truncate max-w-[200px] text-right" title={security.industry}>{security.industry || '-'}</span>
-                                </div>
-                                <div className="h-px bg-slate-700/50 my-2"></div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">Marktkapitalisierung</span>
-                                    <span className="text-white">{security.marketCap ? (security.marketCap / 1e9).toFixed(2) + ' Mrd. ' + security.currency : '-'}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Metrics Card */}
-                        <div className="bg-slate-800/50 rounded-xl p-5 border border-slate-700/50">
-                            <h3 className="text-sm font-medium text-slate-300 mb-4 flex items-center gap-2">
-                                <BarChart3 size={16} className="text-purple-400" /> Kennzahlen
-                            </h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <span className="text-xs text-slate-500 block mb-1">KGV (P/E)</span>
-                                    <span className="text-lg font-bold text-white">{security.trailingPE?.toFixed(2) || '-'}</span>
-                                </div>
-                                <div>
-                                    <span className="text-xs text-slate-500 block mb-1">KGV (Erwartet)</span>
-                                    <span className="text-lg font-bold text-white">{security.forwardPE?.toFixed(2) || '-'}</span>
-                                </div>
-                                <div>
-                                    <span className="text-xs text-slate-500 block mb-1">EPS (Gewinn/Aktie)</span>
-                                    <span className="text-lg font-bold text-white">{security.epsTrailingTwelveMonths?.toFixed(2) || '-'}</span>
-                                </div>
-                                <div>
-                                    <span className="text-xs text-slate-500 block mb-1">Umsatz</span>
-                                    <span className="text-lg font-bold text-white">{security.totalRevenue ? (security.totalRevenue / 1e9).toFixed(2) + ' Mrd.' : '-'}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Dividends Card */}
-                        <div className="col-span-1 md:col-span-2 bg-slate-800/50 rounded-xl p-5 border border-slate-700/50">
-                            <h3 className="text-sm font-medium text-slate-300 mb-4 flex items-center gap-2">
-                                <Calendar size={16} className="text-emerald-400" /> Dividenden
-                            </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div>
-                                    <span className="text-xs text-slate-500 block mb-1">Dividendenrendite</span>
-                                    <span className="text-2xl font-bold text-emerald-400">{((security.dividendYield || 0) * 100).toFixed(2)}%</span>
-                                </div>
-                                <div className="border-l border-slate-700 pl-6">
-                                    <span className="text-xs text-slate-500 block mb-1">Jährliche Dividende (Prognose)</span>
-                                    <span className="text-xl font-bold text-white">
-                                        {security.annualDividendRate ? security.annualDividendRate.toLocaleString('de-DE', { style: 'currency', currency: security.currency }) : '-'}
-                                    </span>
-                                </div>
-                                <div className="border-l border-slate-700 pl-6">
-                                    <span className="text-xs text-slate-500 block mb-1">Nächste Auszahlung</span>
-                                    {security.upcomingDividends && security.upcomingDividends.length > 0 ? (
-                                        <>
-                                            <span className="block text-white font-medium">Ex-Date: {security.upcomingDividends[0].exDate}</span>
-                                        </>
-                                    ) : (
-                                        <span className="text-slate-500 italic">Keine Daten</span>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Dividend History (Mini) */}
-                            {security.dividendHistory && security.dividendHistory.length > 0 && (
-                                <div className="mt-6">
-                                    <h4 className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Historie (Letzte 5)</h4>
-                                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                                        <style>{`
-                                            .scrollbar-none::-webkit-scrollbar {
-                                                display: none;
-                                            }
-                                        `}</style>
-                                        {security.dividendHistory.slice(-5).reverse().map((div, i) => (
-                                            <div key={i} className="bg-slate-900/50 px-3 py-2 rounded-lg border border-slate-700 min-w-[100px]">
-                                                <div className="text-xs text-slate-500">{div.date}</div>
-                                                <div className="text-sm font-bold text-emerald-400">
-                                                    {div.amount.toLocaleString('de-DE', { style: 'currency', currency: security.currency })}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                    </div>
-                </div>
-
-                {/* Footer */}
-                <div className="p-4 border-t border-slate-700 bg-slate-800 flex justify-end">
-                    <button onClick={onClose} className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition font-medium">
-                        Schließen
-                    </button>
-                </div>
+                    )}
+                </section>
             </div>
-        </div>
+        </Modal>
     );
 };
