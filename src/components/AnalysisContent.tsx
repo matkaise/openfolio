@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, AlertCircle, Banknote, BarChart3, Check, ChevronLeft, ChevronRight, Globe, Loader2, X } from 'lucide-react';
 import { AreaChart, Area, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from 'recharts';
-import { calculatePortfolioHistory, calculateTWRSeries, type Holding, type AnalysisMetrics } from '@/lib/portfolioUtils';
-import { calculateAnalysisMetrics } from '@/lib/analysisService';
-import { buildMwrSeries, normalizeInvestedForExplicitCash, smoothPerformanceSeries } from '@/lib/performanceUtils';
+import { calculateTWRSeries, type Holding, type AnalysisMetrics } from '@/lib/portfolioUtils';
+import { buildMwrSeries, smoothPerformanceSeries } from '@/lib/performanceUtils';
+import { createHistoryInput, type AnalysisInput } from '@/lib/calculations/portfolioCalculations';
+import { useWorkerComputation } from '@/lib/calculations/useWorkerComputation';
 import { selectCalculationTransactions, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency as convertFxCurrency } from '@/lib/fxUtils';
 import { parseDateOnlyUTC, toDateKeyUTC } from '@/lib/dateUtils';
@@ -13,6 +14,9 @@ import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { Card } from '@/components/ui/Card';
 import { type AnalysisCache, type HistoryPoint, type PerformanceRow } from '@/types/portfolioView';
 import { isCacheFor } from '@/lib/state/inputCache';
+
+const EMPTY_HISTORY: HistoryPoint[] = [];
+const EMPTY_METRICS: AnalysisMetrics = { volatility: 0, sharpeRatio: 0, maxDrawdown: 0, maxDrawdownDate: '', availableYears: [], monthlyReturns: [], twrSeries: [] };
 
 const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: { date: string; value: number }[] }) => {
   if (!isOpen) return null;
@@ -236,7 +240,6 @@ export const AnalysisContent = ({
   const performanceSmoothing = project?.settings?.performanceSmoothing || '1d';
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [showDrawdown, setShowDrawdown] = useState(false);
-  const [isCalculating, setIsCalculating] = useState(true);
 
   // New View States
   const [returnViewMode, setReturnViewMode] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
@@ -357,12 +360,30 @@ export const AnalysisContent = ({
     return holdings.reduce((sum, h) => sum + h.value, 0);
   }, [holdings]);
 
-  // Calculate portfolio history for MAX (for analysis metrics across years)
-  // Moved to effect to unblock UI
-  const [historyData, setHistoryData] = useState<HistoryPoint[]>([]);
-  const [analysisMetrics, setAnalysisMetrics] = useState<AnalysisMetrics>(
-    { volatility: 0, sharpeRatio: 0, maxDrawdown: 0, maxDrawdownDate: '', availableYears: [], monthlyReturns: [], twrSeries: [] }
-  );
+  // Full daily history and metrics, calculated in the worker; cached across tab switches
+  const analysisRequest = useMemo(() => {
+    if (!project) return null;
+    const key = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|base=${baseCurrency}|v18`;
+    // Same objects = same data; a market or FX sync replaces them and recalculates
+    const inputs = [filteredTransactions, filteredCashAccounts, project.securities, project.fxData.rates] as const;
+    const input: AnalysisInput = {
+      ...createHistoryInput(filteredTransactions, Object.values(project.securities || {}), project.fxData, filteredCashAccounts, baseCurrency),
+      riskFreeRate
+    };
+    return { key, inputs, input };
+  }, [project, selectedPortfolioIds, baseCurrency, filteredTransactions, filteredCashAccounts, riskFreeRate]);
+
+  const cacheHit = analysisRequest && isCacheFor(cachedData, analysisRequest.key, analysisRequest.inputs) ? cachedData : null;
+  const computation = useWorkerComputation('computeAnalysis', cacheHit ? null : analysisRequest?.input ?? null);
+  const analysis = cacheHit ?? computation.result;
+  const historyData = analysis?.historyData ?? EMPTY_HISTORY;
+  const analysisMetrics = (includeDividends ? analysis?.metrics.withDividends : analysis?.metrics.withoutDividends) ?? EMPTY_METRICS;
+  const isCalculating = !cacheHit && !computation.isCurrent;
+
+  useEffect(() => {
+    if (!analysisRequest || !computation.isCurrent || !computation.result || !onCacheUpdate) return;
+    onCacheUpdate({ key: analysisRequest.key, inputs: analysisRequest.inputs, ...computation.result });
+  }, [analysisRequest, computation.isCurrent, computation.result, onCacheUpdate]);
 
   const riskSeries = useMemo(() => {
     const series = analysisMetrics?.twrSeries || [];
@@ -431,61 +452,6 @@ export const AnalysisContent = ({
 
     return { volatility, sharpe };
   }, [analysisMetrics?.twrSeries, riskFreeRate]);
-
-  useEffect(() => {
-    if (!project) return;
-
-    // Check Cache
-    // Added version suffix to force invalidation after TWR refactor
-    const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v17`;
-    // Same objects = same data; a market or FX sync replaces them and recalculates
-    const cacheInputs = [filteredTransactions, filteredCashAccounts, project.securities, project.fxData.rates] as const;
-    if (isCacheFor(cachedData, cacheKey, cacheInputs)) {
-      setHistoryData(cachedData.historyData);
-      setAnalysisMetrics(cachedData.analysisMetrics);
-      setIsCalculating(false);
-      return;
-    }
-
-    // Start loading immediately
-    setIsCalculating(true);
-
-    // Defer heavy calculation to next tick to allow UI to render loading state
-    const timer = setTimeout(() => {
-      const data = calculatePortfolioHistory(
-        filteredTransactions,
-        Object.values(project.securities || {}),
-        project.fxData.rates,
-        filteredCashAccounts,
-        project.settings.baseCurrency,
-        'MAX', // Full history
-        'daily' // High precision for TWR/Drawdown
-      );
-
-      const normalizedHistory = normalizeInvestedForExplicitCash(
-        data,
-        filteredTransactions,
-        filteredCashAccounts,
-        project.fxData,
-        baseCurrency
-      );
-      const metrics = calculateAnalysisMetrics(normalizedHistory, riskFreeRate, { includeDividends });
-
-      setHistoryData(normalizedHistory);
-      setAnalysisMetrics(metrics);
-
-      // Update Cache
-      if (onCacheUpdate) {
-        onCacheUpdate({ key: cacheKey, inputs: cacheInputs, historyData: normalizedHistory, analysisMetrics: metrics });
-      }
-
-      setIsCalculating(false);
-    }, 100); // 100ms delay to ensure loading state is visible and UI feels responsive
-
-    return () => clearTimeout(timer);
-  }, [project, filteredTransactions, filteredCashAccounts, selectedPortfolioIds, cachedData, includeDividends, riskFreeRate, onCacheUpdate, baseCurrency]);
-
-  // Removed old synchronous useMemos and redundant loading effects
 
   const mwrMonthlyReturnsMap = useMemo(() => {
     if (!historyData.length) return {};

@@ -122,6 +122,22 @@ export const getFxTable = (rates: FxRates | null | undefined): FxTable => {
     return table;
 };
 
+/**
+ * The rates of just these currencies (minor units like GBp resolve to their ISO currency).
+ * Conversions between them give the same results as with the full table, at a fraction of
+ * the size, e.g. for sending them to the calculation worker.
+ */
+export const pickFxRates = (rates: FxRates | null | undefined, currencies: Iterable<string | undefined>): FxRates => {
+    const picked: FxRates = {};
+    if (!rates) return picked;
+    for (const currency of currencies) {
+        if (!currency) continue;
+        const { currency: iso } = normalizeCurrency(currency);
+        if (rates[iso]) picked[iso] = rates[iso];
+    }
+    return picked;
+};
+
 /** Currencies the project uses but cannot convert. Shown in the UI as "Kurs fehlt". */
 export const findMissingFxCurrencies = (project: ProjectData): string[] => {
     const fx = getFxTable(project.fxData?.rates);

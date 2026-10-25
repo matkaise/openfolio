@@ -1,6 +1,8 @@
 ﻿import React, { useMemo, useState } from 'react';
 import { Check, PenLine, X } from 'lucide-react';
-import { calculatePortfolioHistory, calculateTWRSeries } from '@/lib/portfolioUtils';
+import { calculateTWRSeries } from '@/lib/portfolioUtils';
+import { createHistoryInput } from '@/lib/calculations/portfolioCalculations';
+import { useWorkerComputation } from '@/lib/calculations/useWorkerComputation';
 import { buildMwrSeries, normalizeInvestedForExplicitCash, smoothPerformanceSeries } from '@/lib/performanceUtils';
 import { selectCalculationTransactions, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency } from '@/lib/fxUtils';
@@ -14,6 +16,8 @@ import { getBrokerConnections } from '@/lib/brokers/connections';
 import type { BrokerConnection } from '@/types/domain';
 import { parseDateOnlyUTC } from '@/lib/dateUtils';
 import { type DividendHistoryEntry, type EventEntry, type TransactionLike, type UpcomingDividendEntry } from '@/types/portfolioView';
+
+const EMPTY_HISTORY: { date: string; value: number; invested: number; dividend: number }[] = [];
 
 const sliceHistoryByRange = (
   history: { date: string; value: number; invested: number; dividend: number }[],
@@ -114,19 +118,12 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     return calculateProjectHoldings(project, filteredTransactions);
   }, [project, filteredTransactions]);
 
-  const maxHistoryData = useMemo(() => {
-    if (!project) return [];
-
-    return calculatePortfolioHistory(
-      filteredTransactions,
-      Object.values(project.securities || {}),
-      project.fxData.rates,
-      filteredCashAccounts,
-      project.settings.baseCurrency,
-      'MAX',
-      'daily'
-    );
-  }, [project, filteredTransactions, filteredCashAccounts]);
+  // Daily MAX history from the calculation worker; the previous history stays visible while it recalculates
+  const historyInput = useMemo(() => {
+    if (!project) return null;
+    return createHistoryInput(filteredTransactions, Object.values(project.securities || {}), project.fxData, filteredCashAccounts, baseCurrency);
+  }, [project, filteredTransactions, filteredCashAccounts, baseCurrency]);
+  const maxHistoryData = useWorkerComputation('computeMaxHistory', historyInput).result ?? EMPTY_HISTORY;
 
   // Calculate portfolio history for chart by slicing MAX history.
   const historyData = useMemo(() => (
