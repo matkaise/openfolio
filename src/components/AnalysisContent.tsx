@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, AlertCircle, Banknote, BarChart3, Check, ChevronLeft, ChevronRight, Globe, Loader2, X } from 'lucide-react';
+import { Activity, AlertCircle, Check, ChevronLeft, ChevronRight, Gauge, Loader2, PieChart, Plus, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { AreaChart, Area, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import { calculateTWRSeries, type Holding, type AnalysisMetrics } from '@/lib/portfolioUtils';
 import { buildMwrSeries, smoothPerformanceSeries } from '@/lib/performanceUtils';
@@ -11,56 +11,28 @@ import { parseDateOnlyUTC, toDateKeyUTC } from '@/lib/dateUtils';
 import { useProjectData } from '@/contexts/ProjectContext';
 import { ReturnChartModal } from '@/components/ReturnChartModal';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
-import { Card } from '@/components/ui/Card';
+import { useFormatters } from '@/components/ui/useFormatters';
+import { Avatar, Button, CardHeader, Chip, EmptyState, GlassCard, IconButton, IconTile, Kpi, ListRow, Pill, Segmented, TextInput, toneOf } from '@/components/ui/primitives';
+import { Modal } from '@/components/ui/Modal';
+import { quoteTypeLabel } from '@/lib/labels';
+import { summarizeTwrSeries } from '@/lib/analysisService';
 import { type AnalysisCache, type HistoryPoint, type PerformanceRow } from '@/types/portfolioView';
 import { isCacheFor } from '@/lib/state/inputCache';
 
 const EMPTY_HISTORY: HistoryPoint[] = [];
 const EMPTY_METRICS: AnalysisMetrics = { volatility: 0, sharpeRatio: 0, maxDrawdown: 0, maxDrawdownDate: '', availableYears: [], monthlyReturns: [], twrSeries: [] };
 
-const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: { date: string; value: number }[] }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div
-        className="md3-card rounded-[32px] w-full max-w-4xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold md3-text-main flex items-center gap-2">
-            <Activity className="md3-negative" />
-            Drawdown Historie
-          </h3>
-          <button onClick={onClose} className="w-10 h-10 rounded-full md3-list-item flex items-center justify-center transition-all">
-            <X className="md3-text-muted" />
-          </button>
-        </div>
-        <div className="h-80 w-full">
-          <SimpleAreaChart
-            data={data}
-            color="var(--loss)"
-            height={320}
-            showAxes={true}
-            timeRange="MAX"
-            isPercentage={true}
-            tooltipLabel="Abstand zum Hoch"
-          />
-        </div>
-        <p className="md3-text-muted text-sm mt-4 text-center">
-          Der Chart zeigt den prozentualen Rückgang vom jeweils letzten Höchststand (High-Water Mark) des Portfolios.
-        </p>
-      </div>
-    </div>
-  );
-};
+const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: { date: string; value: number }[] }) => (
+  <Modal open={isOpen} onClose={onClose} size="xl" title="Drawdown-Verlauf" subtitle="Rückgang vom jeweils letzten Höchststand des Depots" icon={<TrendingDown size={20} />}>
+    <SimpleAreaChart data={data} color="var(--loss)" height={320} showAxes={true} timeRange="MAX" isPercentage={true} tooltipLabel="Abstand zum Hoch" />
+  </Modal>
+);
 
 const HoldingsGroupModal = ({
   isOpen,
   onClose,
   title,
   holdings,
-  currency,
   groupValue,
   portfolioValue
 }: {
@@ -68,59 +40,43 @@ const HoldingsGroupModal = ({
   onClose: () => void;
   title: string;
   holdings: Holding[];
-  currency: string;
   groupValue: number;
   portfolioValue: number;
 }) => {
-  if (!isOpen) return null;
-
+  const formatters = useFormatters();
   const sortedHoldings = [...holdings].sort((a, b) => b.value - a.value);
   const safeGroupValue = groupValue || sortedHoldings.reduce((sum, h) => sum + h.value, 0);
   const groupShare = portfolioValue > 0 ? (safeGroupValue / portfolioValue) * 100 : 0;
-  const formatCurrency = (value: number) => value.toLocaleString('de-DE', { style: 'currency', currency });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div
-        className="md3-card rounded-[32px] w-full max-w-3xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h3 className="text-xl font-bold md3-text-main">{title}</h3>
-            <p className="text-xs md3-text-muted mt-1">
-              {sortedHoldings.length} Positionen - {groupShare.toFixed(1)}% vom Portfolio
-            </p>
-          </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-full md3-list-item flex items-center justify-center transition-all">
-            <X className="md3-text-muted" />
-          </button>
-        </div>
-
-        <div
-          className="max-h-[60vh] overflow-y-auto divide-y divide-current/10 pr-2 -mr-2 [scrollbar-width:thin]"
-          style={{ scrollbarGutter: 'stable both-edges' }}
-        >
-          {sortedHoldings.map(h => {
-            const percentOfGroup = safeGroupValue > 0 ? (h.value / safeGroupValue) * 100 : 0;
-            return (
-              <div key={`${h.security.isin}-${h.currency}`} className="py-3 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm md3-text-main font-medium truncate">{h.security.name}</p>
-                  <p className="text-xs md3-text-muted truncate">
-                    {h.security.isin}{h.security.quoteType ? ` - ${h.security.quoteType}` : ''}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm md3-text-main">{formatCurrency(h.value)}</p>
-                  <p className="text-xs md3-text-muted">{percentOfGroup.toFixed(1)}% der Gruppe</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      size="lg"
+      title={title}
+      subtitle={`${sortedHoldings.length} Positionen · ${formatters.percent(groupShare, { decimals: 1 })} vom Depot`}
+      icon={<PieChart size={20} />}
+    >
+      <div className="ui-rows ui-scroll" style={{ maxHeight: '60vh' }}>
+        {sortedHoldings.map((h) => {
+          const percentOfGroup = safeGroupValue > 0 ? (h.value / safeGroupValue) * 100 : 0;
+          return (
+            <ListRow
+              key={`${h.security.isin}-${h.currency}`}
+              leading={<Avatar seed={h.security.isin} label={h.security.name} size={38} />}
+              title={h.security.name}
+              meta={<span>{quoteTypeLabel(h.security.quoteType)} · {h.security.isin}</span>}
+              trailing={(
+                <>
+                  <span className="ui-row-value">{formatters.money(h.value)}</span>
+                  <span className="ui-row-sub">{formatters.percent(percentOfGroup, { decimals: 1 })} der Gruppe</span>
+                </>
+              )}
+            />
+          );
+        })}
       </div>
-    </div>
+    </Modal>
   );
 };
 
@@ -140,47 +96,30 @@ const RiskMetricModal = ({
   color: string;
   isPercentage: boolean;
   tooltipLabel: string;
-}) => {
-  if (!isOpen) return null;
+}) => (
+  <Modal open={isOpen} onClose={onClose} size="xl" title={title} subtitle="Rollierend über 12 Monate" icon={<Activity size={20} />}>
+    {series.length > 0 ? (
+      <SimpleAreaChart data={series} color={color} height={320} showAxes={true} timeRange="MAX" currency={isPercentage ? 'EUR' : ''} isPercentage={isPercentage} tooltipLabel={tooltipLabel} />
+    ) : (
+      <EmptyState title="Keine Daten" text="Für diesen Zeitraum liegen noch keine Werte vor." />
+    )}
+  </Modal>
+);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div
-        className="md3-card rounded-[32px] w-full max-w-4xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold md3-text-main flex items-center gap-2">
-            <Activity className="md3-accent" />
-            {title}
-          </h3>
-          <button onClick={onClose} className="w-10 h-10 rounded-full md3-list-item flex items-center justify-center transition-all">
-            <X className="md3-text-muted" />
-          </button>
-        </div>
-
-        <div className="h-80 w-full">
-          {series.length > 0 ? (
-            <SimpleAreaChart
-              data={series}
-              color={color}
-              height={320}
-              showAxes={true}
-              timeRange="MAX"
-              currency={isPercentage ? 'EUR' : ''}
-              isPercentage={isPercentage}
-              tooltipLabel={tooltipLabel}
-            />
-          ) : (
-            <div className="h-full flex items-center justify-center md3-text-muted">
-              Keine Daten für diesen Zeitraum verfügbar.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+/** Clickable allocation rows with a share bar (regions, sectors, industries). */
+const AllocationList = ({ items, onSelect }: { items: { name: string; value: number }[]; onSelect: (item: { name: string; value: number }) => void }) => (
+  <div className="ui-alloc">
+    {items.map((item) => (
+      <button key={item.name} type="button" className="ui-alloc-row" onClick={() => onSelect(item)}>
+        <span className="ui-alloc-head">
+          <span className="ui-alloc-name">{item.name}</span>
+          <span className="ui-alloc-value">{item.value} %<ChevronRight size={14} /></span>
+        </span>
+        <span className="ui-alloc-track"><span style={{ width: `${Math.min(100, item.value)}%` }} /></span>
+      </button>
+    ))}
+  </div>
+);
 
 const sliceHistoryByRange = (
   history: HistoryPoint[],
@@ -235,6 +174,7 @@ export const AnalysisContent = ({
   onToggleDividends: () => void
 }) => {
   const project = useProjectData();
+  const formatters = useFormatters();
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
   const performanceMethod = project?.settings?.performanceMethod || 'MWR';
   const performanceSmoothing = project?.settings?.performanceSmoothing || '1d';
@@ -1026,544 +966,269 @@ export const AnalysisContent = ({
     }
   };
 
-  return (
-    <div className="analysis-md3 space-y-6">
+  const RANGE_OPTIONS = (['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map((value) => ({ value, label: value }));
+  const twrSummary = summarizeTwrSeries(analysisMetrics.twrSeries || []);
+  const chartTooltipStyle = { background: 'color-mix(in oklch, var(--surface) 94%, transparent)', border: '1px solid var(--stroke)', borderRadius: 12, fontSize: 12 };
+  const returnTile = (key: string, label: string, value: number | null | undefined, onClick?: () => void) => {
+    const hasData = Number.isFinite(value);
+    return (
+      <button
+        key={key}
+        type="button"
+        className={`ui-return-tile is-${hasData ? toneOf(value as number) : 'empty'}`}
+        onClick={hasData ? onClick : undefined}
+        disabled={!hasData}
+      >
+        <span className="ui-return-label">{label}</span>
+        <span className="ui-return-value">{hasData ? formatters.percent(value as number, { sign: true, decimals: 1 }) : '–'}</span>
+      </button>
+    );
+  };
+  const risks = [
+    { type: 'Sektor', data: sectorData[0] },
+    { type: 'Region', data: regionData[0] },
+    { type: 'Branche', data: industryData[0] }
+  ]
+    .filter((item) => item.data && item.data.value > 30)
+    .sort((a, b) => b.data.value - a.data.value);
 
-      {/* Loading State */}
-      {isCalculating && (
-        <div className="flex flex-col items-center justify-center py-20 space-y-4 animate-pulse">
-          <Loader2 className="w-12 h-12 md3-accent animate-spin" />
-          <p className="md3-text-muted text-sm">Analysedaten werden berechnet...</p>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full mt-8">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="md3-list-item rounded-xl p-4 h-24 animate-pulse" />
-            ))}
-          </div>
+  if (isCalculating) {
+    return (
+      <>
+        <div className="ui-kpis">
+          {[1, 2, 3, 4].map((i) => <div key={i} className="ui-kpi glass ui-skeleton" />)}
         </div>
-      )}
+        <GlassCard>
+          <EmptyState icon={<Loader2 size={22} className="animate-spin" />} title="Analyse wird berechnet" text="Die Kennzahlen werden aus der gesamten Historie berechnet." />
+        </GlassCard>
+      </>
+    );
+  }
 
-      {!isCalculating && (
-        <>
-          <DrawdownModal
-            isOpen={showDrawdown}
-            onClose={() => setShowDrawdown(false)}
-            data={analysisMetrics.drawdownHistory || []}
-          />
-          <RiskMetricModal
-            isOpen={!!riskModal}
-            onClose={() => setRiskModal(null)}
-            title={riskModal?.title || ''}
-            series={riskModal?.series || []}
-            color={riskModal?.color || 'var(--gain)'}
-            isPercentage={riskModal?.isPercentage ?? true}
-            tooltipLabel={riskModal?.tooltipLabel || ''}
-          />
+  return (
+    <>
+      <DrawdownModal isOpen={showDrawdown} onClose={() => setShowDrawdown(false)} data={analysisMetrics.drawdownHistory || []} />
+      <RiskMetricModal
+        isOpen={!!riskModal}
+        onClose={() => setRiskModal(null)}
+        title={riskModal?.title || ''}
+        series={riskModal?.series || []}
+        color={riskModal?.color || 'var(--gain)'}
+        isPercentage={riskModal?.isPercentage ?? true}
+        tooltipLabel={riskModal?.tooltipLabel || ''}
+      />
 
-          {/* Risk Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div
-              onClick={() => setRiskModal({
-                title: 'Volatilität (1J)',
-                series: riskSeries.volatility,
-                color: 'var(--c4)',
-                isPercentage: true,
-                tooltipLabel: 'Volatilität (annualisiert)'
-              })}
-              className="cursor-pointer transition-colors group relative rounded-xl"
-            >
-              <Card className="md3-list-item flex flex-col items-center justify-center p-4 transition-colors">
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <BarChart3 size={14} className="md3-text-muted" />
-                </div>
-                <p className="text-xs md3-text-muted uppercase tracking-wider mb-1">Volatilität (1J)</p>
-                <span className="text-xl font-bold md3-text-main">{currentVolatility.toFixed(1)}%</span>
-                <span className={`text-xs mt-1 ${volLabel.color}`}>{volLabel.text}</span>
-              </Card>
-            </div>
-            <div
-              onClick={() => setRiskModal({
-                title: 'Sharpe Ratio (1J)',
-                series: riskSeries.sharpe,
-                color: 'var(--gain)',
-                isPercentage: false,
-                tooltipLabel: 'Sharpe Ratio'
-              })}
-              className="cursor-pointer transition-colors group relative rounded-xl"
-            >
-              <Card className="md3-list-item flex flex-col items-center justify-center p-4 transition-colors">
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <BarChart3 size={14} className="md3-text-muted" />
-                </div>
-                <p className="text-xs md3-text-muted uppercase tracking-wider mb-1">Sharpe Ratio (1J)</p>
-                <span className="text-xl font-bold md3-text-main">{currentSharpe.toFixed(2)}</span>
-                <span className={`text-xs mt-1 ${sharpeLabel.color}`}>{sharpeLabel.text}</span>
-              </Card>
-            </div>
-            <div
-              onClick={() => setShowDrawdown(true)}
-              className="cursor-pointer transition-colors group relative rounded-xl"
-            >
-              <Card className="md3-list-item flex flex-col items-center justify-center p-4 transition-colors">
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <BarChart3 size={14} className="md3-text-muted" />
-                </div>
-                <p className="text-xs md3-text-muted uppercase tracking-wider mb-1">Max Drawdown</p>
-                <span className="text-xl font-bold md3-negative">{analysisMetrics.maxDrawdown.toFixed(1)}%</span>
-                <span className="text-xs md3-text-muted mt-1">
-                  {analysisMetrics.maxDrawdownDate ? parseDateOnlyUTC(analysisMetrics.maxDrawdownDate).toLocaleDateString('de-DE', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'N/A'}
-                </span>
-              </Card>
-            </div>
-            <Card className="md3-list-item flex flex-col items-center justify-center p-4">
-              <p className="text-xs md3-text-muted uppercase tracking-wider mb-1">Dividendenrendite</p>
-              <span className="text-xl font-bold md3-text-main">1.92%</span>
-              <span className="text-xs md3-text-muted mt-1">Ø 245€ / Monat</span>
-            </Card>
+      <div className="ui-kpis">
+        <button
+          type="button"
+          className="ui-kpi-button"
+          onClick={() => setRiskModal({ title: 'Volatilität (1 Jahr)', series: riskSeries.volatility, color: 'var(--c4)', isPercentage: true, tooltipLabel: 'Volatilität (annualisiert)' })}
+        >
+          <Kpi label="Volatilität (1 J.)" value={formatters.percent(currentVolatility, { decimals: 1 })} sub={volLabel.text} icon={<Activity size={16} />} tone="amber" />
+        </button>
+        <button
+          type="button"
+          className="ui-kpi-button"
+          onClick={() => setRiskModal({ title: 'Sharpe Ratio (1 Jahr)', series: riskSeries.sharpe, color: 'var(--gain)', isPercentage: false, tooltipLabel: 'Sharpe Ratio' })}
+        >
+          <Kpi label="Sharpe Ratio (1 J.)" value={formatters.number(currentSharpe, 2)} sub={sharpeLabel.text} icon={<Gauge size={16} />} tone="teal" />
+        </button>
+        <button type="button" className="ui-kpi-button" onClick={() => setShowDrawdown(true)}>
+          <Kpi
+            label="Max. Drawdown"
+            value={formatters.percent(analysisMetrics.maxDrawdown, { decimals: 1 })}
+            valueTone={analysisMetrics.maxDrawdown < 0 ? 'down' : undefined}
+            sub={analysisMetrics.maxDrawdownDate ? parseDateOnlyUTC(analysisMetrics.maxDrawdownDate).toLocaleDateString('de-DE', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'Kein Rückgang'}
+            icon={<TrendingDown size={16} />}
+            tone="accent"
+          />
+        </button>
+        <Kpi
+          label="Rendite gesamt (TWR)"
+          value={twrSummary ? formatters.percent(twrSummary.total, { sign: true, decimals: 1 }) : '–'}
+          valueTone={twrSummary ? toneOf(twrSummary.total) : undefined}
+          sub={twrSummary
+            ? `${twrSummary.annualized !== null ? `${formatters.percent(twrSummary.annualized, { sign: true, decimals: 1 })} p. a. · ` : ''}seit ${parseDateOnlyUTC(twrSummary.since).toLocaleDateString('de-DE', { month: 'short', year: 'numeric', timeZone: 'UTC' })}`
+            : 'Noch keine Historie'}
+          icon={<TrendingUp size={16} />}
+          tone="gain"
+        />
+      </div>
+
+      <GlassCard>
+        <CardHeader title="Performancevergleich">
+          <div className="ui-head-actions">
+            <Segmented options={RANGE_OPTIONS} value={performanceRange} onChange={setPerformanceRange} ariaLabel="Zeitraum" size="sm" />
+            <Chip active={includeDividends} onClick={onToggleDividends}>{includeDividends && <Check size={12} />} Dividenden</Chip>
           </div>
+        </CardHeader>
 
-          {/* Performance Comparison */}
-          <Card>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <Activity size={18} className="md3-accent" />
-                <h3 className="font-semibold md3-text-main">Performancevergleich</h3>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="md3-segment flex p-1 rounded-lg">
-                  {(['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map(range => (
-                    <button
-                      key={range}
-                      onClick={() => setPerformanceRange(range)}
-                      className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${performanceRange === range ? 'md3-chip-tonal' : 'md3-text-muted hover:opacity-90'}`}
-                    >
-                      {range}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={onToggleDividends}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-all flex items-center gap-1 ${includeDividends
-                    ? 'md3-chip-accent'
-                    : 'md3-segment md3-text-muted hover:opacity-90'
-                    }`}
-                >
-                  {includeDividends && <Check size={12} />}
-                  Dividenden
-                </button>
-              </div>
-            </div>
+        <form className="ui-inline-form" onSubmit={(e) => { e.preventDefault(); handleAddBenchmark(); }}>
+          <TextInput value={benchmarkInput} onChange={(e) => setBenchmarkInput(e.target.value)} placeholder="Benchmark hinzufügen, z. B. SPY oder ^GDAXI" aria-label="Benchmark-Symbol" />
+          <Button type="submit" disabled={isBenchmarkLoading || !benchmarkInput.trim()} icon={isBenchmarkLoading ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}>
+            Hinzufügen
+          </Button>
+        </form>
+        {benchmarkError && <p className="ui-field-hint ui-error" style={{ marginTop: 8 }}>{benchmarkError}</p>}
+        {isBenchmarkCurrencyLoading && <p className="ui-field-hint" style={{ marginTop: 8 }}>Wechselkurse der Benchmarks werden geladen …</p>}
 
-            <div className="mt-4 flex flex-col sm:flex-row gap-2">
-              <input
-                value={benchmarkInput}
-                onChange={(e) => setBenchmarkInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAddBenchmark(); }}
-                placeholder="Benchmark Symbol (z.B. SPY, ^GDAXI)"
-                className="md3-field flex-1 rounded-lg px-3 py-2 text-sm md3-text-main focus:outline-none"
-              />
-              <button
-                onClick={handleAddBenchmark}
-                disabled={isBenchmarkLoading || !benchmarkInput.trim()}
-                className={`px-3 py-2 text-sm rounded-lg font-medium transition-all ${isBenchmarkLoading || !benchmarkInput.trim() ? 'md3-segment md3-text-muted cursor-not-allowed' : 'md3-filled-btn'}`}
-              >
-                {isBenchmarkLoading ? 'Lädt...' : 'Hinzufügen'}
+        <div className="ui-chips">
+          <Pill tone="accent">Depot</Pill>
+          {benchmarkList.map((b) => (
+            <span key={b.symbol} className="ui-pill is-neutral">
+              {b.name || b.symbol}
+              <button type="button" className="ui-pill-remove" onClick={() => removeBenchmark(b.symbol)} aria-label={`Benchmark ${b.symbol} entfernen`}>
+                <X size={12} />
               </button>
-            </div>
+            </span>
+          ))}
+        </div>
 
-            {benchmarkError && (
-              <p className="text-xs md3-negative mt-2">{benchmarkError}</p>
-            )}
-            {isBenchmarkCurrencyLoading && (
-              <p className="text-xs md3-text-muted mt-2">Benchmark-Währungen werden aktualisiert...</p>
-            )}
+        <div className="ui-chart" style={{ height: 320, marginTop: 12 }}>
+          {performanceComparisonData.length > 1 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={performanceComparisonData} margin={{ top: 10, right: 8, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="portfolioSplitStroke" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset={portfolioGradientOffset} stopColor="var(--gain)" stopOpacity={1} />
+                    <stop offset={portfolioGradientOffset} stopColor="var(--loss)" stopOpacity={1} />
+                  </linearGradient>
+                  <linearGradient id="portfolioSplitFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset={portfolioGradientOffset} stopColor="var(--gain)" stopOpacity={0.22} />
+                    <stop offset={portfolioGradientOffset} stopColor="var(--loss)" stopOpacity={0.22} />
+                  </linearGradient>
+                </defs>
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={(dateStr: string) => {
+                    const d = parseDateOnlyUTC(dateStr);
+                    if (['3J', '5J', 'MAX'].includes(performanceRange)) return d.getUTCFullYear().toString();
+                    return `${d.getUTCDate()}.${d.getUTCMonth() + 1}.`;
+                  }}
+                  tick={{ fontSize: 11, fill: 'var(--text3)' }}
+                  minTickGap={80}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tickFormatter={(val: number) => formatters.percent(val, { decimals: 0 })}
+                  tick={{ fontSize: 11, fill: 'var(--text3)' }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={52}
+                />
+                <Tooltip
+                  contentStyle={chartTooltipStyle}
+                  labelStyle={{ color: 'var(--text3)' }}
+                  itemStyle={{ color: 'var(--text)' }}
+                  formatter={(value: number | string | undefined, name: string | undefined) => [formatters.percent(Number(value ?? 0), { sign: true }), name ?? 'Wert']}
+                  labelFormatter={(label: React.ReactNode) => {
+                    if (typeof label !== 'string' && typeof label !== 'number') return '';
+                    return parseDateOnlyUTC(String(label)).toLocaleDateString('de-DE', { timeZone: 'UTC' });
+                  }}
+                />
+                {benchmarkSeries.length > 0 && (
+                  <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ color: 'var(--text2)', paddingTop: 8, fontSize: 12 }} />
+                )}
+                <Area type="monotone" dataKey="portfolio" name="Depot" stroke="url(#portfolioSplitStroke)" strokeWidth={2.2} fill="url(#portfolioSplitFill)" dot={false} />
+                {benchmarkSeries.map((b) => (
+                  <Line key={b.key} type="monotone" dataKey={b.key} name={b.name} stroke={b.color} strokeWidth={1.8} dot={false} />
+                ))}
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState title="Keine Daten" text="Für den gewählten Zeitraum gibt es keine Performance-Daten." />
+          )}
+        </div>
+      </GlassCard>
 
-            <div className="flex flex-wrap gap-2 mt-3">
-              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full md3-chip-accent text-xs">
-                Portfolio
-              </span>
-              {benchmarkList.map(b => (
-                <span key={b.symbol} className="inline-flex items-center gap-2 px-2 py-1 rounded-full md3-chip-tonal text-xs">
-                  {b.name || b.symbol}
-                  <button
-                    onClick={() => removeBenchmark(b.symbol)}
-                    className="md3-text-muted hover:opacity-90"
-                    aria-label={`Benchmark ${b.symbol} entfernen`}
-                  >
-                    <X size={12} />
-                  </button>
+      <div className="ui-analysis-grid">
+        <GlassCard>
+          <CardHeader title={returnViewMode === 'yearly' ? 'Rendite je Jahr' : `Rendite ${selectedYear}`}>
+            <div className="ui-head-actions">
+              <Segmented
+                options={[{ value: 'monthly', label: 'Monat' }, { value: 'quarterly', label: 'Quartal' }, { value: 'yearly', label: 'Jahr' }]}
+                value={returnViewMode}
+                onChange={setReturnViewMode}
+                ariaLabel="Zeitraster"
+                size="sm"
+              />
+              {returnViewMode !== 'yearly' && (
+                <span className="ui-row-actions">
+                  <IconButton label="Vorheriges Jahr" onClick={() => navigateYear('prev')} disabled={!hasPrevYear}><ChevronLeft size={18} /></IconButton>
+                  <IconButton label="Nächstes Jahr" onClick={() => navigateYear('next')} disabled={!hasNextYear}><ChevronRight size={18} /></IconButton>
                 </span>
-              ))}
-            </div>
-
-            <div className="h-80 mt-4">
-              {performanceComparisonData.length > 1 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={performanceComparisonData} margin={{ top: 10, right: 20, bottom: 0, left: 0 }}>
-                    <defs>
-                      <linearGradient id="portfolioSplitStroke" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset={portfolioGradientOffset} stopColor="var(--gain)" stopOpacity={1} />
-                        <stop offset={portfolioGradientOffset} stopColor="var(--loss)" stopOpacity={1} />
-                      </linearGradient>
-                      <linearGradient id="portfolioSplitFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset={portfolioGradientOffset} stopColor="var(--gain)" stopOpacity={0.25} />
-                        <stop offset={portfolioGradientOffset} stopColor="var(--loss)" stopOpacity={0.25} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis
-                      dataKey="date"
-                      tickFormatter={(dateStr: string) => {
-                        const d = parseDateOnlyUTC(dateStr);
-                        if (['3J', '5J', 'MAX'].includes(performanceRange)) return d.getUTCFullYear().toString();
-                        return `${d.getUTCDate()}.${d.getUTCMonth() + 1}.`;
-                      }}
-                      tick={{ fontSize: 11, fill: 'var(--md3-on-surface-variant)' }}
-                      minTickGap={80}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tickFormatter={(val: number) => `${val.toFixed(1)}%`}
-                      tick={{ fontSize: 11, fill: 'var(--md3-on-surface-variant)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={60}
-                    />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: 'var(--md3-surface-container-high)', border: 'none', fontSize: '12px', borderRadius: '12px' }}
-                      labelStyle={{ color: 'var(--md3-on-surface-variant)' }}
-                      formatter={(value: number | string | undefined, name: string | undefined) => [`${Number(value ?? 0).toFixed(2)}%`, name ?? 'Wert']}
-                      labelFormatter={(label: React.ReactNode) => {
-                        if (typeof label !== 'string' && typeof label !== 'number') return '';
-                        return parseDateOnlyUTC(String(label)).toLocaleDateString('de-DE', { timeZone: 'UTC' });
-                      }}
-                    />
-                    <Legend
-                      verticalAlign="bottom"
-                      align="center"
-                      iconType="circle"
-                      wrapperStyle={{ color: 'var(--md3-on-surface-variant)', paddingTop: 8 }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="portfolio"
-                      name="Portfolio"
-                      stroke="url(#portfolioSplitStroke)"
-                      strokeWidth={2.2}
-                      fill="url(#portfolioSplitFill)"
-                      dot={false}
-                    />
-                    {benchmarkSeries.map(b => (
-                      <Line
-                        key={b.key}
-                        type="monotone"
-                        dataKey={b.key}
-                        name={b.name}
-                        stroke={b.color}
-                        strokeWidth={1.8}
-                        dot={false}
-                      />
-                    ))}
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center md3-text-muted text-sm">
-                  Keine Performance-Daten für den ausgewählten Zeitraum.
-                </div>
               )}
             </div>
-          </Card>
+          </CardHeader>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Return Heatmap / Grid */}
-            <Card className="lg:col-span-2">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-                <div className="flex items-center gap-4">
-                  <h3 className="font-semibold md3-text-main flex items-center gap-2">
-                    <Activity size={18} className="md3-accent" />
-                    Rendite
-                    {returnViewMode !== 'yearly' && <span className="md3-text-muted font-normal">({selectedYear})</span>}
-                  </h3>
-
-                  {/* View Toggle */}
-                  <div className="md3-segment flex p-1 rounded-lg">
-                    {(['monthly', 'quarterly', 'yearly'] as const).map(mode => (
-                      <button
-                        key={mode}
-                        onClick={() => setReturnViewMode(mode)}
-                        className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${returnViewMode === mode ? 'md3-chip-tonal' : 'md3-text-muted hover:opacity-90'}`}
-                      >
-                        {mode === 'monthly' ? 'Monat' : mode === 'quarterly' ? 'Quartal' : 'Jahr'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Year Navigation (Only for Monthly/Quarterly) */}
-                {returnViewMode !== 'yearly' && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => navigateYear('prev')}
-                      disabled={!hasPrevYear}
-                      className={`p-1.5 rounded-full transition-colors ${!hasPrevYear ? 'md3-text-muted opacity-40 cursor-not-allowed' : 'md3-list-item md3-text-muted'}`}
-                    >
-                      <ChevronLeft size={20} />
-                    </button>
-                    <button
-                      onClick={() => navigateYear('next')}
-                      disabled={!hasNextYear}
-                      className={`p-1.5 rounded-full transition-colors ${!hasNextYear ? 'md3-text-muted opacity-40 cursor-not-allowed' : 'md3-list-item md3-text-muted'}`}
-                    >
-                      <ChevronRight size={20} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className={`grid gap-3 ${returnViewMode === 'monthly' ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6' : returnViewMode === 'quarterly' ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'}`}>
-                {returnViewMode === 'monthly' && displayedMonthlyReturns.map((m: { month: string; return: number | null; hasData: boolean }, index: number) => {
-                  // Calculate mock dates for click
-                  const monthIndex = index + 1;
-                  const startDate = `${selectedYear}-${String(monthIndex).padStart(2, '0')}-01`;
-                  const endDate = toDateKeyUTC(new Date(Date.UTC(selectedYear, monthIndex, 0)));
-                  const hasData = m.hasData && Number.isFinite(m.return);
-
-                  return (
-                    <div
-                      key={m.month}
-                      onClick={() => hasData && handleTileClick(startDate, endDate, `${m.month} ${selectedYear}`)}
-                      className={`md3-list-item rounded-lg p-3 flex flex-col items-center justify-center transition group relative ${hasData ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
-                    >
-                      <span className="text-xs md3-text-muted mb-1">{m.month}</span>
-                      <span className={`font-bold ${hasData ? ((m.return as number) >= 0 ? 'md3-positive' : 'md3-negative') : 'md3-text-muted'}`}>
-                        {hasData ? `${(m.return as number) > 0 ? '+' : ''}${m.return}%` : '—'}
-                      </span>
-                    </div>
-                  );
-                })}
-
-                {returnViewMode === 'quarterly' && aggregatedReturns.quarterly.map((q) => {
-                  const hasData = Number.isFinite(q.return);
-                  return (
-                    <div
-                      key={q.label}
-                      onClick={() => hasData && handleTileClick(q.startDate, q.endDate, `${q.label} ${selectedYear}`)}
-                      className={`md3-list-item rounded-lg p-4 flex flex-col items-center justify-center transition group relative ${hasData ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
-                    >
-                      <span className="text-xs md3-text-muted mb-1 uppercase tracking-wider">{q.label}</span>
-                      <span className={`text-lg font-bold ${hasData ? ((q.return as number) >= 0 ? 'md3-positive' : 'md3-negative') : 'md3-text-muted'}`}>
-                        {hasData ? `${(q.return as number) > 0 ? '+' : ''}${q.return}%` : '—'}
-                      </span>
-                    </div>
-                  );
-                })}
-
-                {returnViewMode === 'yearly' && aggregatedReturns.yearly.map((y) => {
-                  const hasData = Number.isFinite(y.return);
-                  return (
-                    <div
-                      key={y.year}
-                      onClick={() => hasData && handleTileClick(y.startDate, y.endDate, `Jahr ${y.year}`)}
-                      className={`md3-list-item rounded-lg p-4 flex flex-col items-center justify-center transition group relative ${hasData ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
-                    >
-                      <span className="text-xs md3-text-muted mb-1">{y.year}</span>
-                      <span className={`text-lg font-bold ${hasData ? ((y.return as number) >= 0 ? 'md3-positive' : 'md3-negative') : 'md3-text-muted'}`}>
-                        {hasData ? `${(y.return as number) > 0 ? '+' : ''}${y.return}%` : '—'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-
-            <ReturnChartModal
-              isOpen={!!selectedTileData}
-              onClose={() => setSelectedTileData(null)}
-              series={selectedTileData?.series || []}
-              title={selectedTileData?.title || ''}
-              currency={project?.settings.baseCurrency || 'EUR'}
-              timeRange={selectedTileData?.timeRange}
-            />
-
-            <HoldingsGroupModal
-              isOpen={!!groupOverlay}
-              onClose={() => setGroupOverlay(null)}
-              title={groupOverlay?.title || ''}
-              holdings={groupOverlay?.holdings || []}
-              currency={project?.settings.baseCurrency || 'EUR'}
-              groupValue={groupOverlay?.groupValue || 0}
-              portfolioValue={portfolioTotalValue}
-            />
-
-            {/* Region Allocation */}
-            <Card>
-              <h3 className="font-semibold md3-text-main flex items-center gap-2 mb-6">
-                <Globe size={18} className="md3-accent" />
-                Regionen
-              </h3>
-              <div className="space-y-4">
-                {regionData.map((region) => (
-                  <button
-                    key={region.name}
-                    type="button"
-                    onClick={() => openGroupOverlay(`Region: ${region.name}`, region)}
-                    className="w-full text-left group -mx-2 px-2 py-2 rounded-lg transition-all md3-list-item focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md3-primary)]/40 cursor-pointer"
-                  >
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="md3-text-main transition-colors flex items-center gap-2">
-                        {region.name}
-                        <span className="text-[10px] uppercase tracking-wider md3-text-muted transition-colors">Details</span>
-                      </span>
-                      <span className="md3-text-muted flex items-center gap-1">
-                        {region.value}%
-                        <ChevronRight className="w-3 h-3 md3-text-muted opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5" />
-                      </span>
-                    </div>
-                    <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--md3-surface-container-highest)' }}>
-                      <div
-                        className="h-2 rounded-full transition-all group-hover:brightness-110"
-                        style={{ width: `${region.value}%`, backgroundColor: 'var(--md3-primary)' }}
-                      ></div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </Card>
+          <div className={`ui-return-grid is-${returnViewMode}`}>
+            {returnViewMode === 'monthly' && displayedMonthlyReturns.map((m: { month: string; return: number | null; hasData: boolean }, index: number) => {
+              const monthIndex = index + 1;
+              const startDate = `${selectedYear}-${String(monthIndex).padStart(2, '0')}-01`;
+              const endDate = toDateKeyUTC(new Date(Date.UTC(selectedYear, monthIndex, 0)));
+              return returnTile(m.month, m.month, m.hasData ? m.return : null, () => handleTileClick(startDate, endDate, `${m.month} ${selectedYear}`));
+            })}
+            {returnViewMode === 'quarterly' && aggregatedReturns.quarterly.map((q) => (
+              returnTile(q.label, q.label, q.return, () => handleTileClick(q.startDate, q.endDate, `${q.label} ${selectedYear}`))
+            ))}
+            {returnViewMode === 'yearly' && aggregatedReturns.yearly.map((y) => (
+              returnTile(String(y.year), String(y.year), y.return, () => handleTileClick(y.startDate, y.endDate, `Jahr ${y.year}`))
+            ))}
           </div>
+        </GlassCard>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Industry Allocation */}
-            <Card>
-              <h3 className="font-semibold md3-text-main flex items-center gap-2 mb-6">
-                <Banknote size={18} className="md3-accent" />
-                Branchen
-              </h3>
-              <div className="space-y-4">
-                {industryData.map((industry) => (
-                  <button
-                    key={industry.name}
-                    type="button"
-                    onClick={() => openGroupOverlay(`Branche: ${industry.name}`, industry)}
-                    className="w-full text-left group -mx-2 px-2 py-2 rounded-lg transition-all md3-list-item focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md3-primary)]/40 cursor-pointer"
-                  >
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="md3-text-main transition-colors flex items-center gap-2">
-                        {industry.name}
-                        <span className="text-[10px] uppercase tracking-wider md3-text-muted transition-colors">Details</span>
-                      </span>
-                      <span className="md3-text-muted flex items-center gap-1">
-                        {industry.value}%
-                        <ChevronRight className="w-3 h-3 md3-text-muted opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5" />
-                      </span>
-                    </div>
-                    <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--md3-surface-container-highest)' }}>
-                      <div
-                        className="h-2 rounded-full transition-all group-hover:brightness-110"
-                        style={{ width: `${industry.value}%`, backgroundColor: 'var(--md3-primary)' }}
-                      ></div>
-                    </div>
-                  </button>
+        <GlassCard>
+          <CardHeader title="Regionen" />
+          <AllocationList items={regionData} onSelect={(region) => openGroupOverlay(`Region: ${region.name}`, region as typeof regionData[number])} />
+        </GlassCard>
+      </div>
+
+      <ReturnChartModal
+        isOpen={!!selectedTileData}
+        onClose={() => setSelectedTileData(null)}
+        series={selectedTileData?.series || []}
+        title={selectedTileData?.title || ''}
+        currency={project?.settings.baseCurrency || 'EUR'}
+        timeRange={selectedTileData?.timeRange}
+      />
+      <HoldingsGroupModal
+        isOpen={!!groupOverlay}
+        onClose={() => setGroupOverlay(null)}
+        title={groupOverlay?.title || ''}
+        holdings={groupOverlay?.holdings || []}
+        groupValue={groupOverlay?.groupValue || 0}
+        portfolioValue={portfolioTotalValue}
+      />
+
+      <div className="ui-analysis-grid is-thirds">
+        <GlassCard>
+          <CardHeader title="Branchen" />
+          <AllocationList items={industryData} onSelect={(industry) => openGroupOverlay(`Branche: ${industry.name}`, industry as typeof industryData[number])} />
+        </GlassCard>
+        <GlassCard>
+          <CardHeader title="Sektoren" />
+          <AllocationList items={sectorData} onSelect={(sector) => openGroupOverlay(`Sektor: ${sector.name}`, sector as typeof sectorData[number])} />
+        </GlassCard>
+        <GlassCard>
+          {risks.length > 0 ? (
+            <>
+              <CardHeader title="Klumpenrisiken"><IconTile tone="amber" size={36}><AlertCircle size={18} /></IconTile></CardHeader>
+              <div className="ui-rows">
+                {risks.map((risk) => (
+                  <ListRow key={risk.type} title={risk.data.name} meta={<span>{risk.type}</span>} trailing={<Pill tone="down">{risk.data.value} %</Pill>} />
                 ))}
               </div>
-            </Card>
-            {/* Sector Allocation */}
-            <Card>
-              <h3 className="font-semibold md3-text-main flex items-center gap-2 mb-6">
-                <BarChart3 size={18} className="md3-accent" />
-                Sektoren
-              </h3>
-              <div className="space-y-4">
-                {sectorData.map((sector) => (
-                  <button
-                    key={sector.name}
-                    type="button"
-                    onClick={() => openGroupOverlay(`Sektor: ${sector.name}`, sector)}
-                    className="w-full text-left group -mx-2 px-2 py-2 rounded-lg transition-all md3-list-item focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md3-primary)]/40 cursor-pointer"
-                  >
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="md3-text-main transition-colors flex items-center gap-2">
-                        {sector.name}
-                        <span className="text-[10px] uppercase tracking-wider md3-text-muted transition-colors">Details</span>
-                      </span>
-                      <span className="md3-text-muted flex items-center gap-1">
-                        {sector.value}%
-                        <ChevronRight className="w-3 h-3 md3-text-muted opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5" />
-                      </span>
-                    </div>
-                    <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--md3-surface-container-highest)' }}>
-                      <div
-                        className="h-2 rounded-full transition-all group-hover:brightness-110"
-                        style={{ width: `${sector.value}%`, backgroundColor: 'var(--md3-primary)' }}
-                      ></div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </Card>
-
-            {/* Diversification Score / Alert */}
-            {/* Diversification Score / Alert */}
-            <Card className="flex flex-col justify-center">
-              {(() => {
-                const risks = [
-                  { type: 'Sektor', data: sectorData[0] },
-                  { type: 'Region', data: regionData[0] },
-                  { type: 'Branche', data: industryData[0] }
-                ]
-                  .filter(item => item.data && item.data.value > 30)
-                  .sort((a, b) => b.data.value - a.data.value);
-
-                if (risks.length > 0) {
-                  return (
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 md3-warning-soft rounded-xl max-h-min">
-                        <AlertCircle size={32} className="md3-warning" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="text-lg font-bold md3-text-main mb-2">Klumpenrisiken erkannt</h4>
-                        <div className="space-y-3">
-                          {risks.map((risk, index) => (
-                            <div key={index} className="md3-list-item p-3 rounded-lg">
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs md3-text-muted uppercase tracking-wider font-semibold">{risk.type}</span>
-                                <span className="text-xs font-bold md3-negative">{risk.data.value}%</span>
-                              </div>
-                              <div className="md3-text-main font-medium">{risk.data.name}</div>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="md3-text-muted text-sm mt-3 leading-relaxed">
-                          Eine höhere Diversifikation in diesen Bereichen könnte die Volatilität senken.
-                        </p>
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 md3-positive-soft rounded-xl">
-                      <Check size={32} className="md3-positive" />
-                    </div>
-                    <div>
-                      <h4 className="text-lg font-bold md3-text-main">Gut diversifiziert</h4>
-                      <p className="md3-text-muted text-sm mt-1 leading-relaxed">
-                        Kein Bereich (Sektor, Region, Branche) dominiert das Portfolio übermäßig (über 30%).
-                      </p>
-                    </div>
-                  </div>
-                );
-              })()}
-            </Card>
-          </div>
-        </>
-      )}
-    </div>
+              <p className="ui-text" style={{ marginTop: 10, marginBottom: 0 }}>Mehr Streuung in diesen Bereichen könnte die Schwankungen senken.</p>
+            </>
+          ) : (
+            <>
+              <CardHeader title="Gut gestreut"><IconTile tone="gain" size={36}><Check size={18} /></IconTile></CardHeader>
+              <p className="ui-text" style={{ marginBottom: 0 }}>Kein Sektor, keine Region und keine Branche macht mehr als 30 % des Depots aus.</p>
+            </>
+          )}
+        </GlassCard>
+      </div>
+    </>
   );
 };
-
-
-
-
-
-
-
