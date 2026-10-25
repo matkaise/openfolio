@@ -7,7 +7,7 @@ import { buildMwrSeries, normalizeInvestedForExplicitCash, smoothPerformanceSeri
 import { selectCalculationTransactions, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency as convertFxCurrency } from '@/lib/fxUtils';
 import { parseDateOnlyUTC, toDateKeyUTC } from '@/lib/dateUtils';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProjectData } from '@/contexts/ProjectContext';
 import { ReturnChartModal } from '@/components/ReturnChartModal';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { Card } from '@/components/ui/Card';
@@ -230,7 +230,7 @@ export const AnalysisContent = ({
   includeDividends: boolean,
   onToggleDividends: () => void
 }) => {
-  const { project } = useProject();
+  const project = useProjectData();
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
   const performanceMethod = project?.settings?.performanceMethod || 'MWR';
   const performanceSmoothing = project?.settings?.performanceSmoothing || '1d';

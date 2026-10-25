@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { X, Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase, Check, ChevronDown } from 'lucide-react';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProjectActions, useProjectData, useProjectStoreShallow } from '@/contexts/ProjectContext';
 import { useNotifications } from '@/components/ui/notifications';
 import { Transaction, type Security, type Portfolio } from '@/types/domain';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
@@ -44,7 +44,12 @@ type CsvImportSummary = {
 };
 
 export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: TransactionModalProps) => {
-    const { project, updateProject, syncMarket, isMarketSyncing, marketSyncProgress } = useProject();
+    const project = useProjectData();
+    const { updateProject, syncMarket } = useProjectActions();
+    const { isMarketSyncing, marketSyncProgress } = useProjectStoreShallow((state) => ({
+        isMarketSyncing: state.isMarketSyncing,
+        marketSyncProgress: state.marketSyncProgress
+    }));
     const { notify } = useNotifications();
 
     // Tab State

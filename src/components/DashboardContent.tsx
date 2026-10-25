@@ -5,7 +5,7 @@ import { buildMwrSeries, normalizeInvestedForExplicitCash, smoothPerformanceSeri
 import { selectCalculationTransactions, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency } from '@/lib/fxUtils';
 import { resolveWealthGoalSource } from '@/lib/wealthGoalUtils';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProjectActions, useProjectData } from '@/contexts/ProjectContext';
 import { Avatar, CardHeader, Chip, Donut, GlassCard, Kpi, Pill, Segmented, toneOf } from '@/components/ui/primitives';
 import { useFormatters } from '@/components/ui/useFormatters';
 import { HeroChart } from '@/components/dashboard/HeroChart';
@@ -91,7 +91,8 @@ const relativeTime = (iso: string | undefined, nowMs: number) => {
 };
 
 export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectPortfolios, onSelectSecurity, onShowPortfolio, onShowBrokers, includeDividends, onToggleDividends }: DashboardProps) => {
-  const { project, updateProject } = useProject();
+  const project = useProjectData();
+  const { updateProject } = useProjectActions();
   const formatters = useFormatters();
   const [nowMs] = useState(() => Date.now());
   const [chartMode, setChartMode] = useState<'value' | 'performance'>('value');

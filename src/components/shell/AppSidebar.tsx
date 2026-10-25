@@ -1,7 +1,6 @@
 "use client";
 
 import React from 'react';
-import { LogOut } from 'lucide-react';
 
 export type ShellNavItem = { key: string; label: string; badge?: string | number };
 
@@ -10,12 +9,12 @@ type Props = {
     activeKey: string;
     onNavigate: (key: string) => void;
     sync: { title: string; text: string; ok: boolean; onClick: () => void };
-    file: { name: string; detail: string; modified: boolean; onSave: () => void };
-    onClose: () => void;
+    /** File status card; subscribes to the store itself so status changes do not re-render the shell. */
+    fileStatus: React.ReactNode;
 };
 
 /** Desktop navigation (design v2): logo, nav with dots and badges, sync card, file status. */
-export const AppSidebar = ({ items, activeKey, onNavigate, sync, file, onClose }: Props) => (
+export const AppSidebar = ({ items, activeKey, onNavigate, sync, fileStatus }: Props) => (
     <aside className="app-side" aria-label="Hauptnavigation">
         <div className="app-logo">
             <span className="app-logo-mark" aria-hidden="true">O</span>
@@ -45,18 +44,7 @@ export const AppSidebar = ({ items, activeKey, onNavigate, sync, file, onClose }
                 <span className="app-promo-title">{sync.title}</span>
                 <span className="app-promo-text">{sync.text}</span>
             </button>
-            <div className="app-file">
-                <button type="button" className="app-file-main" onClick={file.onSave} title={file.modified ? 'Jetzt speichern' : 'Gespeichert'}>
-                    <span className={file.modified ? 'app-live is-warn' : 'app-live'} aria-hidden="true" />
-                    <span className="app-file-text">
-                        <span className="app-file-name">{file.name}</span>
-                        <span className="app-file-meta">{file.detail}</span>
-                    </span>
-                </button>
-                <button type="button" className="app-file-close" onClick={onClose} aria-label="Projekt schließen" title="Projekt schließen">
-                    <LogOut size={15} />
-                </button>
-            </div>
+            {fileStatus}
             {!sync.ok && <span className="sr-only">{sync.text}</span>}
         </div>
     </aside>

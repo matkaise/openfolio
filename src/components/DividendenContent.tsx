@@ -4,7 +4,7 @@ import { selectCalculationTransactions, calculateProjectHoldings } from '@/lib/p
 import { buildSplitIgnoreDates } from '@/lib/portfolioUtils';
 import { convertCurrency } from '@/lib/fxUtils';
 import { getRangeStartDate, toDateKeyLocal } from '@/lib/dateUtils';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProjectData } from '@/contexts/ProjectContext';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { Card } from '@/components/ui/Card';
 import { type DividendHistoryEntry, type EventEntry, type TransactionLike, type UpcomingDividendEntry } from '@/types/portfolioView';
@@ -80,7 +80,7 @@ const DividendListModal = ({
 };
 
 export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: string[] }) => {
-  const { project } = useProject();
+  const project = useProjectData();
   const [chartView, setChartView] = useState<'monthly' | 'yearly'>('yearly'); // Default to yearly as requested "Last 5 Years"
   const [historyRange, setHistoryRange] = useState<'5Y' | 'MAX'>('5Y');
   const [dividendListModal, setDividendListModal] = useState<{

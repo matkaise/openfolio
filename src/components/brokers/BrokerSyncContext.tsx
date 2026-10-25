@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProjectActions, useProjectData, useProjectStore } from '@/contexts/ProjectContext';
 import { scanDegiroFolder } from '@/lib/brokers/degiroFolder';
 import {
     addBrokerConnection,
@@ -169,7 +169,10 @@ const fetchIbkrStatement = async (token: string, queryId: string): Promise<strin
 };
 
 export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
-    const { project, updateProject, syncMarket, isHydratingProject, encryptionStatus } = useProject();
+    const project = useProjectData();
+    const { updateProject, syncMarket } = useProjectActions();
+    const isHydratingProject = useProjectStore((state) => state.isHydratingProject);
+    const encryptionStatus = useProjectStore((state) => state.encryptionStatus);
     const [statuses, setStatuses] = useState<Record<string, ConnectionStatus>>({});
     const [pending, setPending] = useState<PendingImport | null>(null);
     const [tanRequest, setTanRequest] = useState<TanRequest | null>(null);

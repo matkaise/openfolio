@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import {
   LayoutDashboard,
   Activity,
@@ -9,21 +9,17 @@ import {
   Calendar,
   FileText,
   Database,
-  RefreshCw,
-  Loader2,
   Sparkles,
-  ShieldAlert,
   FolderSync
 } from 'lucide-react';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProjectActions, useProjectData } from '@/contexts/ProjectContext';
+import { FileStatusCard, MissingFxNotice, MobileSaveButton, StartupMarketSync, SyncButton } from '@/components/shell/ShellStatus';
 import { ProjectLauncher } from '@/components/ProjectLauncher';
 import { DataSourcesContent } from '@/components/DataSourcesContent';
 import { ImportContent } from '@/components/ImportContent';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { TransactionModal } from '@/components/TransactionModal';
 import { SecurityDetailModal } from '@/components/SecurityDetailModal';
-import { repairProjectSecurities, securityNeedsSync } from '@/lib/marketDataService';
-import { findMissingFxCurrencies } from '@/lib/domain/fx/rates';
 import { applyThemePreference, resolveThemePreference, THEME_LABELS, type ThemePreference } from '@/lib/theme';
 import { DEFAULT_NUMBER_LOCALE, NUMBER_LOCALES, type NumberLocale } from '@/lib/format';
 import { normalizeWealthGoalSettings } from '@/lib/wealthGoalUtils';
@@ -74,7 +70,10 @@ const MOBILE_LABELS: Partial<Record<TabKey, string>> = {
 };
 
 export default function PortfolioApp() {
-  const { isLoaded, closeProject, saveProject, project, isModified, updateProject, syncAll, syncMarket, isSyncing, isMarketSyncing, marketSyncProgress, isHydratingProject, encryptionStatus, fileName, lastSavedAt } = useProject();
+  // Only the project: file status and sync progress are read by the small status components
+  const project = useProjectData();
+  const isLoaded = project !== null;
+  const { closeProject, updateProject } = useProjectActions();
   const [activeTab, setActiveTab] = useState<TabKey>('Dashboard');
   const [visitedTabs, setVisitedTabs] = useState<TabKey[]>(['Dashboard']);
   const [isMobileMoreOpen, setIsMobileMoreOpen] = useState(false);
@@ -86,9 +85,7 @@ export default function PortfolioApp() {
   const [selectedSecurity, setSelectedSecurity] = useState<{ isin: string; currency?: string } | null>(null);
   const [analysisCache, setAnalysisCache] = useState<AnalysisCache | null>(null);
   const [includeDividendsInPerformance, setIncludeDividendsInPerformance] = useState(false);
-  const [showStartupSyncModal, setShowStartupSyncModal] = useState(false);
   const [, startTransition] = useTransition();
-  const lastMarketAutoSyncRef = useRef(0);
   const performanceMethod = project?.settings?.performanceMethod || 'MWR';
   const performanceSmoothing = project?.settings?.performanceSmoothing || '1d';
 
@@ -99,11 +96,6 @@ export default function PortfolioApp() {
     project ? calculateProjectHoldings(project, selectCalculationTransactions(project, [])).holdings.length : 0
   ), [project]);
 
-  const missingFxCurrencies = useMemo(() => {
-    if (!project || isHydratingProject || Object.keys(project.fxData?.rates || {}).length === 0) return [];
-    return findMissingFxCurrencies(project);
-  }, [project, isHydratingProject]);
-
   const themePreference = resolveThemePreference(project?.settings);
 
   useEffect(() => {
@@ -113,12 +105,6 @@ export default function PortfolioApp() {
   const setThemePreference = useCallback((theme: ThemePreference) => {
     updateProject((prev) => ({ ...prev, settings: { ...prev.settings, theme } }));
   }, [updateProject]);
-
-  useEffect(() => {
-    if (project) return;
-    // Reset startup sync cooldown after closing a project so the next opened project syncs immediately.
-    lastMarketAutoSyncRef.current = 0;
-  }, [project]);
 
   useEffect(() => {
     if (!isLoaded || !project?.id) return;
@@ -165,38 +151,6 @@ export default function PortfolioApp() {
     };
   }, [isLoaded, project?.id]);
 
-  // Sync Market Data on load and auto-repair missing securities.
-  useEffect(() => {
-    if (!isLoaded || !project || isMarketSyncing || isHydratingProject) return;
-
-    if (repairProjectSecurities(project) !== project) {
-      // Apply to the latest state, not to this render's snapshot
-      updateProject((prev) => repairProjectSecurities(prev));
-      return;
-    }
-
-    const now = new Date();
-    const needsSync = Object.values(project.securities || {}).some((sec) => securityNeedsSync(sec, now));
-    if (!needsSync) {
-      return;
-    }
-
-    const cooldownMs = 10 * 60 * 1000;
-    if (Date.now() - lastMarketAutoSyncRef.current < cooldownMs) {
-      return;
-    }
-
-    lastMarketAutoSyncRef.current = Date.now();
-    void Promise.resolve()
-      .then(() => {
-        setShowStartupSyncModal(true);
-        return syncMarket(false, { full: true });
-      })
-      .finally(() => {
-        setShowStartupSyncModal(false);
-      });
-  }, [isLoaded, project, isMarketSyncing, isHydratingProject, syncMarket, updateProject]);
-
   const handleCacheUpdate = useCallback((data: AnalysisCache) => {
     setAnalysisCache(data);
   }, []);
@@ -214,11 +168,6 @@ export default function PortfolioApp() {
     setVisitedTabs(['Dashboard']);
   }, [closeProject]);
 
-
-  const startupSyncModalVisible = showStartupSyncModal && isMarketSyncing;
-  const startupSyncProgress = marketSyncProgress && marketSyncProgress.total > 0
-    ? Math.min(100, Math.round((marketSyncProgress.current / marketSyncProgress.total) * 100))
-    : 0;
 
   if (!isLoaded) {
     return <ProjectLauncher />;
@@ -450,10 +399,6 @@ export default function PortfolioApp() {
   navItems.push({ key: 'Einstellungen', label: 'Einstellungen' });
   const hour = shellNow.getHours();
   const greeting = hour < 11 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
-  const savedTime = lastSavedAt ? new Date(lastSavedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : null;
-  const fileDetail = isModified
-    ? 'Ungespeicherte Änderungen'
-    : `${encryptionStatus === 'encrypted' ? 'Verschlüsselt' : 'Unverschlüsselt'} · ${savedTime ? `${savedTime} gespeichert` : 'noch nicht gespeichert'}`;
   const mobileMainKeys: TabKey[] = ['Dashboard', 'Portfolio', 'Dividenden', 'Transaktionen'];
 
   return (
@@ -478,8 +423,7 @@ export default function PortfolioApp() {
             ok: false,
             onClick: () => handleTabChange('Broker')
           }}
-        file={{ name: fileName || 'Unbenannt.openfolio', detail: fileDetail, modified: isModified, onSave: () => void saveProject() }}
-        onClose={handleCloseProject}
+        fileStatus={<FileStatusCard onClose={handleCloseProject} />}
       />
 
       <main className="app-main">
@@ -531,16 +475,7 @@ export default function PortfolioApp() {
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={() => syncAll(true)}
-              className="md3-icon-btn"
-              aria-label="Kurse und Wechselkurse aktualisieren"
-              disabled={isSyncing || isMarketSyncing}
-              title="Kurse und Wechselkurse aktualisieren"
-            >
-              {(isSyncing || isMarketSyncing) ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
-            </button>
+            <SyncButton />
             <button type="button" onClick={() => handleTabChange('Import')} className="md3-tonal-btn app-hide-mobile px-4 text-sm">
               Import
             </button>
@@ -550,17 +485,7 @@ export default function PortfolioApp() {
           </div>
         </header>
 
-        {missingFxCurrencies.length > 0 && (
-          <div className="app-notices">
-            <div className="md3-warning-soft flex items-start gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
-              <ShieldAlert size={18} className="mt-0.5 shrink-0" />
-              <span>
-                Kurs fehlt: Für {missingFxCurrencies.join(', ')} gibt es keinen Wechselkurs.
-                Beträge in {missingFxCurrencies.length === 1 ? 'dieser Währung' : 'diesen Währungen'} sind in den Summen nicht enthalten.
-              </span>
-            </div>
-          </div>
-        )}
+        <MissingFxNotice />
 
         <div className="app-content pt-4">
           {visitedTabs.map((tab) => (
@@ -630,10 +555,7 @@ export default function PortfolioApp() {
                 {item.label}
               </button>
             ))}
-            <button type="button" className="app-nav-item" onClick={() => { setIsMobileMoreOpen(false); void saveProject(); }}>
-              <span className="app-nav-dot" aria-hidden="true" />
-              {isModified ? 'Speichern (ungespeicherte Änderungen)' : 'Gespeichert'}
-            </button>
+            <MobileSaveButton onDone={() => setIsMobileMoreOpen(false)} />
             <button type="button" className="app-nav-item" onClick={() => { setIsMobileMoreOpen(false); handleCloseProject(); }}>
               <span className="app-nav-dot" aria-hidden="true" />
               Projekt schließen
@@ -645,57 +567,7 @@ export default function PortfolioApp() {
       <PendingImportDialog />
       <TanDialog />
 
-      {startupSyncModalVisible && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] p-4">
-          <div
-            className="w-full max-w-md rounded-3xl p-6 shadow-2xl border"
-            style={{
-              background: 'var(--md3-surface)',
-              borderColor: 'var(--md3-outline)'
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className="flex h-11 w-11 items-center justify-center rounded-2xl"
-                style={{
-                  background: 'var(--md3-primary-container)',
-                  color: 'var(--md3-on-primary-container)'
-                }}
-              >
-                <Loader2 size={20} className="animate-spin" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold" style={{ color: 'var(--md3-on-surface)' }}>
-                  Marktdaten werden synchronisiert
-                </div>
-                <div className="text-xs mt-0.5" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                  Projektstart-Update
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-2">
-              <div className="flex items-center justify-between text-xs font-semibold" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                <span>
-                  {marketSyncProgress && marketSyncProgress.total > 0
-                    ? `Markt ${marketSyncProgress.current}/${marketSyncProgress.total}`
-                    : 'Vorbereitung...'}
-                </span>
-                <span>{marketSyncProgress?.symbol || ''}</span>
-              </div>
-              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--md3-surface-container-highest)' }}>
-                <div
-                  className="h-full rounded-full transition-all duration-300"
-                  style={{
-                    width: `${startupSyncProgress}%`,
-                    background: 'var(--md3-primary)'
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <StartupMarketSync />
 
       {isTransactionModalOpen && (
         <TransactionModal

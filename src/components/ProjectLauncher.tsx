@@ -2,14 +2,14 @@
 
 import React, { useCallback, useRef, useState } from 'react';
 import { FolderOpen, Lock, Plus, TrendingUp, X } from 'lucide-react';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProjectActions } from '@/contexts/ProjectContext';
 import { createDemoProject } from '@/lib/demoProject';
 import { useNotifications } from '@/components/ui/notifications';
 
 type PasswordReason = 'required' | 'invalid';
 
 export const ProjectLauncher = () => {
-  const { newProject, openProject } = useProject();
+  const { newProject, openProject } = useProjectActions();
   const { notify } = useNotifications();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);

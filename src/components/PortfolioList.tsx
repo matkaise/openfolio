@@ -2,12 +2,12 @@
 import { ChevronRight, Wallet } from 'lucide-react';
 import { selectCalculationTransactions, calculateProjectHoldings } from '@/lib/portfolioSelectors';
 import { convertCurrency } from '@/lib/fxUtils';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProjectData } from '@/contexts/ProjectContext';
 import { type TransactionLike } from '@/types/portfolioView';
 import { Card } from '@/components/ui/Card';
 
 export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPortfolioIds: string[], onSelectSecurity: (isin: string, currency?: string) => void }) => {
-  const { project } = useProject();
+  const project = useProjectData();
   const [showClosedPositions, setShowClosedPositions] = useState(false);
 
   const filteredTransactions = useMemo(() => (

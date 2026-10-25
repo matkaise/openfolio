@@ -1,20 +1,17 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import { ProjectData, createEmptyProject } from '@/types/domain';
 import { CurrencyService } from '@/lib/currencyService';
-import {
-    applySecurityPatches,
-    syncSecurityPatches,
-    type MarketSyncProgress
-} from '@/lib/marketDataService';
-import { createRevisionTracker } from '@/lib/state/revisionTracker';
+import { applySecurityPatches, syncSecurityPatches } from '@/lib/marketDataService';
+import { createProjectStore, type ProjectState, type ProjectStore } from '@/lib/state/projectStore';
 import { createBeforeUnloadHandler } from '@/lib/state/unloadGuard';
 import {
     isSqliteFileName,
     openProjectFile,
     serializeProjectForFile,
-    type ProjectEncryptionStatus,
     type SqliteProjectSession
 } from '@/lib/projectPersistence';
 import { createProjectKey, type ProjectEncryptionKey } from '@/lib/projectCrypto';
@@ -52,18 +49,7 @@ const ensurePortfoliosFromData = (project: ProjectData): ProjectData => {
     };
 };
 
-interface ProjectContextType {
-    project: ProjectData | null;
-    isLoaded: boolean;
-    isModified: boolean;
-    fileName: string | null;
-    marketSyncProgress: MarketSyncProgress | null;
-    isHydratingProject: boolean;
-    encryptionStatus: ProjectEncryptionStatus;
-    /** When the project was last written to (or read from) its file in this session. */
-    lastSavedAt: string | null;
-
-    // Actions
+export interface ProjectActions {
     newProject: (options?: { name?: string; password?: string; data?: ProjectData; fileName?: string }) => Promise<void>;
     openProject: (options?: {
         requestPassword?: (reason: 'required' | 'invalid') => Promise<string | null>;
@@ -72,60 +58,54 @@ interface ProjectContextType {
     saveProjectAs: () => Promise<void>;
     /** Resolves false if the user kept the project open. */
     closeProject: () => Promise<boolean>;
-
-    // Data Mutation
     updateProject: (updater: (prev: ProjectData) => ProjectData) => void;
-
-    // Sync
     syncFx: () => Promise<void>;
     syncMarket: (force?: boolean, options?: { full?: boolean; projectOverride?: ProjectData }) => Promise<void>;
     syncAll: (forceMarket?: boolean) => Promise<void>;
-    isSyncing: boolean;
-    isMarketSyncing: boolean;
 }
 
-const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
+const ProjectStoreContext = createContext<ProjectStore | null>(null);
+const ProjectActionsContext = createContext<ProjectActions | null>(null);
 
-export const useProject = () => {
-    const context = useContext(ProjectContext);
-    if (!context) {
-        throw new Error('useProject must be used within a ProjectProvider');
-    }
-    return context;
+const useStoreInstance = (): ProjectStore => {
+    const store = useContext(ProjectStoreContext);
+    if (!store) throw new Error('Project hooks must be used within a ProjectProvider');
+    return store;
+};
+
+/** Reads a slice of the project state; the component re-renders only when the slice changes. */
+export const useProjectStore = <T,>(selector: (state: ProjectState) => T): T => useStore(useStoreInstance(), selector);
+
+/** Like useProjectStore for selectors that build an object or array (compared shallowly). */
+export const useProjectStoreShallow = <T,>(selector: (state: ProjectState) => T): T => (
+    useStore(useStoreInstance(), useShallow(selector))
+);
+
+export const useProjectData = (): ProjectData | null => useProjectStore((state) => state.project);
+
+/** File and sync workflows. Stable: using them never re-renders a component. */
+export const useProjectActions = (): ProjectActions => {
+    const actions = useContext(ProjectActionsContext);
+    if (!actions) throw new Error('useProjectActions must be used within a ProjectProvider');
+    return actions;
 };
 
 export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const { notify, confirm } = useNotifications();
-    const [project, setProject] = useState<ProjectData | null>(null);
-    const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(null);
-    const [fileName, setFileName] = useState<string | null>(null);
-    const [isModified, setIsModified] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [isMarketSyncing, setIsMarketSyncing] = useState(false);
-    const [marketSyncProgress, setMarketSyncProgress] = useState<MarketSyncProgress | null>(null);
-    const [isHydratingProject, setIsHydratingProject] = useState(false);
-    const [encryptionStatus, setEncryptionStatus] = useState<ProjectEncryptionStatus>('none');
-    const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+    const [store] = useState(createProjectStore);
 
+    const fileHandleRef = useRef<FileSystemFileHandle | null>(null);
     const sqliteSessionRef = useRef<SqliteProjectSession | null>(null);
     // Derived AES key (non-extractable). The password itself is never kept.
     const encryptionKeyRef = useRef<ProjectEncryptionKey | null>(null);
-    // Counts changes so a save that overlaps an edit does not mark the project as saved.
-    const revisionsRef = useRef(createRevisionTracker());
 
     // Ask before closing the tab with unsaved changes. No autosave draft in browser storage:
     // it would keep a plain-text copy of encrypted projects.
     useEffect(() => {
-        if (!isModified) return;
-        const handler = createBeforeUnloadHandler(() => true);
+        const handler = createBeforeUnloadHandler(() => store.getState().isModified);
         window.addEventListener('beforeunload', handler);
         return () => window.removeEventListener('beforeunload', handler);
-    }, [isModified]);
-
-    const markChanged = useCallback(() => {
-        revisionsRef.current.bump();
-        setIsModified(true);
-    }, []);
+    }, [store]);
 
     const setSqliteSession = useCallback((nextSession: SqliteProjectSession | null) => {
         if (sqliteSessionRef.current === nextSession) return;
@@ -133,10 +113,6 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             sqliteSessionRef.current.close();
         }
         sqliteSessionRef.current = nextSession;
-    }, []);
-
-    const setEncryptionKey = useCallback((nextKey: ProjectEncryptionKey | null) => {
-        encryptionKeyRef.current = nextKey;
     }, []);
 
     const serializeForSave = useCallback(async (targetName: string, data: ProjectData) => {
@@ -156,15 +132,14 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const writeToHandle = useCallback(async (handle: FileSystemFileHandle, data: ProjectData) => {
         // Serialize before opening the file, so a serialization error leaves the file untouched.
         const serializedData = await serializeForSave(handle.name, data);
-        const serialized = { data: serializedData };
 
         const writable = await handle.createWritable();
         try {
-            if (typeof serialized.data === 'string') {
-                await writable.write(serialized.data);
+            if (typeof serializedData === 'string') {
+                await writable.write(serializedData);
             } else {
-                const bytes = new Uint8Array(serialized.data.byteLength);
-                bytes.set(serialized.data);
+                const bytes = new Uint8Array(serializedData.byteLength);
+                bytes.set(serializedData);
                 await writable.write(new Blob([bytes]));
             }
             await writable.close();
@@ -173,23 +148,18 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             await writable.abort().catch(() => undefined);
             throw error;
         }
-        setEncryptionStatus(encryptionKeyRef.current ? 'encrypted' : 'none');
-    }, [serializeForSave]);
+        store.getState().setStatus({ encryptionStatus: encryptionKeyRef.current ? 'encrypted' : 'none' });
+    }, [serializeForSave, store]);
 
-    // Helper to perform sync on a given project data state
     const performSync = useCallback(async (currentProject: ProjectData) => {
-        setIsSyncing(true);
+        const { setStatus, updateProject } = store.getState();
+        setStatus({ isSyncing: true });
         try {
             log.info('Auto-syncing FX rates...');
             const newFxData = await CurrencyService.syncRates(currentProject.fxData);
 
             if (newFxData.lastUpdated !== currentProject.fxData.lastUpdated) {
-                setProject((prev) => prev ? ({
-                    ...prev,
-                    fxData: newFxData,
-                    modified: new Date().toISOString()
-                }) : null);
-                markChanged();
+                updateProject((prev) => ({ ...prev, fxData: newFxData, modified: new Date().toISOString() }));
                 log.info('FX Sync completed. Updated to:', newFxData.lastUpdated);
             } else {
                 log.info('FX Sync completed. No new data.');
@@ -197,29 +167,25 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         } catch (e) {
             log.error('FX Sync failed', e);
         } finally {
-            setIsSyncing(false);
+            setStatus({ isSyncing: false });
         }
-    }, [markChanged]);
+    }, [store]);
 
     const performMarketSync = useCallback(async (currentProject: ProjectData, force: boolean = false, full: boolean = false) => {
-        setIsMarketSyncing(true);
-        setMarketSyncProgress({ current: 0, total: 0, stage: 'start' });
+        const { setStatus, updateProject } = store.getState();
+        setStatus({ isMarketSyncing: true, marketSyncProgress: { current: 0, total: 0, stage: 'start' } });
         try {
             log.info('Auto-syncing market data...');
             const patches = await syncSecurityPatches(currentProject, force, (progress) => {
-                setMarketSyncProgress(progress);
+                setStatus({ marketSyncProgress: progress });
             }, full ? { maxPerRun: 0, maxTimeMs: 0 } : undefined);
             if (Object.keys(patches).length > 0) {
                 // A full sync can take minutes: apply the results to the current state so edits
                 // made meanwhile (new transactions, ticker mappings) survive.
-                setProject((prev) => {
-                    if (!prev || prev.id !== currentProject.id) return prev;
-                    return {
-                        ...applySecurityPatches(prev, patches, currentProject.securities),
-                        modified: new Date().toISOString()
-                    };
-                });
-                markChanged();
+                updateProject((prev) => (prev.id !== currentProject.id ? prev : {
+                    ...applySecurityPatches(prev, patches, currentProject.securities),
+                    modified: new Date().toISOString()
+                }));
                 log.info('Market sync completed.');
             } else {
                 log.info('Market sync completed. No new data.');
@@ -227,27 +193,24 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         } catch (e) {
             log.error('Market sync failed', e);
         } finally {
-            setIsMarketSyncing(false);
-            setMarketSyncProgress(null);
+            setStatus({ isMarketSyncing: false, marketSyncProgress: null });
         }
-    }, [markChanged]);
+    }, [store]);
 
     const newProject = useCallback(async (options?: { name?: string; password?: string; data?: ProjectData; fileName?: string }) => {
         const created = options?.data ?? createEmptyProject(options?.name || 'Mein Portfolio');
-        setProject(created);
-        setLastSavedAt(null);
-        setFileHandle(null);
-        setFileName(options?.fileName || 'Unbenannt.openfolio');
-        setIsModified(true);
-        setIsHydratingProject(false);
-        setSqliteSession(null);
-
         const password = options?.password?.trim();
-        setEncryptionKey(password ? await createProjectKey(password) : null);
-        setEncryptionStatus(password ? 'encrypted' : 'none');
+        encryptionKeyRef.current = password ? await createProjectKey(password) : null;
+        fileHandleRef.current = null;
+        setSqliteSession(null);
+        store.getState().loadProject(created, {
+            fileName: options?.fileName || 'Unbenannt.openfolio',
+            isModified: true,
+            encryptionStatus: password ? 'encrypted' : 'none'
+        });
 
         void performSync(created);
-    }, [performSync, setEncryptionKey, setSqliteSession]);
+    }, [performSync, setSqliteSession, store]);
 
     const openProject = useCallback(async (options?: {
         requestPassword?: (reason: 'required' | 'invalid') => Promise<string | null>;
@@ -299,23 +262,26 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
 
             const data = ensurePortfoliosFromData(opened.project);
+            const lazy = Boolean(opened.hasLazyPayload && opened.sqliteSession);
 
             setSqliteSession(opened.sqliteSession);
-            setEncryptionKey(opened.encryptionKey);
-            setEncryptionStatus(opened.encryption);
-            setProject(data);
-            setFileHandle(handle);
-            setFileName(file.name);
-            setLastSavedAt(new Date(file.lastModified).toISOString());
-            setIsModified(data !== opened.project);
+            encryptionKeyRef.current = opened.encryptionKey;
+            fileHandleRef.current = handle;
+            store.getState().loadProject(data, {
+                fileName: file.name,
+                lastSavedAt: new Date(file.lastModified).toISOString(),
+                isModified: data !== opened.project,
+                encryptionStatus: opened.encryption,
+                isHydratingProject: lazy
+            });
 
-            if (opened.hasLazyPayload && opened.sqliteSession) {
-                setIsHydratingProject(true);
+            if (lazy && opened.sqliteSession) {
                 void opened.sqliteSession
                     .hydrateHeavyData(data)
                     .then((hydratedProject) => {
-                        setProject((prev) => {
-                            if (!prev || prev.id !== data.id) return prev;
+                        // Loading the rest of the file is no edit
+                        store.getState().touchProject((prev) => {
+                            if (prev.id !== data.id) return prev;
 
                             const mergedSecurities = { ...prev.securities };
                             Object.entries(hydratedProject.securities || {}).forEach(([isin, hydratedSec]) => {
@@ -356,10 +322,9 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                         void performSync(data);
                     })
                     .finally(() => {
-                        setIsHydratingProject(false);
+                        store.getState().setStatus({ isHydratingProject: false });
                     });
             } else {
-                setIsHydratingProject(false);
                 void performSync(data);
             }
 
@@ -371,9 +336,22 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             log.error('Failed to open project:', err);
             notify({ tone: 'error', title: 'Datei konnte nicht geöffnet werden', message });
         }
-    }, [notify, performSync, setEncryptionKey, setSqliteSession]);
+    }, [notify, performSync, setSqliteSession, store]);
+
+    /** Records a finished save: timestamp on the project, and "saved" unless it changed meanwhile. */
+    const markSaved = useCallback((modified: string, clean: boolean, file?: { name: string }) => {
+        const { touchProject, setStatus } = store.getState();
+        // Keep edits made while writing; only the timestamp comes from the save.
+        touchProject((prev) => ({ ...prev, modified }));
+        setStatus({
+            lastSavedAt: modified,
+            ...(file ? { fileName: file.name } : {}),
+            ...(clean ? { isModified: false } : {})
+        });
+    }, [store]);
 
     const saveProjectAs = useCallback(async () => {
+        const { project, fileName, revisions, setStatus } = store.getState();
         if (!project) return;
         try {
             if (!supportsFileSystemAccess()) {
@@ -381,14 +359,11 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                 const suggested = fileName || 'Portfolio.openfolio';
                 const downloadName = isSqliteFileName(suggested) ? suggested : `${suggested.replace(/\.[^.]+$/, '')}.openfolio`;
                 const modified = new Date().toISOString();
-                const { clean } = await revisionsRef.current.save(async () => {
+                const { clean } = await revisions.save(async () => {
                     downloadFile(await serializeForSave(downloadName, { ...project, modified }), downloadName);
                 });
-                setFileName(downloadName);
-                setEncryptionStatus(encryptionKeyRef.current ? 'encrypted' : 'none');
-                setProject((prev) => prev ? { ...prev, modified } : prev);
-                setLastSavedAt(modified);
-                if (clean) setIsModified(false);
+                setStatus({ encryptionStatus: encryptionKeyRef.current ? 'encrypted' : 'none' });
+                markSaved(modified, clean, { name: downloadName });
                 return;
             }
 
@@ -405,14 +380,9 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             });
 
             const modified = new Date().toISOString();
-            const { clean } = await revisionsRef.current.save(() => writeToHandle(handle, { ...project, modified }));
-
-            setFileHandle(handle);
-            setFileName(handle.name);
-            // Keep edits made while writing; only the timestamp comes from the save.
-            setProject((prev) => prev ? { ...prev, modified } : prev);
-            setLastSavedAt(modified);
-            if (clean) setIsModified(false);
+            const { clean } = await revisions.save(() => writeToHandle(handle, { ...project, modified }));
+            fileHandleRef.current = handle;
+            markSaved(modified, clean, { name: handle.name });
         } catch (err: unknown) {
             if (err && typeof err === 'object' && 'name' in err && (err as { name?: string }).name === 'AbortError') {
                 return;
@@ -421,22 +391,21 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             log.error('Failed to save project:', err);
             notify({ tone: 'error', title: 'Speichern fehlgeschlagen', message });
         }
-    }, [notify, project, fileName, writeToHandle, serializeForSave]);
+    }, [markSaved, notify, serializeForSave, store, writeToHandle]);
 
     const saveProject = useCallback(async () => {
+        const { project, revisions } = store.getState();
         if (!project) return;
 
+        const fileHandle = fileHandleRef.current;
         if (!fileHandle) {
             return saveProjectAs();
         }
 
         try {
             const modified = new Date().toISOString();
-            const { clean } = await revisionsRef.current.save(() => writeToHandle(fileHandle, { ...project, modified }));
-
-            setProject((prev) => prev ? { ...prev, modified } : prev);
-            setLastSavedAt(modified);
-            if (clean) setIsModified(false);
+            const { clean } = await revisions.save(() => writeToHandle(fileHandle, { ...project, modified }));
+            markSaved(modified, clean);
         } catch (err) {
             log.error('Failed to save directly:', err);
             const name = err && typeof err === 'object' && 'name' in err ? (err as { name?: string }).name : '';
@@ -448,10 +417,10 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
             notify({ tone: 'error', title: 'Speichern fehlgeschlagen', message });
         }
-    }, [notify, project, fileHandle, saveProjectAs, writeToHandle]);
+    }, [markSaved, notify, saveProjectAs, store, writeToHandle]);
 
     const closeProject = useCallback(async () => {
-        if (isModified) {
+        if (store.getState().isModified) {
             const ok = await confirm({
                 title: 'Projekt schließen?',
                 message: 'Es gibt ungespeicherte Änderungen. Sie gehen beim Schließen verloren.',
@@ -460,45 +429,37 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             });
             if (!ok) return false;
         }
-        setProject(null);
-        setFileHandle(null);
-        setFileName(null);
-        setIsModified(false);
-        setIsHydratingProject(false);
+        fileHandleRef.current = null;
+        encryptionKeyRef.current = null;
         setSqliteSession(null);
-        setEncryptionKey(null);
-        setEncryptionStatus('none');
+        store.getState().closeProject();
         return true;
-    }, [confirm, isModified, setEncryptionKey, setSqliteSession]);
+    }, [confirm, setSqliteSession, store]);
 
     const updateProject = useCallback((updater: (prev: ProjectData) => ProjectData) => {
-        setProject((prev) => {
-            if (!prev) return null;
-            const newData = updater(prev);
-            return newData;
-        });
-        markChanged();
-    }, [markChanged]);
+        store.getState().updateProject(updater);
+    }, [store]);
 
-    // Public Sync Function (useCallback to keep stable reference)
     const syncFx = useCallback(async () => {
+        const { project } = store.getState();
         if (project) {
             await performSync(project);
         } else {
             log.warn('Could not sync FX: No project loaded.');
         }
-    }, [project, performSync]);
+    }, [performSync, store]);
 
     const syncMarket = useCallback(async (force: boolean = false, options?: { full?: boolean; projectOverride?: ProjectData }) => {
-        const target = options?.projectOverride || project;
+        const target = options?.projectOverride || store.getState().project;
         if (target) {
             await performMarketSync(target, force, Boolean(options?.full));
         } else {
             log.warn('Could not sync market data: No project loaded.');
         }
-    }, [project, performMarketSync]);
+    }, [performMarketSync, store]);
 
     const syncAll = useCallback(async (forceMarket: boolean = false) => {
+        const { project } = store.getState();
         if (!project) {
             log.warn('Could not sync: No project loaded.');
             return;
@@ -507,31 +468,25 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             performSync(project),
             performMarketSync(project, forceMarket, true)
         ]);
-    }, [project, performSync, performMarketSync]);
+    }, [performMarketSync, performSync, store]);
+
+    const actions = useMemo<ProjectActions>(() => ({
+        newProject,
+        openProject,
+        saveProject,
+        saveProjectAs,
+        closeProject,
+        updateProject,
+        syncFx,
+        syncMarket,
+        syncAll
+    }), [newProject, openProject, saveProject, saveProjectAs, closeProject, updateProject, syncFx, syncMarket, syncAll]);
 
     return (
-        <ProjectContext.Provider value={{
-            project,
-            isLoaded: !!project,
-            isModified,
-            fileName,
-            marketSyncProgress,
-            isHydratingProject,
-            encryptionStatus,
-            lastSavedAt,
-            newProject,
-            openProject,
-            saveProject,
-            saveProjectAs,
-            closeProject,
-            updateProject,
-            syncFx,
-            syncMarket,
-            syncAll,
-            isSyncing,
-            isMarketSyncing
-        }}>
-            {children}
-        </ProjectContext.Provider>
+        <ProjectStoreContext.Provider value={store}>
+            <ProjectActionsContext.Provider value={actions}>
+                {children}
+            </ProjectActionsContext.Provider>
+        </ProjectStoreContext.Provider>
     );
 };
