@@ -9,6 +9,7 @@ import { type DeletedTxEntry, type TransactionLike } from '@/types/portfolioView
 import { type CashMovement, type Transaction } from '@/types/domain';
 import { Card } from '@/components/ui/Card';
 import { addTransactions, getCashMovements, getTransactions, hasTransaction, removeTransaction, updateTransaction } from '@/lib/domain/ledger/store';
+import { resolveEditedAmount } from '@/lib/transactionEdit';
 
 const TransactionEditModal = ({
   isOpen,
@@ -52,13 +53,7 @@ const TransactionEditModal = ({
       else if (type === 'Buy' || type === 'Sparplan_Buy') finalShares = Math.abs(parsedShares);
     }
 
-    let finalAmount = transaction.amount ?? undefined;
-    if (parsedPrice !== undefined && !Number.isNaN(parsedPrice) && parsedShares !== undefined && !Number.isNaN(parsedShares)) {
-      const rawTotal = Math.abs(parsedShares) * parsedPrice;
-      if (type === 'Buy' || type === 'Sparplan_Buy') finalAmount = -Math.abs(rawTotal);
-      else if (type === 'Sell' || type === 'Dividend') finalAmount = Math.abs(rawTotal);
-      else finalAmount = rawTotal;
-    }
+    const finalAmount = resolveEditedAmount({ type, shares, pricePerShare, storedAmount: transaction.amount });
 
     const shareKey = transaction.shares !== undefined ? 'shares' : (transaction.quantity !== undefined ? 'quantity' : 'shares');
 
@@ -139,16 +134,8 @@ const TransactionEditModal = ({
             <label className="md3-text-muted text-xs font-bold uppercase tracking-wider">Betrag</label>
             <div className="md3-field flex w-full items-center px-4 py-3 text-sm font-semibold">
               {(() => {
-                const parsedShares = Number(shares);
-                const parsedPrice = Number(pricePerShare);
-                if (Number.isNaN(parsedShares) || Number.isNaN(parsedPrice)) return '--';
-                const rawTotal = Math.abs(parsedShares) * parsedPrice;
-                const signed = (type === 'Buy' || type === 'Sparplan_Buy')
-                  ? -Math.abs(rawTotal)
-                  : (type === 'Sell' || type === 'Dividend')
-                    ? Math.abs(rawTotal)
-                    : rawTotal;
-                return signed.toLocaleString('de-DE', { style: 'currency', currency });
+                const amount = resolveEditedAmount({ type, shares, pricePerShare, storedAmount: transaction.amount });
+                return amount.toLocaleString('de-DE', { style: 'currency', currency });
               })()}
             </div>
           </div>
