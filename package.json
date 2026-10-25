@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "comlink": "4.4.2",
     "date-fns": "^4.1.0",
     "dexie": "^4.3.0",
     "lucide-react": "^0.563.0",
@@ -36,6 +37,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "fast-check": "3.23.2",
+    "jsdom": "30.1.2",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"
