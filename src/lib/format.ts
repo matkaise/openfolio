@@ -42,8 +42,21 @@ export const createFormatters = (locale: NumberLocale = DEFAULT_NUMBER_LOCALE, c
         return withSign(formatted, value, Boolean(options.sign));
     };
 
+    /** Amount in another currency (e.g. a share price in USD), same number format. */
+    const moneyIn = (value: number, valueCurrency: string, options: { decimals?: number; sign?: boolean } = {}) => {
+        const decimals = options.decimals ?? 2;
+        const formatted = getFormat(locale, {
+            style: 'currency',
+            currency: valueCurrency || currency,
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
+        }).format(Math.abs(value));
+        return withSign(formatted, value, Boolean(options.sign));
+    };
+
     return {
         money,
+        moneyIn,
         /** Integer part and the rest (decimals + currency), so the cents can be shown lighter. */
         moneyParts(value: number): { main: string; rest: string } {
             const parts = getFormat(locale, { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 })

@@ -1,20 +1,21 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { Globe, Loader2, RefreshCw, CheckCircle, Search, Check, PencilLine, Trash2 } from 'lucide-react';
+import { Loader2, RefreshCw, CheckCircle, Search, Check, PencilLine, Trash2, Wallet } from 'lucide-react';
 import { useProjectActions, useProjectData, useProjectStoreShallow } from '@/contexts/ProjectContext';
 import {
     AreaChart,
     Area,
     XAxis,
     YAxis,
-    CartesianGrid,
     Tooltip,
     ResponsiveContainer
 } from 'recharts';
 import { buildManualPriceHistory, securityNeedsSync } from '@/lib/marketDataService';
 import { getRangeStartDate, toDateKeyLocal } from '@/lib/dateUtils';
-import { BarChart3, X } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
+import { Avatar, Button, CardHeader, EmptyState, Field, GlassCard, IconButton, IconTile, ListRow, Pill, Segmented, SelectInput, TextInput } from '@/components/ui/primitives';
+import { Modal } from '@/components/ui/Modal';
 import { SimpleAreaChart } from './SimpleAreaChart';
 import { Security, type ProjectData } from '@/types/domain';
 import { resolveTicker, searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
@@ -308,547 +309,281 @@ export const DataSourcesContent = () => {
         setPortfolioToDelete(null);
     };
 
+    const RANGE_OPTIONS = ['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'].map((value) => ({ value, label: value }));
+    const marketStatus = isMarketSyncing
+        ? <Pill tone="accent"><Loader2 size={12} className="animate-spin" />Aktualisiere …</Pill>
+        : pendingSecurities.length > 0
+            ? <Pill>Teilweise</Pill>
+            : marketStats.lastSync && marketStats.lastSync !== 'Nie'
+                ? <Pill tone="up"><CheckCircle size={12} />Aktuell</Pill>
+                : <Pill>Ausstehend</Pill>;
+    const securityBadge = (sec: Security) => {
+        if (isSecurityPending(sec, nowMs)) return <Pill>Ausstehend</Pill>;
+        if (sec.lastSync) return <Pill tone="up">{new Date(sec.lastSync).toLocaleDateString('de-DE')}</Pill>;
+        return sec.symbolStatus === 'unresolved' ? <Pill tone="down">Nicht gefunden</Pill> : <Pill>Ausstehend</Pill>;
+    };
+
     return (
-        <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-6">
-                {/* ECB Feed Card */}
-                <div className="md3-card p-6">
-                    <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                                <Globe size={18} className="md3-accent" />
-                                <h3 className="font-semibold md3-text-main">EZB Währungskurse</h3>
-                            </div>
-                            <p className="text-sm md3-text-muted">Offizielle Referenzkurse der Europäischen Zentralbank.</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {isSyncing ? (
-                                <span className="md3-chip-accent inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
-                                    <Loader2 size={12} className="animate-spin" />
-                                    Synchronisiere...
-                                </span>
-                            ) : (
-                                <span className="md3-positive-soft inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
-                                    <CheckCircle size={12} />
-                                    Aktuell
-                                </span>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="md3-list-item mt-6 flex items-center justify-between gap-4 p-4">
+        <>
+            <div className="ui-grid-2" style={{ alignItems: 'start' }}>
+                <GlassCard>
+                    <CardHeader title="EZB-Wechselkurse">
+                        {isSyncing ? <Pill tone="accent"><Loader2 size={12} className="animate-spin" />Aktualisiere …</Pill> : <Pill tone="up"><CheckCircle size={12} />Aktuell</Pill>}
+                    </CardHeader>
+                    <p className="ui-text">Offizielle Referenzkurse der Europäischen Zentralbank.</p>
+                    <div className="ui-status-row">
                         <div>
-                            <p className="md3-text-muted text-xs uppercase font-bold tracking-wider">Letztes Update</p>
-                            <p className="md3-text-main font-mono mt-1">
-                                {project?.fxData.lastUpdated || 'Nie'}
-                            </p>
+                            <span className="ui-label">Letztes Update</span>
+                            <span className="ui-status-value">{project?.fxData.lastUpdated || 'Nie'}</span>
                         </div>
-
-                        <button
-                            type="button"
-                            onClick={() => syncFx()}
-                            disabled={isSyncing}
-                            className="md3-icon-btn h-10 w-10 disabled:opacity-60 disabled:cursor-not-allowed"
-                            aria-label="EZB-Kurse aktualisieren"
-                            title="Jetzt aktualisieren"
-                        >
+                        <IconButton label="EZB-Kurse aktualisieren" onClick={() => syncFx()} disabled={isSyncing}>
                             <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
-                        </button>
+                        </IconButton>
                     </div>
 
-                    {/* Chart Area */}
-                    <div className="mt-6 space-y-4">
-                        <div className="flex items-center justify-between gap-3">
-                            <h4 className="text-sm font-medium md3-text-main">Kursverlauf (vs. EUR)</h4>
-                            <select
-                                value={selectedCurrency}
-                                onChange={(e) => setSelectedCurrency(e.target.value)}
-                                className="md3-field px-3 py-2 text-xs font-semibold outline-none"
-                            >
-                                {availableCurrencies.map(c => (
-                                    <option key={c} value={c}>{c}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Time Range Selectors */}
-                        <div className="md3-segment flex w-max items-center gap-1 p-1">
-                            {['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'].map((range) => (
-                                <button
-                                    key={range}
-                                    type="button"
-                                    onClick={() => setTimeRange(range)}
-                                    className={`px-3 py-1 text-[11px] font-semibold transition-all ${timeRange === range
-                                        ? 'md3-chip-tonal'
-                                        : 'md3-text-muted hover:opacity-90'
-                                        }`}
-                                >
-                                    {range}
-                                </button>
-                            ))}
-                        </div>
+                    <div className="ui-toolbar">
+                        <Segmented options={RANGE_OPTIONS} value={timeRange} onChange={setTimeRange} ariaLabel="Zeitraum" size="sm" />
+                        <SelectInput aria-label="Währung" value={selectedCurrency} onChange={(e) => setSelectedCurrency(e.target.value)} className="ui-input-compact">
+                            {availableCurrencies.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </SelectInput>
                     </div>
-
-                    <div className="md3-list-item mt-4 h-48 w-full p-2">
+                    <div className="ui-chart" style={{ height: 200 }}>
                         {chartData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={chartData}>
+                                <AreaChart data={chartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
                                     <defs>
-                                        <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="var(--md3-primary)" stopOpacity={0.35} />
-                                            <stop offset="95%" stopColor="var(--md3-primary)" stopOpacity={0} />
+                                        <linearGradient id="fxRateFill" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.3} />
+                                            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--md3-outline)" />
-                                    <XAxis
-                                        dataKey="date"
-                                        tickFormatter={formatXAxis}
-                                        tick={{ fontSize: 10, fill: 'var(--md3-on-surface-variant)' }}
-                                        axisLine={false}
-                                        tickLine={false}
-                                        minTickGap={30}
-                                    />
-                                    <YAxis
-                                        domain={['auto', 'auto']}
-                                        tick={{ fontSize: 10, fill: 'var(--md3-on-surface-variant)' }}
-                                        axisLine={false}
-                                        tickLine={false}
-                                        width={30}
-                                    />
+                                    <XAxis dataKey="date" tickFormatter={formatXAxis} tick={{ fontSize: 11, fill: 'var(--text3)' }} axisLine={false} tickLine={false} minTickGap={40} />
+                                    <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11, fill: 'var(--text3)' }} axisLine={false} tickLine={false} width={44} />
                                     <Tooltip
-                                        contentStyle={{ backgroundColor: 'var(--md3-surface-container-high)', border: 'none', fontSize: '12px', borderRadius: '12px' }}
-                                        labelStyle={{ color: 'var(--md3-on-surface-variant)' }}
+                                        contentStyle={{ background: 'color-mix(in oklch, var(--surface) 92%, transparent)', border: '1px solid var(--stroke)', borderRadius: 12, fontSize: 12 }}
+                                        labelStyle={{ color: 'var(--text3)' }}
+                                        itemStyle={{ color: 'var(--text)' }}
                                     />
-                                    <Area
-                                        type="monotone"
-                                        dataKey="rate"
-                                        stroke="var(--md3-primary)"
-                                        strokeWidth={2}
-                                        fillOpacity={1}
-                                        fill="url(#colorRate)"
-                                    />
+                                    <Area type="monotone" dataKey="rate" name={`${selectedCurrency} je EUR`} stroke="var(--accent)" strokeWidth={2} fill="url(#fxRateFill)" />
                                 </AreaChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="h-full flex items-center justify-center md3-text-muted text-sm">
-                                Keine Daten verfügbar. Bitte synchronisieren.
-                            </div>
+                            <EmptyState title="Keine Kurse" text="Noch keine Wechselkurse geladen. Bitte aktualisieren." />
                         )}
                     </div>
-                </div>
+                </GlassCard>
 
-                {/* Yahoo Finance Card */}
-                <div className="md3-card flex h-full flex-col p-6">
-                        <div className="flex items-start justify-between gap-4">
-                            <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                    <BarChart3 size={18} className="md3-accent" />
-                                    <h3 className="font-semibold md3-text-main">Marktdaten (Yahoo)</h3>
-                                </div>
-                                <p className="text-sm md3-text-muted">Automatische Schlusskurse für Aktien & ETFs.</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {isMarketSyncing ? (
-                                    <span className="md3-chip-accent inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
-                                        <Loader2 size={12} className="animate-spin" />
-                                        Synchronisiere...
-                                    </span>
-                                ) : pendingSecurities.length > 0 ? (
-                                    <span className="md3-segment inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold md3-text-muted">
-                                        Teilweise
-                                    </span>
-                                ) : marketStats.lastSync && marketStats.lastSync !== 'Nie' ? (
-                                    <span className="md3-positive-soft inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold">
-                                        <CheckCircle size={12} />
-                                        Aktuell
-                                    </span>
-                                ) : (
-                                    <span className="md3-segment inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold md3-text-muted">
-                                        Ausstehend
-                                    </span>
-                                )}
-                            </div>
+                <GlassCard>
+                    <CardHeader title="Kursdaten (Yahoo)">{marketStatus}</CardHeader>
+                    <p className="ui-text">Automatische Schlusskurse für Aktien und ETFs.</p>
+                    <div className="ui-status-row">
+                        <div>
+                            <span className="ui-label">Letztes Update</span>
+                            <span className="ui-status-value">{marketStats.lastSync}</span>
                         </div>
-
-                        <div className="md3-list-item mt-6 flex items-center justify-between gap-4 p-4">
-                            <div>
-                                <p className="md3-text-muted text-xs uppercase font-bold tracking-wider">Letztes Update</p>
-                                <p className="md3-text-main font-mono mt-1">
-                                    {marketStats.lastSync}
-                                </p>
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={handleQuoteSync}
-                                disabled={isMarketSyncing}
-                                className="md3-icon-btn h-10 w-10 disabled:opacity-60 disabled:cursor-not-allowed"
-                                aria-label="Marktdaten aktualisieren"
-                                title="Jetzt aktualisieren"
-                            >
-                                {isMarketSyncing ? (
-                                    <Loader2 size={16} className="animate-spin" />
-                                ) : (
-                                    <RefreshCw size={16} />
-                                )}
-                            </button>
-                        </div>
-
-                        {isMarketSyncing && marketSyncProgress && marketSyncProgress.total > 0 && (
-                            <div className="mt-3 rounded-xl border border-white/10 bg-black/5 px-3 py-2 text-xs md3-text-muted">
-                                <div className="flex items-center justify-between">
-                                    <span>Fortschritt</span>
-                                    <span>{marketSyncProgress.current}/{marketSyncProgress.total}</span>
-                                </div>
-                                <div className="mt-2 h-1.5 w-full rounded-full" style={{ background: 'var(--md3-surface-container-highest)' }}>
-                                    <div
-                                        className="h-full rounded-full"
-                                        style={{
-                                            width: `${Math.min(100, Math.round((marketSyncProgress.current / marketSyncProgress.total) * 100))}%`,
-                                            background: 'var(--md3-primary)'
-                                        }}
-                                    />
-                                </div>
-                                {marketSyncProgress.symbol && (
-                                    <div className="mt-1 text-[11px] md3-text-muted">Aktuell: {marketSyncProgress.symbol}</div>
-                                )}
-                            </div>
-                        )}
-
-                        <div className="custom-scrollbar mt-6 flex-1 max-h-[300px] space-y-2 overflow-y-auto pr-2">
-                            {marketStats.securities.length === 0 ? (
-                                <div className="md3-list-item p-6 text-center text-sm md3-text-muted">
-                                    Keine Wertpapiere gefunden.
-                                </div>
-                            ) : (
-                                marketStats.securities.map(sec => (
-                                    <div
-                                        key={sec.isin}
-                                        onClick={() => setSelectedSecurity(sec)}
-                                        className="md3-list-item flex items-center justify-between gap-3 p-3 cursor-pointer transition"
-                                    >
-                                        <div className="flex min-w-0 items-center gap-3">
-                                            <div className="md3-chip-tonal flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold">
-                                                {sec.name.substring(0, 2).toUpperCase()}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="md3-text-main text-sm font-medium">{sec.symbol || sec.isin}</div>
-                                                <div className="md3-text-muted text-xs truncate max-w-[150px]">{sec.name}</div>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className={`px-2 py-0.5 text-xs font-semibold rounded-full ${isSecurityPending(sec, nowMs) || !sec.lastSync ? 'md3-segment md3-text-muted' : 'md3-positive-soft'}`}>
-                                                {isSecurityPending(sec, nowMs)
-                                                    ? 'Ausstehend'
-                                                    : sec.lastSync
-                                                        ? new Date(sec.lastSync).toLocaleDateString()
-                                                        : sec.symbolStatus === 'unresolved' ? 'Nicht gefunden' : 'Ausstehend'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
+                        <IconButton label="Kursdaten aktualisieren" onClick={handleQuoteSync} disabled={isMarketSyncing}>
+                            {isMarketSyncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                        </IconButton>
                     </div>
-
-                {unresolvedSecurities.length > 0 && (
-                    <div className="md3-card p-6">
-                        <div className="space-y-1">
-                            <h3 className="font-semibold md3-text-main">
-                                Fehlende Ticker ({unresolvedSecurities.length})
-                            </h3>
-                            <p className="text-sm md3-text-muted">
-                                Wir konnten für diese Titel keinen gültigen Yahoo-Ticker finden. Du kannst ihn manuell setzen oder die Marktdaten ignorieren.
-                            </p>
+                    {isMarketSyncing && marketSyncProgress && marketSyncProgress.total > 0 && (
+                        <div className="ui-progress-block">
+                            <div className="ui-progress-meta">
+                                <span>{marketSyncProgress.symbol ? `Aktuell: ${marketSyncProgress.symbol}` : 'Fortschritt'}</span>
+                                <span>{marketSyncProgress.current}/{marketSyncProgress.total}</span>
+                            </div>
+                            <div className="ui-progress"><span style={{ width: `${Math.min(100, Math.round((marketSyncProgress.current / marketSyncProgress.total) * 100))}%` }} /></div>
                         </div>
-
-                        <div className="custom-scrollbar mt-6 space-y-3 max-h-[420px] overflow-y-auto pr-2">
-                            {unresolvedSecurities.map(sec => (
-                                <button
+                    )}
+                    {marketStats.securities.length === 0 ? (
+                        <EmptyState title="Keine Wertpapiere" text="Sobald Positionen importiert sind, werden ihre Kurse hier geladen." />
+                    ) : (
+                        <div className="ui-rows ui-scroll" style={{ maxHeight: 340 }}>
+                            {marketStats.securities.map((sec) => (
+                                <ListRow
                                     key={sec.isin}
-                                    type="button"
-                                    onClick={() => openCompanySearch(sec)}
-                                    className="md3-list-item flex w-full items-start justify-between gap-4 p-4 text-left transition hover:opacity-90"
-                                >
-                                    <div className="min-w-0">
-                                        <div className="md3-text-main text-sm font-medium truncate">{sec.name}</div>
-                                        <div className="md3-text-muted text-xs mt-1">{sec.isin}</div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="md3-chip-tonal text-xs px-2 py-0.5 rounded-full">Kein Treffer</span>
-                                        <span className="text-[11px] md3-text-muted">Zuweisen</span>
-                                    </div>
-                                </button>
+                                    onClick={() => setSelectedSecurity(sec)}
+                                    leading={<Avatar seed={sec.isin} label={sec.name} size={38} />}
+                                    title={sec.symbol || sec.isin}
+                                    meta={<span>{sec.name}</span>}
+                                    trailing={securityBadge(sec)}
+                                />
                             ))}
                         </div>
-                    </div>
-                )}
-
-                <div className="md3-card p-6">
-                    <div className="space-y-1">
-                        <h3 className="font-semibold md3-text-main">Depots verwalten</h3>
-                        <p className="text-sm md3-text-muted">
-                            Lösche einzelne Depots inklusive zugehöriger Transaktionen und Konten.
-                        </p>
-                    </div>
-
-                    <div className="mt-4 space-y-2">
-                        {portfolioStats.length === 0 ? (
-                            <div className="md3-list-item p-4 text-sm md3-text-muted">Keine Depots vorhanden.</div>
-                        ) : (
-                            portfolioStats.map((portfolio) => (
-                                <div key={portfolio.id} className="md3-list-item flex items-center justify-between gap-3 p-3">
-                                    <div className="min-w-0">
-                                        <div className="md3-text-main text-sm font-semibold truncate">{portfolio.name}</div>
-                                        <div className="text-xs md3-text-muted mt-1">
-                                            {portfolio.txCount} Transaktionen • {portfolio.cashCount} Konten
-                                        </div>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setPortfolioToDelete(portfolio)}
-                                        className="md3-icon-btn h-9 w-9 md3-negative-soft"
-                                        aria-label={`Depot ${portfolio.name} löschen`}
-                                        title="Depot löschen"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
+                    )}
+                </GlassCard>
             </div>
 
-            {/* Chart Modal Overlay */}
-            {selectedSecurity && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedSecurity(null)}>
-                    <div className="md3-card w-full max-w-3xl p-6" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-start justify-between gap-4 mb-6">
-                            <div>
-                                <h3 className="text-xl font-bold md3-text-main">{selectedSecurity.name}</h3>
-                                <div className="flex items-center gap-2 text-sm md3-text-muted mt-1">
-                                    <span className="md3-segment rounded-full px-2 py-0.5 text-xs font-mono">{selectedSecurity.isin}</span>
-                                    <span>&bull;</span>
-                                    <span>{selectedSecurity.symbol}</span>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const sec = selectedSecurity;
-                                        if (!sec) return;
-                                        setSelectedSecurity(null);
-                                        openCompanySearch(sec);
-                                    }}
-                                    className="mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold md3-chip-tonal"
-                                >
-                                    <PencilLine size={12} />
-                                    Ticker ändern
-                                </button>
-                            </div>
-                            <button type="button" onClick={() => setSelectedSecurity(null)} className="md3-icon-btn" aria-label="Schließen">
-                                <X size={20} />
-                            </button>
-                        </div>
+            {unresolvedSecurities.length > 0 && (
+                <GlassCard>
+                    <CardHeader title={`Fehlende Ticker (${unresolvedSecurities.length})`} />
+                    <p className="ui-text">Für diese Titel wurde kein Yahoo-Ticker gefunden. Weise ihn manuell zu oder verzichte auf Marktdaten.</p>
+                    <div className="ui-rows" style={{ marginTop: 8 }}>
+                        {unresolvedSecurities.map((sec) => (
+                            <ListRow
+                                key={sec.isin}
+                                onClick={() => openCompanySearch(sec)}
+                                leading={<Avatar seed={sec.isin} label={sec.name} size={38} />}
+                                title={sec.name}
+                                meta={<span>{sec.isin}</span>}
+                                trailing={<span className="ui-row-sub"><Pill tone="down">Kein Treffer</Pill><span className="ui-link">Zuweisen</span></span>}
+                            />
+                        ))}
+                    </div>
+                </GlassCard>
+            )}
 
-                        {/* Time Range Selector */}
-                        <div className="md3-segment flex w-max items-center gap-1 p-1 mb-4">
-                            {['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'].map(range => (
-                                <button
-                                    key={range}
-                                    type="button"
-                                    onClick={() => setModalTimeRange(range)}
-                                    className={`px-3 py-1 text-xs font-semibold transition-colors ${modalTimeRange === range
-                                        ? 'md3-chip-tonal'
-                                        : 'md3-text-muted hover:opacity-90'
-                                        }`}
-                                >
-                                    {range}
-                                </button>
-                            ))}
-                        </div>
+            <GlassCard>
+                <CardHeader title="Depots verwalten" />
+                <p className="ui-text">Löscht ein Depot mit allen zugehörigen Buchungen und Konten.</p>
+                {portfolioStats.length === 0 ? (
+                    <EmptyState title="Keine Depots" />
+                ) : (
+                    <div className="ui-rows" style={{ marginTop: 8 }}>
+                        {portfolioStats.map((portfolio) => (
+                            <ListRow
+                                key={portfolio.id}
+                                leading={<IconTile tone="accent"><Wallet size={18} /></IconTile>}
+                                title={portfolio.name}
+                                meta={<span>{portfolio.txCount} Buchungen · {portfolio.cashCount} Konten</span>}
+                                trailing={(
+                                    <IconButton label={`Depot ${portfolio.name} löschen`} className="is-danger" onClick={() => setPortfolioToDelete(portfolio)}>
+                                        <Trash2 size={16} />
+                                    </IconButton>
+                                )}
+                            />
+                        ))}
+                    </div>
+                )}
+            </GlassCard>
 
-                        <div className="md3-list-item h-[350px] w-full p-4">
+            <Modal
+                open={Boolean(selectedSecurity)}
+                onClose={() => setSelectedSecurity(null)}
+                size="lg"
+                title={selectedSecurity?.name}
+                subtitle={selectedSecurity ? `${selectedSecurity.symbol || '–'} · ${selectedSecurity.isin}` : undefined}
+                icon={selectedSecurity ? <Avatar seed={selectedSecurity.isin} label={selectedSecurity.name} size={44} /> : undefined}
+                footer={(
+                    <>
+                        <Button
+                            variant="ghost"
+                            icon={<PencilLine size={14} />}
+                            onClick={() => {
+                                const sec = selectedSecurity;
+                                if (!sec) return;
+                                setSelectedSecurity(null);
+                                openCompanySearch(sec);
+                            }}
+                        >
+                            Ticker ändern
+                        </Button>
+                        <Button onClick={() => setSelectedSecurity(null)}>Schließen</Button>
+                    </>
+                )}
+            >
+                {selectedSecurity && (
+                    <>
+                        <Segmented options={RANGE_OPTIONS} value={modalTimeRange} onChange={setModalTimeRange} ariaLabel="Zeitraum" size="sm" />
+                        <div className="ui-chart" style={{ height: 320 }}>
                             {selectedSecurity.priceHistory && Object.keys(selectedSecurity.priceHistory).length > 0 ? (
                                 <SimpleAreaChart
                                     data={getFilteredHistory(selectedSecurity.priceHistory)}
-                                    color="var(--md3-primary)"
+                                    color="var(--accent)"
                                     height={320}
                                     showAxes={true}
                                     timeRange={modalTimeRange}
                                     currency={selectedSecurity.currency}
                                 />
                             ) : (
-                                <div className="h-full flex items-center justify-center flex-col md3-text-muted">
-                                    <BarChart3 size={48} className="mb-2 opacity-50" />
-                                    <p>Keine historischen Daten verfügbar</p>
-                                    <p className="text-xs mt-2">Klicke auf &quot;Jetzt aktualisieren&quot;</p>
-                                </div>
+                                <EmptyState icon={<BarChart3 size={22} />} title="Keine Kursdaten" text="Aktualisiere die Kursdaten, um den Verlauf zu laden." />
                             )}
                         </div>
+                    </>
+                )}
+            </Modal>
 
-                        <div className="mt-6 flex justify-end">
-                            <button type="button" onClick={() => setSelectedSecurity(null)} className="md3-text-muted px-4 py-2 font-semibold hover:opacity-80">
-                                Schließen
-                            </button>
-                        </div>
+            <Modal
+                open={Boolean(activeSearchSecurity)}
+                onClose={closeCompanySearch}
+                title="Ticker zuweisen"
+                subtitle={activeSearchSecurity ? `Für ${activeSearchSecurity.name || activeSearchSecurity.isin}` : undefined}
+                icon={<Search size={20} />}
+                footer={(
+                    <>
+                        <Button
+                            variant="ghost"
+                            onClick={() => {
+                                if (!activeSearchSecurity) return;
+                                handleIgnoreSecurity(activeSearchSecurity);
+                                closeCompanySearch();
+                            }}
+                        >
+                            Ohne Marktdaten fortfahren
+                        </Button>
+                        <Button onClick={closeCompanySearch}>Schließen</Button>
+                    </>
+                )}
+            >
+                <form
+                    className="ui-inline-form"
+                    onSubmit={(e) => { e.preventDefault(); void handleCompanySearch(); }}
+                >
+                    <Field label="Ticker, ISIN oder Firmenname">
+                        <TextInput
+                            value={companyQuery}
+                            onChange={(e) => {
+                                setCompanyQuery(e.target.value);
+                                setCompanySearchMessage(null);
+                                setCompanyMatches([]);
+                            }}
+                            placeholder="z. B. AAPL oder Apple"
+                            autoFocus
+                        />
+                    </Field>
+                    <Button type="submit" variant="primary" icon={isCompanySearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} disabled={isCompanySearching || !companyQuery.trim()}>
+                        Suchen
+                    </Button>
+                </form>
+                {companySearchMessage && <p className="ui-field-hint">{companySearchMessage}</p>}
+                {companyMatches.length > 0 && (
+                    <div className="ui-rows ui-scroll" style={{ maxHeight: 300 }}>
+                        {companyMatches.map((match) => (
+                            <ListRow
+                                key={match.symbol}
+                                title={match.name || match.symbol}
+                                meta={(
+                                    <>
+                                        <Pill>{match.symbol}</Pill>
+                                        {match.exchange && <Pill>{match.exchange}</Pill>}
+                                        {match.currency && <Pill>{match.currency}</Pill>}
+                                    </>
+                                )}
+                                trailing={<Button size="sm" variant="primary" icon={<Check size={14} />} onClick={() => handleSelectCompanyMatch(match)}>Übernehmen</Button>}
+                            />
+                        ))}
                     </div>
-                </div>
-            )}
+                )}
+            </Modal>
 
-            {activeSearchSecurity && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeCompanySearch}>
-                    <div className="md3-card w-full max-w-lg rounded-[24px] p-5" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="text-base font-semibold md3-text-main">Ticker zuweisen</h3>
-                                <p className="text-xs md3-text-muted">
-                                    Für: {activeSearchSecurity.name || activeSearchSecurity.isin}
-                                </p>
-                            </div>
-                            <button type="button" onClick={closeCompanySearch} className="md3-icon-btn" aria-label="Schließen">
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div className="mt-4 space-y-3">
-                            <div className="text-xs font-semibold md3-text-main">Ticker, ISIN oder Firmennamen</div>
-                            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                                <input
-                                    type="text"
-                                    value={companyQuery}
-                                    onChange={(e) => {
-                                        setCompanyQuery(e.target.value);
-                                        setCompanySearchMessage(null);
-                                        setCompanyMatches([]);
-                                    }}
-                                    placeholder="Ticker, ISIN oder Firmenname (z.B. AAPL oder Apple)"
-                                    className="md3-field w-full px-3 py-2 text-sm outline-none"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={handleCompanySearch}
-                                    disabled={isCompanySearching || !companyQuery.trim()}
-                                    className="md3-icon-btn h-10 w-10 disabled:opacity-60 disabled:cursor-not-allowed"
-                                    aria-label="Suchen"
-                                    title="Suchen"
-                                >
-                                    <Search size={16} className={isCompanySearching ? 'animate-spin' : ''} />
-                                </button>
-                            </div>
-                        </div>
-
-                        {companySearchMessage && (
-                            <div className="mt-3 text-xs md3-text-muted">{companySearchMessage}</div>
-                        )}
-
-                        {companyMatches.length > 0 && (
-                            <div className="mt-5 rounded-2xl border border-white/10 bg-black/5 p-3">
-                                <div className="max-h-72 space-y-3 overflow-y-auto pr-2 [scrollbar-width:thin]">
-                                    {companyMatches.map(match => (
-                                        <div key={match.symbol} className="md3-list-item flex items-start justify-between gap-4 rounded-2xl px-4 py-3">
-                                            <div className="min-w-0">
-                                                <div className="text-sm md3-text-main font-semibold leading-snug truncate">
-                                                    {match.name || match.symbol}
-                                                </div>
-                                                <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] md3-text-muted">
-                                                    <span className="md3-chip-tonal px-2 py-0.5 rounded-full">{match.symbol}</span>
-                                                    {match.exchange && (
-                                                        <span className="md3-chip-tonal px-2 py-0.5 rounded-full">{match.exchange}</span>
-                                                    )}
-                                                    {match.currency && (
-                                                        <span className="md3-chip-tonal px-2 py-0.5 rounded-full">{match.currency}</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleSelectCompanyMatch(match)}
-                                                className="md3-icon-btn h-10 w-10 md3-positive-soft border border-emerald-300/40"
-                                                aria-label="Übernehmen"
-                                                title="Übernehmen"
-                                            >
-                                                <Check size={18} className="text-emerald-500" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="mt-4 flex flex-wrap justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (!activeSearchSecurity) return;
-                                    handleIgnoreSecurity(activeSearchSecurity);
-                                    closeCompanySearch();
-                                }}
-                                className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80"
-                            >
-                                Ignorieren
-                            </button>
-                            <button type="button" onClick={closeCompanySearch} className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80">
-                                Schließen
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {portfolioToDelete && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setPortfolioToDelete(null)}>
-                    <div className="md3-card w-full max-w-lg rounded-[24px] p-5" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-start justify-between gap-4">
-                            <div className="flex items-start gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl md3-negative-soft">
-                                    <Trash2 size={18} />
-                                </div>
-                                <div>
-                                    <h3 className="text-base font-semibold md3-text-main">Depot löschen</h3>
-                                    <p className="text-xs md3-text-muted">
-                                        {portfolioToDelete.name} wird inklusive Transaktionen und Konten gelöscht.
-                                    </p>
-                                </div>
-                            </div>
-                            <button type="button" onClick={() => setPortfolioToDelete(null)} className="md3-icon-btn" aria-label="Schließen">
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div className="mt-4 rounded-2xl border border-white/10 bg-black/5 p-3">
-                            <div className="text-[11px] uppercase tracking-wider md3-text-muted">Enthalten</div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                                <span className="md3-chip-tonal px-2 py-1 text-xs font-semibold">
-                                    {portfolioToDelete.txCount} Transaktionen
-                                </span>
-                                <span className="md3-chip-tonal px-2 py-1 text-xs font-semibold">
-                                    {portfolioToDelete.cashCount} Konten
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="mt-5 flex justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setPortfolioToDelete(null)}
-                                className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80"
-                            >
-                                Abbrechen
-                            </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleDeletePortfolio(portfolioToDelete.id)}
-                                    className="md3-filled-btn px-4 py-2 text-sm font-semibold"
-                                >
-                                    Löschen
-                                </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-        </div>
+            <Modal
+                open={Boolean(portfolioToDelete)}
+                onClose={() => setPortfolioToDelete(null)}
+                size="sm"
+                title="Depot löschen?"
+                icon={<Trash2 size={20} />}
+                footer={(
+                    <>
+                        <Button variant="ghost" onClick={() => setPortfolioToDelete(null)}>Abbrechen</Button>
+                        <Button variant="danger" onClick={() => portfolioToDelete && handleDeletePortfolio(portfolioToDelete.id)}>Endgültig löschen</Button>
+                    </>
+                )}
+            >
+                {portfolioToDelete && (
+                    <p className="ui-modal-text">
+                        <strong>{portfolioToDelete.name}</strong> wird mit {portfolioToDelete.txCount} Buchungen und {portfolioToDelete.cashCount} Konten gelöscht. Das lässt sich nicht rückgängig machen, solange du das Projekt nicht ohne Speichern schließt.
+                    </p>
+                )}
+            </Modal>
+        </>
     );
 };
-
