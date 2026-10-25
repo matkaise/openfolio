@@ -550,29 +550,15 @@ export default function PortfolioApp() {
           </div>
         </header>
 
-        {(missingFxCurrencies.length > 0 || encryptionStatus === 'legacy-unencrypted') && (
+        {missingFxCurrencies.length > 0 && (
           <div className="app-notices">
-            {missingFxCurrencies.length > 0 && (
-              <div className="md3-warning-soft flex items-start gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
-                <ShieldAlert size={18} className="mt-0.5 shrink-0" />
-                <span>
-                  Kurs fehlt: Für {missingFxCurrencies.join(', ')} gibt es keinen Wechselkurs.
-                  Beträge in {missingFxCurrencies.length === 1 ? 'dieser Währung' : 'diesen Währungen'} sind in den Summen nicht enthalten.
-                </span>
-              </div>
-            )}
-            {encryptionStatus === 'legacy-unencrypted' && (
-              <div className="md3-warning-soft flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
-                <ShieldAlert size={18} className="shrink-0" />
-                <span className="flex-1 min-w-[12rem]">
-                  Diese Datei hatte nur eine Zugriffssperre, die Daten lagen unverschlüsselt darin.
-                  Beim nächsten Speichern wird sie mit deinem Passwort verschlüsselt.
-                </span>
-                <button type="button" onClick={() => void saveProject()} className="md3-filled-btn px-3 py-1.5 text-xs font-semibold">
-                  Jetzt verschlüsseln
-                </button>
-              </div>
-            )}
+            <div className="md3-warning-soft flex items-start gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
+              <ShieldAlert size={18} className="mt-0.5 shrink-0" />
+              <span>
+                Kurs fehlt: Für {missingFxCurrencies.join(', ')} gibt es keinen Wechselkurs.
+                Beträge in {missingFxCurrencies.length === 1 ? 'dieser Währung' : 'diesen Währungen'} sind in den Summen nicht enthalten.
+              </span>
+            </div>
           </div>
         )}
 

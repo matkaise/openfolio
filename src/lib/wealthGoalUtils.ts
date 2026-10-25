@@ -1,4 +1,4 @@
-import { type Currency, type ProjectData, type ProjectSettings } from '@/types/domain';
+import { type Currency, type ProjectSettings } from '@/types/domain';
 
 type WealthGoalSource = {
     amount?: number;
@@ -10,52 +10,13 @@ const isValidGoalAmount = (value: unknown): value is number => (
 );
 
 export const resolveWealthGoalSource = (settings?: ProjectSettings | null): WealthGoalSource => {
-    if (!settings) return {};
-
-    const legacyEntries = Object.entries(settings.wealthGoals || {})
-        .filter(([, amount]) => isValidGoalAmount(amount));
-
-    const explicitCurrency = (
-        typeof settings.wealthGoalCurrency === 'string' && settings.wealthGoalCurrency.trim().length > 0
-            ? settings.wealthGoalCurrency
-            : undefined
-    );
-
-    const wealthGoal = settings.wealthGoal;
-    if (isValidGoalAmount(wealthGoal)) {
-        if (explicitCurrency) {
-            return { amount: wealthGoal, currency: explicitCurrency };
-        }
-
-        const matchedLegacyEntry = legacyEntries.find(([, amount]) => Math.abs(amount - wealthGoal) < 0.5);
-        return {
-            amount: wealthGoal,
-            currency: matchedLegacyEntry?.[0] || settings.baseCurrency
-        };
-    }
-
-    if (legacyEntries.length > 0) {
-        const byBaseCurrency = legacyEntries.find(([currency]) => currency === settings.baseCurrency);
-        const [currency, amount] = byBaseCurrency || legacyEntries[0];
-        return { amount, currency };
-    }
-
-    return {};
+    if (!settings || !isValidGoalAmount(settings.wealthGoal)) return {};
+    const currency = settings.wealthGoalCurrency?.trim() || settings.baseCurrency;
+    return { amount: settings.wealthGoal, currency };
 };
 
+/** Pins the goal's currency, e.g. before the display currency changes. */
 export const normalizeWealthGoalSettings = (settings: ProjectSettings): ProjectSettings => {
     const source = resolveWealthGoalSource(settings);
-    const withoutLegacyGoals: ProjectSettings = { ...settings };
-    delete withoutLegacyGoals.wealthGoals;
-
-    return {
-        ...withoutLegacyGoals,
-        wealthGoal: source.amount,
-        wealthGoalCurrency: source.currency
-    };
+    return { ...settings, wealthGoal: source.amount, wealthGoalCurrency: source.currency };
 };
-
-export const normalizeProjectWealthGoal = (project: ProjectData): ProjectData => ({
-    ...project,
-    settings: normalizeWealthGoalSettings(project.settings)
-});

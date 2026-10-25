@@ -267,19 +267,10 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     const numericGoal = Number(goalInput.replace(/[^\d]/g, ''));
     if (!Number.isFinite(numericGoal) || numericGoal < 1000) return;
 
-    updateProject((prev) => {
-      const withoutLegacyGoals = { ...prev.settings };
-      delete withoutLegacyGoals.wealthGoals;
-
-      return {
-        ...prev,
-        settings: {
-          ...withoutLegacyGoals,
-          wealthGoal: numericGoal,
-          wealthGoalCurrency: prev.settings.baseCurrency
-        }
-      };
-    });
+    updateProject((prev) => ({
+      ...prev,
+      settings: { ...prev.settings, wealthGoal: numericGoal, wealthGoalCurrency: prev.settings.baseCurrency }
+    }));
 
     setIsEditingGoal(false);
     setGoalInput('');
