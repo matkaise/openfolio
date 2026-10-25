@@ -1,6 +1,7 @@
 export type Currency = string; // 'EUR', 'USD', 'CHF', etc.
 export type ISIN = string;
 
+/** Transaction view of a ledger entry (calculations, edit form) and the shape importers produce. */
 export interface Transaction {
     id: string;
     date: string; // ISO 8601
@@ -133,6 +134,7 @@ export interface CashAccount {
     balanceHistory?: Record<string, number>; // YYYY-MM-DD -> end-of-day balance
 }
 
+/** Account-statement view of a ledger entry, and the shape statement importers produce. */
 export interface CashMovement {
     id: string;
     date: string; // YYYY-MM-DD
@@ -149,6 +151,38 @@ export interface CashMovement {
     originalData?: unknown;
 }
 
+export type LedgerKind =
+    | 'buy' | 'sell' | 'dividend' | 'withholding_tax' | 'tax' | 'fee' | 'interest'
+    | 'deposit' | 'withdrawal' | 'fx' | 'transfer' | 'split' | 'adjustment';
+
+/**
+ * One booking, whatever it came from (manual entry, CSV, broker API). The ledger is the
+ * only stored list of bookings; holdings, cash, dividends and performance derive from it.
+ * Signs come from the source: amount > 0 = cash in, < 0 = cash out, in `currency`.
+ */
+export interface LedgerEntry {
+    id: string;
+    source: string; // broker or importer, e.g. 'Flatex', 'IBKR', 'Trading 212', 'comdirect', 'CSV', 'Manual'
+    externalId?: string; // stable id from the source (order id, row hash); dedupes repeated imports
+    orderId?: string; // broker order reference; links fee rows of a statement to their trade
+    portfolioId?: string;
+    date: string; // YYYY-MM-DD (value date where known)
+    kind: LedgerKind;
+    savingsPlan?: boolean; // buy from a savings plan
+    isin?: ISIN;
+    name?: string;
+    quantity?: number; // signed: + bought, - sold
+    amount: number;
+    currency: Currency;
+    fee?: number; // negative = cost, in feeCurrency
+    fxFee?: number; // currency conversion fee, negative = cost, in feeCurrency; priced into the FX legs, so cost basis only, not cash
+    feeCurrency?: Currency; // defaults to `currency`
+    fxRate?: number;
+    internal?: boolean; // moves money within the broker (FX legs, sweeps): neither income nor deposit
+    description?: string;
+    raw?: unknown; // source row, for debugging
+}
+
 export interface ProjectData {
     version: number;
     id: string; // UUID
@@ -158,14 +192,14 @@ export interface ProjectData {
 
     settings: ProjectSettings;
     portfolios: Portfolio[]; // List of user portfolios
-    transactions: Transaction[];
+    ledger: LedgerEntry[]; // all bookings, sorted by date
     securities: Record<ISIN, Security>;
-    cashAccounts?: CashAccount[];
-    cashMovements?: CashMovement[];
+    cashAccounts?: CashAccount[]; // balances reported by the broker (for reconciliation and cash display)
     fxData: FxData;
 }
 
-export const CURRENT_PROJECT_VERSION = 1;
+/** v3: one ledger instead of transactions + cash movements. Older files are not read. */
+export const CURRENT_PROJECT_VERSION = 3;
 
 export const createEmptyProject = (name: string = 'Mein Portfolio'): ProjectData => ({
     version: CURRENT_PROJECT_VERSION,
@@ -181,10 +215,9 @@ export const createEmptyProject = (name: string = 'Mein Portfolio'): ProjectData
         wealthGoalCurrency: 'EUR',
         theme: 'system',
     },
-    transactions: [],
+    ledger: [],
     securities: {},
     cashAccounts: [],
-    cashMovements: [],
     fxData: {
         baseCurrency: 'EUR',
         rates: {},

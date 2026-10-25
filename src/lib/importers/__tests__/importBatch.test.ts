@@ -3,6 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyImportBatch, parseDegiroFiles } from '../importBatch';
 import { createEmptyProject } from '@/types/domain';
+import { getCashMovements, getLedger, getTransactions } from '@/lib/domain/ledger/store';
 
 const fixtureDir = path.join(__dirname, '..', '..', '__tests__', 'fixtures');
 const accountCsv = readFileSync(path.join(fixtureDir, 'degiro-account.csv'), 'utf-8');
@@ -23,12 +24,14 @@ describe('applyImportBatch', () => {
     const { project, summary } = applyImportBatch(createEmptyProject(), parseDegiroFiles([accountCsv, tradesCsv]), target);
 
     expect(project.portfolios).toEqual([{ id: 'p1', name: 'DEGIRO' }]);
-    expect(project.transactions).toHaveLength(4);
+    expect(getTransactions(project).filter((tx) => tx.type === 'Buy' || tx.type === 'Sell')).toHaveLength(4);
     expect(Object.keys(project.securities).sort()).toEqual(['DE0000000002', 'US0000000001']);
     expect(project.cashAccounts?.map((a) => a.currency).sort()).toEqual(['CHF', 'EUR', 'USD']);
     expect(project.cashAccounts?.find((a) => a.currency === 'CHF')?.balanceHistory?.['2024-12-02']).toBe(2812.92);
-    expect(summary).toMatchObject({ addedTransactions: 4, duplicateTransactions: 0, duplicateMovements: 0 });
-    expect(summary.addedMovements).toBe(project.cashMovements?.length);
+    // The four DEGIRO trade fee rows are already on the trades
+    expect(summary).toMatchObject({ addedTransactions: 4, duplicateTransactions: 0, duplicateMovements: 4 });
+    expect(summary.addedMovements).toBe(getCashMovements(project).length);
+    expect(getLedger(project)).toHaveLength(4 + summary.addedMovements);
   });
 
   it('adds nothing when the same files are imported again', () => {
@@ -37,9 +40,8 @@ describe('applyImportBatch', () => {
     const second = applyImportBatch(first.project, parseDegiroFiles([accountCsv, tradesCsv]), { ...target, isNew: false });
 
     expect(second.summary).toMatchObject({ addedTransactions: 0, duplicateTransactions: 4, addedMovements: 0 });
-    expect(second.summary.duplicateMovements).toBe(first.summary.addedMovements);
-    expect(second.project.transactions).toHaveLength(4);
-    expect(second.project.cashMovements).toHaveLength(first.project.cashMovements?.length ?? 0);
+    expect(second.summary.duplicateMovements).toBe(first.summary.addedMovements + first.summary.duplicateMovements);
+    expect(second.project.ledger).toBe(first.project.ledger);
     expect(second.project.portfolios).toHaveLength(1);
   });
 

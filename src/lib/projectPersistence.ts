@@ -1,6 +1,6 @@
 import initSqlJs from 'sql.js';
 import { normalizeProjectWealthGoal } from '@/lib/wealthGoalUtils';
-import { parseNumberRecordMap, parseProjectData, ProjectFormatError } from '@/lib/schemas/project';
+import { OUTDATED_PROJECT_MESSAGE, parseNumberRecordMap, parseProjectData, ProjectFormatError } from '@/lib/schemas/project';
 import {
   InvalidPasswordError,
   createProjectKey,
@@ -9,11 +9,11 @@ import {
   isEncryptedProjectBytes,
   type ProjectEncryptionKey
 } from '@/lib/projectCrypto';
-import type { CashAccount, CashMovement, FxData, ISIN, Portfolio, ProjectData, Security, Transaction } from '@/types/domain';
+import type { CashAccount, FxData, ISIN, LedgerEntry, Portfolio, ProjectData, Security } from '@/types/domain';
 
 const SQLITE_FILE_EXTENSIONS = ['.openfolio', '.sqlite', '.sqlite3', '.db'];
 const SQLITE_HEADER = 'SQLite format 3\u0000';
-const SQLITE_SCHEMA_VERSION = '2';
+const SQLITE_SCHEMA_VERSION = '3'; // v3: one ledger section instead of transactions + cash movements
 // Iteration default of the old hash-only "password protection" (pre-encryption files).
 const LEGACY_PASSWORD_ITERATIONS = 210000;
 
@@ -375,7 +375,9 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
     }
 
     if (version !== SQLITE_SCHEMA_VERSION) {
-      throw new Error(`Nicht unterstuetztes SQLite-Projektformat v${version}. Erwartet: v${SQLITE_SCHEMA_VERSION}.`);
+      throw new Error(Number(version) < Number(SQLITE_SCHEMA_VERSION)
+        ? OUTDATED_PROJECT_MESSAGE
+        : `Nicht unterstuetztes SQLite-Projektformat v${version}. Erwartet: v${SQLITE_SCHEMA_VERSION}.`);
     }
   }
 
@@ -417,9 +419,8 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
     const meta = this.readMetaMap();
 
     const portfolios = this.readSection<Portfolio[]>('portfolios', []);
-    const transactions = this.readSection<Transaction[]>('transactions', []);
+    const ledger = this.readSection<LedgerEntry[]>('ledger', []);
     const cashAccounts = this.readSection<CashAccount[]>('cash_accounts', []);
-    const cashMovements = this.readSection<CashMovement[]>('cash_movements', []);
     const securityCore = this.readSection<Record<ISIN, Security>>('securities_core', {});
 
     const securityPriceHistory = lazy
@@ -440,10 +441,9 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
       modified: meta.modified || new Date().toISOString(),
       settings,
       portfolios,
-      transactions,
+      ledger,
       securities: mergeSecurityPayload(securityCore, securityPriceHistory),
       cashAccounts,
-      cashMovements,
       fxData: {
         baseCurrency: 'EUR',
         rates: fxRates,
@@ -524,9 +524,8 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
       this.upsertMeta('password_iterations', '');
 
       this.upsertSection('portfolios', JSON.stringify(project.portfolios || []));
-      this.upsertSection('transactions', JSON.stringify(project.transactions || []));
+      this.upsertSection('ledger', JSON.stringify(project.ledger || []));
       this.upsertSection('cash_accounts', JSON.stringify(project.cashAccounts || []));
-      this.upsertSection('cash_movements', JSON.stringify(project.cashMovements || []));
       this.upsertSection('securities_core', JSON.stringify(securityCore));
 
       if (!preserveUnknownHeavyData) {

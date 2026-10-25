@@ -1,5 +1,5 @@
 import { calculateHoldings, type Holding } from '@/lib/portfolioUtils';
-import { getProjectLedger, ledgerToTransactions } from '@/lib/domain/ledger/buildLedger';
+import { getProjectLedger, ledgerToTransactions } from '@/lib/domain/ledger/ledger';
 import { type CashAccount, type ProjectData, type Security, type Transaction } from '@/types/domain';
 import { getTransactions } from '@/lib/domain/ledger/store';
 

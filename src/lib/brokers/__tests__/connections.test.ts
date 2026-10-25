@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { addBrokerConnection, connectionTarget, getBrokerConnections, importFromConnection, removeBrokerConnection } from '../connections';
 import { parseDegiroFiles } from '@/lib/importers/importBatch';
 import { createEmptyProject, type BrokerConnection } from '@/types/domain';
+import { getLedger } from '@/lib/domain/ledger/store';
 
 const tradesCsv = readFileSync(path.join(__dirname, '..', '..', '__tests__', 'fixtures', 'degiro-transactions.csv'), 'utf-8');
 const connection: BrokerConnection = {
@@ -32,6 +33,6 @@ describe('broker connections', () => {
 
     const second = importFromConnection(first.project, updated, parseDegiroFiles([tradesCsv]), scan, '2026-10-24T12:00:00Z');
     expect(second.summary.addedTransactions).toBe(0);
-    expect(second.project.transactions).toHaveLength(4);
+    expect(getLedger(second.project).filter((e) => e.kind === 'buy' || e.kind === 'sell')).toHaveLength(4);
   });
 });

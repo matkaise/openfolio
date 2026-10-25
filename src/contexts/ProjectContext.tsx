@@ -5,7 +5,6 @@ import { ProjectData, createEmptyProject } from '@/types/domain';
 import { CurrencyService } from '@/lib/currencyService';
 import {
     applySecurityPatches,
-    removeLegacySplitTransactions,
     syncSecurityPatches,
     type MarketSyncProgress
 } from '@/lib/marketDataService';
@@ -300,8 +299,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                 }
             }
 
-            const loaded = ensurePortfoliosFromData(opened.project);
-            const data = removeLegacySplitTransactions(loaded);
+            const data = ensurePortfoliosFromData(opened.project);
 
             setSqliteSession(opened.sqliteSession);
             setEncryptionKey(opened.encryptionKey);
@@ -311,7 +309,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             setFileName(file.name);
             setLastSavedAt(new Date(file.lastModified).toISOString());
             // A legacy file is still plain text on disk; flag it so the user saves (= encrypts) it.
-            setIsModified(opened.encryption === 'legacy-unencrypted' || data !== loaded);
+            setIsModified(opened.encryption === 'legacy-unencrypted' || data !== opened.project);
 
             if (opened.hasLazyPayload && opened.sqliteSession) {
                 setIsHydratingProject(true);
