@@ -12,6 +12,7 @@ import { ReturnChartModal } from '@/components/ReturnChartModal';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { Card } from '@/components/ui/Card';
 import { type AnalysisCache, type HistoryPoint, type PerformanceRow } from '@/types/portfolioView';
+import { isCacheFor } from '@/lib/state/inputCache';
 
 const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: { date: string; value: number }[] }) => {
   if (!isOpen) return null;
@@ -437,7 +438,9 @@ export const AnalysisContent = ({
     // Check Cache
     // Added version suffix to force invalidation after TWR refactor
     const cacheKey = `${project.id}-${selectedPortfolioIds.slice().sort().join(',')}|div=${includeDividends ? 1 : 0}|base=${baseCurrency}|v17`;
-    if (cachedData && cachedData.key === cacheKey) {
+    // Same objects = same data; a market or FX sync replaces them and recalculates
+    const cacheInputs = [filteredTransactions, filteredCashAccounts, project.securities, project.fxData.rates] as const;
+    if (isCacheFor(cachedData, cacheKey, cacheInputs)) {
       setHistoryData(cachedData.historyData);
       setAnalysisMetrics(cachedData.analysisMetrics);
       setIsCalculating(false);
@@ -473,7 +476,7 @@ export const AnalysisContent = ({
 
       // Update Cache
       if (onCacheUpdate) {
-        onCacheUpdate({ key: cacheKey, historyData: normalizedHistory, analysisMetrics: metrics });
+        onCacheUpdate({ key: cacheKey, inputs: cacheInputs, historyData: normalizedHistory, analysisMetrics: metrics });
       }
 
       setIsCalculating(false);
