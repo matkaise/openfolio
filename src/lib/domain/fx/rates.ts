@@ -1,5 +1,5 @@
 import type { CurrencyHistory, ProjectData } from '@/types/domain';
-import { getCashMovements, getTransactions } from '../ledger/store';
+import { getLedger } from '../ledger/store';
 
 /** ECB reference rates: rates[currency][YYYY-MM-DD] = units of currency per 1 EUR. */
 export type FxRates = Record<string, CurrencyHistory>;
@@ -132,13 +132,12 @@ export const findMissingFxCurrencies = (project: ProjectData): string[] => {
     };
 
     add(project.settings?.baseCurrency);
-    getTransactions(project).forEach((tx) => {
-        add(tx.currency);
-        add(tx.feeCurrency);
+    getLedger(project).forEach((entry) => {
+        add(entry.currency);
+        add(entry.feeCurrency);
     });
     Object.values(project.securities || {}).forEach((sec) => add(sec.currency));
     project.cashAccounts?.forEach((account) => add(account.currency));
-    getCashMovements(project).forEach((movement) => add(movement.currency));
 
     return Array.from(used).filter((currency) => !fx.hasRates(currency)).sort();
 };

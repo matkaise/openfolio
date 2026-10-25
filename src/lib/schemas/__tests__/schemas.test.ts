@@ -19,21 +19,25 @@ describe('parseProjectData', () => {
     expect(parsed.settings.baseCurrency).toBe('EUR');
   });
 
-  it('rejects broken transactions with a readable message', () => {
+  it('rejects broken ledger entries with a readable message', () => {
     const project = createEmptyProject();
     const broken = {
       ...project,
-      transactions: [
-        { id: '1', date: '2024-01-01', type: 'Buy', isin: 'X', shares: 1, amount: -10, currency: 'EUR', broker: 'T' },
-        { id: '2', date: '2024-01-02', type: 'Kauf', amount: 'zehn', currency: 'EUR', broker: 'T' }
+      ledger: [
+        { id: '1', source: 'T', date: '2024-01-01', kind: 'buy', isin: 'X', quantity: 1, amount: -10, currency: 'EUR' },
+        { id: '2', source: 'T', date: '2024-01-02', kind: 'kauf', amount: 'zehn', currency: 'EUR' }
       ]
     };
     expect(() => parseProjectData(broken)).toThrow(ProjectFormatError);
     try {
       parseProjectData(broken);
     } catch (error) {
-      expect((error as Error).message).toContain('transactions.1');
+      expect((error as Error).message).toContain('ledger.1');
     }
+  });
+
+  it('refuses files from older versions with a hint to import again', () => {
+    expect(() => parseProjectData({ ...createEmptyProject(), version: 1 })).toThrow(/älteren Testversion.*neu importieren/);
   });
 
   it('rejects something that is not a project at all', () => {

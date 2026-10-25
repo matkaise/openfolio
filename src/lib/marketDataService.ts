@@ -1,7 +1,7 @@
 import { ProjectData, type Security, type Transaction } from '@/types/domain';
 import { parseYahooQuoteResponse, type YahooQuoteResponse } from '@/lib/schemas/api';
 import { createLogger } from '@/lib/logger';
-import { filterTransactions, getTransactions } from '@/lib/domain/ledger/store';
+import { getTransactions } from '@/lib/domain/ledger/store';
 
 const log = createLogger('MarketData');
 
@@ -187,11 +187,6 @@ const resolveSecuritySymbol = async (input: string, currency?: string, isin?: st
 };
 
 export type SecurityPatches = Record<string, Partial<Security>>;
-
-/** Removes the "System" split transactions older versions created; splits live on the security now. */
-export const removeLegacySplitTransactions = (project: ProjectData): ProjectData => {
-    return filterTransactions(project, (t) => t.type !== 'Split' || t.broker !== 'System');
-};
 
 /**
  * Applies sync results to the *current* project. A field that changed since the sync

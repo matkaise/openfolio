@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applySecurityPatches, buildManualPriceHistory, mergeDividendHistory, removeLegacySplitTransactions, securityNeedsSync, syncProjectQuotes, syncSecurityPatches } from '@/lib/marketDataService';
+import { applySecurityPatches, buildManualPriceHistory, mergeDividendHistory, securityNeedsSync, syncProjectQuotes, syncSecurityPatches } from '@/lib/marketDataService';
 import { createEmptyProject, type ProjectData, type Transaction } from '@/types/domain';
 
 const originalFetch = globalThis.fetch;
@@ -351,7 +351,7 @@ describe('patch-based market sync (B4)', () => {
     // Meanwhile: a new transaction, a renamed security, a new ticker mapping elsewhere
     const current: ProjectData = {
       ...before,
-      transactions: [{ id: 'new', date: '2025-01-11', type: 'Buy', isin, shares: 1, amount: -51, currency: 'USD', broker: 'Manual' }],
+      ledger: [{ id: 'new', source: 'Manual', date: '2025-01-11', kind: 'buy', isin, quantity: 1, amount: -51, currency: 'USD' }],
       securities: {
         ...before.securities,
         [isin]: { ...before.securities[isin], name: 'My ACME' },
@@ -361,7 +361,7 @@ describe('patch-based market sync (B4)', () => {
 
     const merged = applySecurityPatches(current, patches, before.securities);
 
-    expect(merged.transactions).toHaveLength(1);
+    expect(merged.ledger).toHaveLength(1);
     expect(merged.securities[otherIsin].symbol).toBe('WDG.DE');
     expect(merged.securities[isin].name).toBe('My ACME'); // user edit wins over longName from Yahoo
     expect(merged.securities[isin].priceHistory?.['2025-01-11']).toBe(51);
@@ -372,17 +372,6 @@ describe('patch-based market sync (B4)', () => {
     const current = { ...before, securities: { [otherIsin]: before.securities[otherIsin] } };
     const merged = applySecurityPatches(current, { [isin]: { lastSync: 'x' } }, before.securities);
     expect(merged.securities[isin]).toBeUndefined();
-  });
-});
-
-describe('legacy split cleanup', () => {
-  it('removes old system split transactions when a project is loaded', () => {
-    const project = createEmptyProject();
-    project.transactions = [
-      { id: '1', date: '2024-01-01', type: 'Split', isin: 'X', amount: 0, currency: 'USD', broker: 'System' },
-      { id: '2', date: '2024-01-01', type: 'Buy', isin: 'X', shares: 1, amount: -1, currency: 'USD', broker: 'Manual' }
-    ];
-    expect(removeLegacySplitTransactions(project).transactions.map((t) => t.id)).toEqual(['2']);
   });
 });
 

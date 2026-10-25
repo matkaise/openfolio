@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createEmptyProject, type ProjectData } from '@/types/domain';
 import { createProjectKey, isEncryptedProjectBytes } from '../projectCrypto';
 import { legacyProjectId, openProjectFile, serializeProjectForFile } from '../projectPersistence';
+import { addTransactions } from '../domain/ledger/store';
 
 // Low iteration count keeps the suite fast; production files use the default.
 const TEST_ITERATIONS = 1_000;
@@ -10,7 +11,7 @@ const SECRET_MARKER = 'ZZ-SECRET-PORTFOLIO-NAME';
 
 const makeProject = (): ProjectData => {
   const project = createEmptyProject(SECRET_MARKER);
-  project.transactions = [{
+  return addTransactions(project, [{
     id: 'tx-1',
     date: '2024-03-15',
     type: 'Buy',
@@ -20,8 +21,7 @@ const makeProject = (): ProjectData => {
     amount: -1000,
     currency: 'USD',
     broker: 'Test'
-  }];
-  return project;
+  }]);
 };
 
 const toFile = (data: string | Uint8Array, name = 'Test.openfolio') => {
@@ -64,7 +64,7 @@ describe('encrypted project files', () => {
     expect(opened.encryption).toBe('encrypted');
     expect(opened.encryptionKey).not.toBeNull();
     expect(opened.project.name).toBe(SECRET_MARKER);
-    expect(opened.project.transactions).toEqual(project.transactions);
+    expect(opened.project.ledger).toEqual(project.ledger);
   });
 
   it('rejects a file whose header was modified', async () => {
@@ -188,8 +188,32 @@ describe('damaged project files', () => {
     const notJson = new File([new TextEncoder().encode('{"id": "x", ')], 'broken.json');
     await expect(openProjectFile(notJson)).rejects.toThrow(/beschädigt.*kein gültiges JSON/);
 
-    const project = { ...createEmptyProject(), transactions: [{ id: 't', date: '2024-01-01', type: 'Buy', amount: null, currency: 'EUR', broker: 'X' }] };
+    const project = { ...createEmptyProject(), ledger: [{ id: 't', source: 'X', date: '2024-01-01', kind: 'buy', amount: null, currency: 'EUR' }] };
     const wrongType = new File([new TextEncoder().encode(JSON.stringify(project))], 'wrong.json');
-    await expect(openProjectFile(wrongType)).rejects.toThrow(/transactions\.0\.amount: Zahl erwartet/);
+    await expect(openProjectFile(wrongType)).rejects.toThrow(/ledger\.0\.amount: Zahl erwartet/);
+  });
+});
+
+describe('files from older versions', () => {
+  it('refuses an SQLite project in the old format (v2) with a hint to import again', async () => {
+    const { data, sqliteSession } = await serializeProjectForFile('Test.openfolio', makeProject(), null, null);
+    sqliteSession?.close();
+    const SQL = await initSqlJs();
+    const db = new SQL.Database(data as Uint8Array);
+    db.run("UPDATE project_meta SET value = '2' WHERE key = 'schema_version'");
+    const bytes = db.export();
+    db.close();
+
+    await expect(openProjectFile(toFile(bytes))).rejects.toThrow(/älteren Testversion/);
+  });
+
+  it('round-trips the ledger through an SQLite file', async () => {
+    const project = makeProject();
+    const { data, sqliteSession } = await serializeProjectForFile('Test.openfolio', project, null, null);
+    sqliteSession?.close();
+    const opened = await openProjectFile(toFile(data));
+    opened.sqliteSession?.close();
+    expect(opened.project.version).toBe(3);
+    expect(opened.project.ledger).toEqual(project.ledger);
   });
 });

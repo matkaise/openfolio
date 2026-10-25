@@ -59,9 +59,9 @@ describe('findMissingFxCurrencies', () => {
     const project = createEmptyProject();
     project.fxData.rates = rates;
     project.settings.baseCurrency = 'CHF';
-    project.transactions = [
-      { id: '1', date: '2024-01-02', type: 'Buy', isin: 'X', shares: 1, amount: -1, currency: 'JPY', broker: 'T' },
-      { id: '2', date: '2024-01-02', type: 'Buy', isin: 'Y', shares: 1, amount: -1, currency: 'GBp', broker: 'T' }
+    project.ledger = [
+      { id: '1', source: 'T', date: '2024-01-02', kind: 'buy', isin: 'X', quantity: 1, amount: -1, currency: 'JPY' },
+      { id: '2', source: 'T', date: '2024-01-02', kind: 'buy', isin: 'Y', quantity: 1, amount: -1, currency: 'GBp' }
     ];
     project.securities = { X: { isin: 'X', name: 'X', currency: 'SEK' } };
 

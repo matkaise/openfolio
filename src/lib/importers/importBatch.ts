@@ -7,7 +7,9 @@ import {
 } from '@/lib/csvParser';
 import { hash53 } from '@/lib/hash';
 import { mergeImportedTransactions } from '@/lib/importMerge';
-import type { CashAccount, CashMovement, ProjectData, Security, Transaction } from '@/types/domain';
+import { dropDuplicateTradeFees, entryFromCashMovement, entryFromTransaction, ledgerToTransactions, sortLedger } from '@/lib/domain/ledger/ledger';
+import { getLedger } from '@/lib/domain/ledger/store';
+import type { CashAccount, LedgerEntry, ProjectData, Security, Transaction } from '@/types/domain';
 
 /** What an importer (CSV file, broker connection) hands to the app. */
 export interface ImportBatch {
@@ -58,9 +60,10 @@ const movementKey = (movement: { date: string; currency: string; amount: number;
 );
 
 /**
- * Merges an import into the project. Pure and deterministic (ids are derived from stable
- * keys), so it can run inside a React state updater and be repeated for a preview.
- * Trades and account rows already in the target portfolio are skipped and counted.
+ * Merges an import into the project's ledger. Pure and deterministic (ids are derived from
+ * stable keys), so it can run inside a React state updater and be repeated for a preview.
+ * Bookings already in the target portfolio are skipped and counted as duplicates, and so are
+ * DEGIRO statement fee rows that the trade already carries.
  */
 export const applyImportBatch = (
     project: ProjectData,
@@ -71,9 +74,16 @@ export const applyImportBatch = (
     const updatedPortfolios = target.isNew && !portfolios.some((p) => p.id === target.id)
         ? [...portfolios, { id: target.id, name: target.name }]
         : portfolios;
+    const ledger = getLedger(project);
 
-    // Trades
-    const merged = mergeImportedTransactions(project.transactions, batch.transactions, target.id);
+    // Trades: dedupe against the trades already in the ledger
+    const existingTrades = ledgerToTransactions(ledger.filter((entry) => entry.kind === 'buy' || entry.kind === 'sell' || entry.kind === 'split'));
+    const merged = mergeImportedTransactions(existingTrades, batch.transactions, target.id);
+    const tradeEntries: LedgerEntry[] = merged.added.map((tx) => entryFromTransaction({
+        ...tx,
+        id: `le-${hash53(`${target.id}|${tx.broker}|${tx.externalId ?? tx.id}`)}`
+    }));
+
     let securities = project.securities;
     merged.added.forEach((tx) => {
         if (!tx.isin || securities[tx.isin]) return;
@@ -108,22 +118,24 @@ export const applyImportBatch = (
             });
     });
 
-    // Account rows (dividends, taxes, deposits, ...)
-    const movements = new Map<string, CashMovement>(
-        (project.cashMovements || []).map((m) => [`${m.portfolioId || ''}|${movementKey(m)}`, m])
+    // Statement rows (dividends, taxes, deposits, FX legs, ...)
+    const knownMovements = new Set(
+        ledger
+            .filter((entry) => entry.kind !== 'buy' && entry.kind !== 'sell' && entry.kind !== 'split' && entry.externalId)
+            .map((entry) => `${entry.portfolioId || ''}|${entry.externalId}`)
     );
-    let addedMovements = 0;
+    const movementEntries: LedgerEntry[] = [];
     let duplicateMovements = 0;
     batch.cashMovements.forEach((movement) => {
         const sourceKey = movementKey(movement);
         const key = `${target.id}|${sourceKey}`;
-        if (movements.has(key)) {
+        if (knownMovements.has(key)) {
             duplicateMovements += 1;
             return;
         }
-        addedMovements += 1;
-        movements.set(key, {
-            id: `mv-${hash53(key)}`,
+        knownMovements.add(key);
+        movementEntries.push(entryFromCashMovement({
+            id: `le-${hash53(key)}`,
             date: movement.date,
             type: movement.type,
             amount: movement.amount,
@@ -136,29 +148,34 @@ export const applyImportBatch = (
             isInternal: movement.isInternal,
             sourceKey,
             originalData: movement.originalData
-        });
+        }));
     });
 
-    const changed = merged.added.length > 0 || addedMovements > 0 || batch.cashBalances.length > 0
-        || updatedPortfolios !== portfolios;
+    const added = [...tradeEntries, ...movementEntries];
+    const { entries: nextLedger, dropped } = dropDuplicateTradeFees(sortLedger([...ledger, ...added]));
+    const surviving = new Set(nextLedger.map((entry) => entry.id));
+    const addedMovements = movementEntries.filter((entry) => surviving.has(entry.id)).length;
+    const droppedExisting = dropped - (movementEntries.length - addedMovements);
+
+    const ledgerChanged = tradeEntries.length + addedMovements > 0 || droppedExisting > 0;
+    const changed = ledgerChanged || batch.cashBalances.length > 0 || updatedPortfolios !== portfolios;
 
     return {
         project: changed
             ? {
                 ...project,
                 portfolios: updatedPortfolios,
-                transactions: merged.transactions,
+                ledger: ledgerChanged ? nextLedger : ledger,
                 securities,
                 cashAccounts: Array.from(accounts.values()),
-                cashMovements: Array.from(movements.values()),
                 modified: new Date().toISOString()
             }
             : project,
         summary: {
-            addedTransactions: merged.added.length,
+            addedTransactions: tradeEntries.length,
             duplicateTransactions: merged.duplicates,
             addedMovements,
-            duplicateMovements,
+            duplicateMovements: duplicateMovements + (movementEntries.length - addedMovements),
             balancePoints: batch.cashBalances.length
         }
     };

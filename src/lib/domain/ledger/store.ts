@@ -1,60 +1,93 @@
-import type { CashMovement, ProjectData, Transaction } from '@/types/domain';
+import type { CashMovement, LedgerEntry, ProjectData, Transaction } from '@/types/domain';
+import { entryFromTransaction, entryToCashMovement, entryToTransaction, getProjectLedger, sortLedger } from './ledger';
 
-// The only place that reads or writes the stored bookings of a project. Components and
-// services go through these functions, so the storage model (today: transactions and
-// cash movements, next: one ledger) can change in one place. All writes are pure.
-// Not yet routed through here: applyImportBatch (merge with dedupe) and the file format.
+// The only place that reads or writes the stored bookings (the ledger). Components and
+// services use the transaction and statement views below. All writes are pure.
 
-type Bookings = Pick<ProjectData, 'transactions' | 'cashMovements'>;
+type WithLedger = Pick<ProjectData, 'ledger'>;
 
-/** Bookings entered or imported as transactions (trades, manual dividends, ...). */
-export const getTransactions = (project: Bookings | null | undefined): Transaction[] => project?.transactions ?? [];
+export const getLedger = (project: WithLedger | null | undefined): LedgerEntry[] => getProjectLedger(project);
 
-/** Imported account statement rows. */
-export const getCashMovements = (project: Bookings | null | undefined): CashMovement[] => project?.cashMovements ?? [];
+const withLedger = <P extends WithLedger>(project: P, ledger: LedgerEntry[]): P => ({ ...project, ledger });
 
-export const addTransactions = <P extends Bookings>(project: P, transactions: Transaction[]): P => (
-    transactions.length === 0 ? project : { ...project, transactions: [...getTransactions(project), ...transactions] }
+const transactionViewCache = new WeakMap<LedgerEntry[], Transaction[]>();
+const movementViewCache = new WeakMap<LedgerEntry[], CashMovement[]>();
+
+/** Every booking that is a transaction (trades, income, taxes, fees, deposits); internal moves are left out. */
+export const getTransactions = (project: WithLedger | null | undefined): Transaction[] => {
+    const ledger = getLedger(project);
+    let view = transactionViewCache.get(ledger);
+    if (!view) {
+        view = ledger.filter((entry) => !entry.internal).map(entryToTransaction).filter((tx): tx is Transaction => tx !== null);
+        transactionViewCache.set(ledger, view);
+    }
+    return view;
+};
+
+/** Statement view: every cash booking except trades, including internal moves (FX legs, sweeps). */
+export const getCashMovements = (project: WithLedger | null | undefined): CashMovement[] => {
+    const ledger = getLedger(project);
+    let view = movementViewCache.get(ledger);
+    if (!view) {
+        view = ledger.map(entryToCashMovement).filter((movement): movement is CashMovement => movement !== null);
+        movementViewCache.set(ledger, view);
+    }
+    return view;
+};
+
+export const addEntries = <P extends WithLedger>(project: P, entries: LedgerEntry[]): P => (
+    entries.length === 0 ? project : withLedger(project, sortLedger([...getLedger(project), ...entries]))
 );
 
-/** Replaces the transaction with the same id; unknown ids are ignored. */
-export const updateTransaction = <P extends Bookings>(project: P, updated: Transaction): P => {
-    const current = getTransactions(project);
-    if (!current.some((tx) => tx.id === updated.id)) return project;
-    return { ...project, transactions: current.map((tx) => (tx.id === updated.id ? updated : tx)) };
-};
-
-export const removeTransaction = <P extends Bookings>(project: P, id: string): P => {
-    const current = getTransactions(project);
-    const next = current.filter((tx) => tx.id !== id);
-    return next.length === current.length ? project : { ...project, transactions: next };
-};
-
-export const hasTransaction = (project: Bookings | null | undefined, id: string): boolean => (
-    getTransactions(project).some((tx) => tx.id === id)
+export const addTransactions = <P extends WithLedger>(project: P, transactions: Transaction[]): P => (
+    addEntries(project, transactions.map(entryFromTransaction))
 );
 
-/** Keeps the transactions for which `keep` returns true. */
-export const filterTransactions = <P extends Bookings>(project: P, keep: (tx: Transaction) => boolean): P => {
-    const current = getTransactions(project);
-    const next = current.filter(keep);
-    return next.length === current.length ? project : { ...project, transactions: next };
+/**
+ * Applies an edited transaction to its entry. Fields the form does not show (source row,
+ * order id, description) stay, and so does a withholding tax when the type is still "Tax".
+ */
+export const updateTransaction = <P extends WithLedger>(project: P, updated: Transaction): P => {
+    const ledger = getLedger(project);
+    const index = ledger.findIndex((entry) => entry.id === updated.id);
+    if (index < 0) return project;
+    const existing = ledger[index];
+    const edited = entryFromTransaction(updated);
+    const keepKind = existing.kind === 'withholding_tax' && edited.kind === 'tax';
+    const next: LedgerEntry = {
+        ...existing,
+        ...edited,
+        ...(keepKind ? { kind: existing.kind } : {}),
+        ...(edited.raw === undefined && existing.raw !== undefined ? { raw: existing.raw } : {})
+    };
+    if (!edited.savingsPlan) delete next.savingsPlan;
+    const copy = [...ledger];
+    copy[index] = next;
+    return withLedger(project, sortLedger(copy));
 };
+
+export const removeEntry = <P extends WithLedger>(project: P, id: string): P => {
+    const ledger = getLedger(project);
+    const next = ledger.filter((entry) => entry.id !== id);
+    return next.length === ledger.length ? project : withLedger(project, next);
+};
+
+export const removeTransaction = removeEntry;
+
+export const hasTransaction = (project: WithLedger | null | undefined, id: string): boolean => (
+    getLedger(project).some((entry) => entry.id === id)
+);
 
 /** Removes every booking of a portfolio (when the portfolio is deleted). */
-export const removePortfolioBookings = <P extends Bookings>(project: P, portfolioId: string): P => ({
-    ...project,
-    transactions: getTransactions(project).filter((tx) => tx.portfolioId !== portfolioId),
-    cashMovements: getCashMovements(project).filter((movement) => movement.portfolioId !== portfolioId)
-});
+export const removePortfolioBookings = <P extends WithLedger>(project: P, portfolioId: string): P => (
+    withLedger(project, getLedger(project).filter((entry) => entry.portfolioId !== portfolioId))
+);
 
 /** Portfolio ids referenced by any booking, in first-seen order. */
-export const bookingPortfolioIds = (project: Bookings | null | undefined): string[] => {
+export const bookingPortfolioIds = (project: WithLedger | null | undefined): string[] => {
     const ids: string[] = [];
-    const add = (id?: string) => {
-        if (id && !ids.includes(id)) ids.push(id);
-    };
-    getTransactions(project).forEach((tx) => add(tx.portfolioId));
-    getCashMovements(project).forEach((movement) => add(movement.portfolioId));
+    getLedger(project).forEach((entry) => {
+        if (entry.portfolioId && !ids.includes(entry.portfolioId)) ids.push(entry.portfolioId);
+    });
     return ids;
 };
