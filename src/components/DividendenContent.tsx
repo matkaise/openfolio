@@ -665,12 +665,12 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
 
       {/* Dividend Chart (Year over Year) */}
       <Card className="h-96 flex flex-col">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
           <h3 className="font-semibold text-white flex items-center gap-2">
             <BarChart3 size={18} className="text-emerald-400" />
             Dividendenentwicklung
           </h3>
-          <div className="flex gap-4 items-center">
+          <div className="flex flex-wrap gap-2 items-center">
             {/* View Toggles */}
             <div className="flex bg-slate-900/50 p-1 rounded-lg">
               <button

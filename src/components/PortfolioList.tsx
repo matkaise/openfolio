@@ -105,14 +105,14 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
               }
 
               return (
-            <div key={`${stock.security.isin}-${stock.currency}`} onClick={() => onSelectSecurity(stock.security.isin, stock.currency)} className="md3-list-item flex cursor-pointer items-center justify-between p-4">
-              <div className="flex items-center space-x-4">
-                <div className="md3-chip-tonal flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold">
+            <div key={`${stock.security.isin}-${stock.currency}`} onClick={() => onSelectSecurity(stock.security.isin, stock.currency)} className="md3-list-item flex cursor-pointer items-center justify-between gap-3 p-4">
+              <div className="flex min-w-0 flex-1 items-center gap-4">
+                <div className="md3-chip-tonal flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold">
                   {stock.security.name.slice(0, 2).toUpperCase()}
                 </div>
-                <div>
-                  <h4 className="md3-text-main font-medium">{stock.security.name}</h4>
-                  <div className="mt-0.5 flex items-center space-x-2 text-xs text-slate-400">
+                <div className="min-w-0">
+                  <h4 className="md3-text-main truncate font-medium" title={stock.security.name}>{stock.security.name}</h4>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
                       <span className="md3-chip-tonal rounded px-1.5">{stock.security.quoteType || 'Aktie'}</span>
                       <span className="md3-chip-tonal rounded px-1.5">{stock.currency}</span>
                       <span className={statusClass}>{statusLabel}</span>
@@ -125,7 +125,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
                 </div>
               </div>
 
-              <div className="text-right">
+              <div className="shrink-0 text-right">
                 <p className="md3-text-main font-medium">{stock.value.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}</p>
                 <div className="flex flex-col items-end">
                   <p className={`text-xs ${stock.totalReturn >= 0 ? 'md3-positive' : 'md3-negative'}`}>
@@ -160,10 +160,10 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
                 <div
                   key={`${pos.isin}-${pos.currency}`}
                   onClick={() => onSelectSecurity(pos.isin, pos.currency)}
-                  className="md3-list-item flex cursor-pointer items-center justify-between p-4"
+                  className="md3-list-item flex cursor-pointer items-center justify-between gap-3 p-4"
                 >
-                  <div>
-                    <div className="md3-text-main text-sm font-medium">{pos.name}</div>
+                  <div className="min-w-0">
+                    <div className="md3-text-main truncate text-sm font-medium" title={pos.name}>{pos.name}</div>
                     <div className="mt-0.5 text-xs text-slate-400">
                       <span className="md3-chip-tonal rounded px-1.5">{pos.quoteType}</span>
                       <span className="md3-chip-tonal rounded px-1.5 ml-1">{pos.currency}</span>
@@ -171,7 +171,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
                       <span>Letzter Trade: {new Date(pos.lastDate).toLocaleDateString('de-DE')}</span>
                     </div>
                   </div>
-                  <div className={`text-sm font-medium ${pos.realized >= 0 ? 'md3-positive' : 'md3-negative'}`}>
+                  <div className={`shrink-0 text-sm font-medium ${pos.realized >= 0 ? 'md3-positive' : 'md3-negative'}`}>
                     {pos.realized >= 0 ? '+' : ''}{pos.realized.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
                   </div>
                 </div>
