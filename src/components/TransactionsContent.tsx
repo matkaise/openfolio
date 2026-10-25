@@ -8,6 +8,7 @@ import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
 import { type DeletedTxEntry, type TransactionLike } from '@/types/portfolioView';
 import { type CashMovement, type Transaction } from '@/types/domain';
 import { Card } from '@/components/ui/Card';
+import { addTransactions, getCashMovements, getTransactions, hasTransaction, removeTransaction, updateTransaction } from '@/lib/domain/ledger/store';
 
 const TransactionEditModal = ({
   isOpen,
@@ -294,10 +295,10 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
   ), [project, selectedPortfolioIds]);
 
   const filteredCashMovements = useMemo(() => {
-    const movements = project?.cashMovements || [];
+    const movements = getCashMovements(project);
     if (selectedPortfolioIds.length === 0) return movements;
     return movements.filter((entry) => entry.portfolioId && selectedPortfolioIds.includes(entry.portfolioId));
-  }, [project?.cashMovements, selectedPortfolioIds]);
+  }, [project, selectedPortfolioIds]);
 
   const transactionTypes = useMemo(() => {
     const types = new Set<string>();
@@ -448,8 +449,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
     if (!updateProject) return;
 
     updateProject((prev) => ({
-      ...prev,
-      transactions: prev.transactions.filter((t) => t.id !== target.id),
+      ...removeTransaction(prev, target.id),
       cashAccounts: applyManualCashEntryToExplicitHistory(
         prev.cashAccounts,
         target.portfolioId,
@@ -471,11 +471,8 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
     if (!updateProject) return;
 
     updateProject((prev) => ({
-      ...prev,
-      transactions: prev.transactions.some((t) => t.id === entry.tx.id)
-        ? prev.transactions
-        : [...prev.transactions, entry.tx],
-      cashAccounts: prev.transactions.some((t) => t.id === entry.tx.id)
+      ...(hasTransaction(prev, entry.tx.id) ? prev : addTransactions(prev, [entry.tx as Transaction])),
+      cashAccounts: hasTransaction(prev, entry.tx.id)
         ? prev.cashAccounts
         : applyManualCashEntryToExplicitHistory(
           prev.cashAccounts,
@@ -822,7 +819,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
         onSave={(updated) => {
           if (!updateProject) return;
           updateProject((prev) => {
-            const existing = prev.transactions.find((t) => t.id === updated.id);
+            const existing = getTransactions(prev).find((t) => t.id === updated.id);
             let nextCashAccounts = prev.cashAccounts;
 
             if (existing) {
@@ -848,8 +845,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
             );
 
             return {
-              ...prev,
-              transactions: prev.transactions.map((t) => (t.id === updated.id ? updated : t)),
+              ...updateTransaction(prev, updated as Transaction),
               cashAccounts: nextCashAccounts,
               modified: new Date().toISOString()
             };

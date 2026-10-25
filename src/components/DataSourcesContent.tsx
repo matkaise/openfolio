@@ -18,6 +18,7 @@ import { BarChart3, X } from 'lucide-react';
 import { SimpleAreaChart } from './SimpleAreaChart';
 import { Security, type ProjectData } from '@/types/domain';
 import { resolveTicker, searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
+import { getTransactions, removePortfolioBookings } from '@/lib/domain/ledger/store';
 
 const isSecurityPending = (sec: Security, nowMs: number) => securityNeedsSync(sec, new Date(nowMs));
 
@@ -107,7 +108,7 @@ export const DataSourcesContent = () => {
         const txCounts: Record<string, number> = {};
         const cashCounts: Record<string, number> = {};
 
-        (project?.transactions || []).forEach(tx => {
+        getTransactions(project).forEach(tx => {
             if (!tx.portfolioId) return;
             txCounts[tx.portfolioId] = (txCounts[tx.portfolioId] || 0) + 1;
         });
@@ -123,7 +124,7 @@ export const DataSourcesContent = () => {
             txCount: txCounts[p.id] || 0,
             cashCount: cashCounts[p.id] || 0
         }));
-    }, [project?.portfolios, project?.transactions, project?.cashAccounts]);
+    }, [project]);
 
     const applyResolvedTicker = (
         sec: Security,
@@ -190,7 +191,7 @@ export const DataSourcesContent = () => {
         updateProject(prev => {
             const current = prev.securities[sec.isin];
             if (!current) return prev;
-            const manualHistory = buildManualPriceHistory(prev.transactions, sec.isin);
+            const manualHistory = buildManualPriceHistory(getTransactions(prev), sec.isin);
             return {
                 ...prev,
                 securities: {
@@ -290,15 +291,11 @@ export const DataSourcesContent = () => {
     const handleDeletePortfolio = (portfolioId: string) => {
         updateProject(prev => {
             const portfolios = (prev.portfolios || []).filter(p => p.id !== portfolioId);
-            const transactions = prev.transactions.filter(t => t.portfolioId !== portfolioId);
             const cashAccounts = (prev.cashAccounts || []).filter(a => a.portfolioId !== portfolioId);
-            const cashMovements = (prev.cashMovements || []).filter(m => m.portfolioId !== portfolioId);
             return {
-                ...prev,
+                ...removePortfolioBookings(prev, portfolioId),
                 portfolios,
-                transactions,
                 cashAccounts,
-                cashMovements,
                 modified: new Date().toISOString()
             };
         });

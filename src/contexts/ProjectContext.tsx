@@ -22,6 +22,7 @@ import { createProjectKey, type ProjectEncryptionKey } from '@/lib/projectCrypto
 import { downloadFile, pickFileWithInput, supportsFileSystemAccess } from '@/lib/fileAccess';
 import { useNotifications } from '@/components/ui/notifications';
 import { createLogger } from '@/lib/logger';
+import { bookingPortfolioIds } from '@/lib/domain/ledger/store';
 
 const log = createLogger('Project');
 
@@ -30,15 +31,10 @@ const ensurePortfoliosFromData = (project: ProjectData): ProjectData => {
         return project;
     }
 
-    const discoveredIds: string[] = [];
-    const pushId = (id?: string) => {
-        if (!id) return;
-        if (!discoveredIds.includes(id)) discoveredIds.push(id);
-    };
-
-    (project.transactions || []).forEach((tx) => pushId(tx.portfolioId));
-    (project.cashAccounts || []).forEach((account) => pushId(account.portfolioId));
-    (project.cashMovements || []).forEach((movement) => pushId(movement.portfolioId));
+    const discoveredIds = bookingPortfolioIds(project);
+    (project.cashAccounts || []).forEach((account) => {
+        if (account.portfolioId && !discoveredIds.includes(account.portfolioId)) discoveredIds.push(account.portfolioId);
+    });
 
     if (discoveredIds.length === 0) {
         return project;
@@ -306,11 +302,6 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
 
             const loaded = ensurePortfoliosFromData(opened.project);
             const data = removeLegacySplitTransactions(loaded);
-
-            // Basic validation
-            if (!data.version || !data.transactions) {
-                throw new Error('Ungueltiges Dateiformat');
-            }
 
             setSqliteSession(opened.sqliteSession);
             setEncryptionKey(opened.encryptionKey);

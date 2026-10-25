@@ -13,6 +13,7 @@ import { applyImportBatch, emptyImportBatch, isEmptyImportBatch, type ImportBatc
 import { searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
 import { createLogger } from '@/lib/logger';
 import { buildGenericCashBalances, buildGenericTransactions, guessCsvMapping, parseGenericCsv, type CsvDateFormat, type CsvMapping } from '@/lib/importers/genericCsv';
+import { addTransactions, getTransactions } from '@/lib/domain/ledger/store';
 
 const log = createLogger('TransactionModal');
 
@@ -398,7 +399,8 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             const symbolValue = options.resolvedSymbol || fallbackIdentifier;
             const existing = prev.securities[securityKey];
 
-            const transactions = [...prev.transactions, { ...newTransaction, isin: securityKey, portfolioId: target.id }];
+            const withTransaction = addTransactions(prev, [{ ...newTransaction, isin: securityKey, portfolioId: target.id }]);
+            const transactions = getTransactions(withTransaction);
 
             const manualHistory = options.ignoreMarketData
                 ? buildManualPriceHistory(transactions, securityKey)
@@ -428,9 +430,8 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             };
 
             return {
-                ...prev,
+                ...withTransaction,
                 portfolios: updatedPortfolios,
-                transactions,
                 securities: updatedSecurities,
                 cashAccounts: prev.cashAccounts,
                 modified: new Date().toISOString()
@@ -575,9 +576,8 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             }
 
             return {
-                ...prev,
+                ...addTransactions(prev, [{ ...newTransaction, portfolioId: target.id }]),
                 portfolios: updatedPortfolios,
-                transactions: [...prev.transactions, { ...newTransaction, portfolioId: target.id }],
                 cashAccounts: manualHoldingType === 'cash'
                     ? applyManualCashEntryToExplicitHistory(prev.cashAccounts, target.id, newTransaction, {
                         portfolioName: target.name
