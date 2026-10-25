@@ -1,6 +1,7 @@
 import { calculateHoldings, type Holding } from '@/lib/portfolioUtils';
 import { getProjectLedger, ledgerToTransactions } from '@/lib/domain/ledger/buildLedger';
 import { type CashAccount, type ProjectData, type Security, type Transaction } from '@/types/domain';
+import { getTransactions } from '@/lib/domain/ledger/store';
 
 const resolveActivePortfolioIds = (project: ProjectData, selectedPortfolioIds: string[]): string[] | null => {
   if (selectedPortfolioIds.length === 0) return null;
@@ -37,16 +38,16 @@ export const filterTransactionsByPortfolio = (
 ): Transaction[] => {
   if (!project) return [];
   if (selectedPortfolioIds.length === 0) {
-    return project.transactions;
+    return getTransactions(project);
   }
 
   const validPortfolioIds = new Set((project.portfolios || []).map((portfolio) => portfolio.id));
   const activeIds = selectedPortfolioIds.filter((id) => validPortfolioIds.has(id));
   if (activeIds.length === 0) {
-    return project.transactions;
+    return getTransactions(project);
   }
 
-  return project.transactions.filter(
+  return getTransactions(project).filter(
     t => t.portfolioId && activeIds.includes(t.portfolioId)
   );
 };

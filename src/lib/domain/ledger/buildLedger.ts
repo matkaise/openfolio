@@ -1,5 +1,6 @@
 import { classifyDegiroAccountDescription, parseDegiroAccountRow } from '@/lib/csvParser';
 import type { CashMovement, ProjectData, Transaction } from '@/types/domain';
+import { getCashMovements, getTransactions } from './store';
 
 export type LedgerKind =
     | 'buy' | 'sell' | 'dividend' | 'withholding_tax' | 'tax' | 'fee' | 'interest'
@@ -162,14 +163,14 @@ const fromCashMovement = (movement: CashMovement): LedgerEntry => {
  * movements are complete), otherwise they are reclassified from their raw row.
  */
 export const buildLedger = (project: Pick<ProjectData, 'transactions' | 'cashMovements'>): LedgerEntry[] => {
-    const movements = project.cashMovements || [];
+    const movements = getCashMovements(project);
     const portfoliosWithAccountRows = new Set(
         movements.filter((m) => m.broker === 'Flatex').map((m) => m.portfolioId || '')
     );
     // Trade fees appear twice in DEGIRO exports: on the trade row and as an account row.
     // The trade keeps them (cost basis); the account row is skipped when its trade is known.
     const tradeOrders = new Set(
-        (project.transactions || [])
+        getTransactions(project)
             .map((tx) => {
                 const orderId = tradeOrderId(tx);
                 return orderId ? `${tx.portfolioId || ''}|${orderId}` : null;
@@ -178,7 +179,7 @@ export const buildLedger = (project: Pick<ProjectData, 'transactions' | 'cashMov
     );
 
     const entries: LedgerEntry[] = [];
-    (project.transactions || []).forEach((tx) => {
+    getTransactions(project).forEach((tx) => {
         const legacyRow = legacyAccountRow(tx);
         if (!legacyRow) {
             entries.push(fromTransaction(tx));

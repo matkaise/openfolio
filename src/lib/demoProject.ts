@@ -1,4 +1,5 @@
 import { createEmptyProject, type ProjectData, type Security, type Transaction } from '@/types/domain';
+import { addTransactions } from '@/lib/domain/ledger/store';
 
 // Demo portfolio with well-known public securities, to try the app without own data.
 // Trades and amounts are made up; prices come from the normal market data sync.
@@ -54,6 +55,5 @@ export const createDemoProject = (now: Date = new Date()): ProjectData => {
         if (new Date(year, 5, 12) <= now) add({ date: `${year}-06-12`, type: 'Dividend', isin: 'US5949181045', name: 'Microsoft Corp.', amount: 8 * 0.68, currency: 'USD' });
     }
 
-    project.transactions = txs.sort((a, b) => a.date.localeCompare(b.date));
-    return project;
+    return addTransactions(project, txs.sort((a, b) => a.date.localeCompare(b.date)));
 };

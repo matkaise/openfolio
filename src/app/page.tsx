@@ -40,6 +40,7 @@ import { PortfolioList } from '@/components/PortfolioList';
 import { BrokersContent } from '@/components/brokers/BrokersContent';
 import { PendingImportDialog } from '@/components/brokers/PendingImportDialog';
 import { TanDialog } from '@/components/brokers/TanDialog';
+import { getTransactions } from '@/lib/domain/ledger/store';
 
 const NAV_ITEMS = [
   { key: 'Dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -592,7 +593,7 @@ export default function PortfolioApp() {
             isOpen={!!selectedSecurity}
             onClose={() => setSelectedSecurity(null)}
             security={project.securities[selectedSecurity.isin]}
-            transactions={project.transactions}
+            transactions={getTransactions(project)}
             currencyFilter={selectedSecurity.currency}
           />
         )}

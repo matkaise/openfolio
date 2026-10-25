@@ -1,6 +1,7 @@
 import { ProjectData, type Security, type Transaction } from '@/types/domain';
 import { parseYahooQuoteResponse, type YahooQuoteResponse } from '@/lib/schemas/api';
 import { createLogger } from '@/lib/logger';
+import { filterTransactions, getTransactions } from '@/lib/domain/ledger/store';
 
 const log = createLogger('MarketData');
 
@@ -189,8 +190,7 @@ export type SecurityPatches = Record<string, Partial<Security>>;
 
 /** Removes the "System" split transactions older versions created; splits live on the security now. */
 export const removeLegacySplitTransactions = (project: ProjectData): ProjectData => {
-    const transactions = project.transactions.filter(t => t.type !== 'Split' || t.broker !== 'System');
-    return transactions.length === project.transactions.length ? project : { ...project, transactions };
+    return filterTransactions(project, (t) => t.type !== 'Split' || t.broker !== 'System');
 };
 
 /**
@@ -270,7 +270,7 @@ export const syncSecurityPatches = async (
         ? Math.floor(concurrencyRaw as number)
         : (fullSyncMode ? FULL_SYNC_CONCURRENCY : SYNC_CONCURRENCY);
 
-    const transactions = project.transactions;
+    const transactions = getTransactions(project);
 
     let syncedCount = 0;
     let attemptedCount = 0;
@@ -511,7 +511,7 @@ export const repairProjectSecurities = (project: ProjectData): ProjectData => {
     const securities = { ...project.securities };
     let hasRepairs = false;
 
-    project.transactions.forEach(tx => {
+    getTransactions(project).forEach(tx => {
         if (tx.isin && !securities[tx.isin]) {
             log.debug(`Repair: backfilling security for ${tx.isin}`);
             securities[tx.isin] = {
