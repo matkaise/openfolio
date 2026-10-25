@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { AlertTriangle, CheckCircle2, FolderOpen, KeyRound, Landmark, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProjectData } from '@/contexts/ProjectContext';
 import { getBrokerConnections } from '@/lib/brokers/connections';
 import type { BrokerConnection, ProjectData } from '@/types/domain';
 import { useBrokerSync, type ConnectionStatus } from './BrokerSyncContext';
@@ -193,7 +193,7 @@ const hasStoredSecrets = (connection: BrokerConnection) => {
 };
 
 export const BrokersContent = () => {
-    const { project } = useProject();
+    const project = useProjectData();
     const { supported, statuses, connectDegiroFolder, connectIbkrFlex, connectTrading212, connectComdirect, canStoreTokens, checkConnection, removeConnection } = useBrokerSync();
     const [degiroTarget, setDegiroTarget] = useState<string>('new');
     const [degiroName, setDegiroName] = useState('DEGIRO');

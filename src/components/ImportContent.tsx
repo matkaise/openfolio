@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Wallet, Plus, CheckCircle2, AlertCircle } from 'lucide-react';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProjectData } from '@/contexts/ProjectContext';
 
 interface ImportContentProps {
     onContinue: (portfolioId: string, isNew: boolean, newName?: string) => void;
 }
 
 export const ImportContent = ({ onContinue }: ImportContentProps) => {
-    const { project } = useProject();
+    const project = useProjectData();
     const initialPortfolioId = project?.portfolios?.[0]?.id || '';
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>(initialPortfolioId);
     const [isNewPortfolio, setIsNewPortfolio] = useState(!(project?.portfolios && project.portfolios.length > 0));

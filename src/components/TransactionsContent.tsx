@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, FileText, Search, Wallet, X } from 'lucide-react';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProjectActions, useProjectData } from '@/contexts/ProjectContext';
 import { useNotifications } from '@/components/ui/notifications';
 import { filterTransactionsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency, getCurrencyOptions } from '@/lib/fxUtils';
@@ -264,7 +264,8 @@ const DeletedTransactionsModal = ({
 };
 
 export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: string[] }) => {
-  const { project, updateProject } = useProject();
+  const project = useProjectData();
+  const { updateProject } = useProjectActions();
   const [activeTab, setActiveTab] = useState<'transactions' | 'cash'>('transactions');
   const [txSearch, setTxSearch] = useState('');
   const [txType, setTxType] = useState('Alle');

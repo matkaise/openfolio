@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Globe, Loader2, RefreshCw, CheckCircle, Search, Check, PencilLine, Trash2 } from 'lucide-react';
-import { useProject } from '@/contexts/ProjectContext';
+import { useProjectActions, useProjectData, useProjectStoreShallow } from '@/contexts/ProjectContext';
 import {
     AreaChart,
     Area,
@@ -23,7 +23,13 @@ import { getTransactions, removePortfolioBookings } from '@/lib/domain/ledger/st
 const isSecurityPending = (sec: Security, nowMs: number) => securityNeedsSync(sec, new Date(nowMs));
 
 export const DataSourcesContent = () => {
-    const { project, syncFx, syncMarket, isSyncing, isMarketSyncing, marketSyncProgress, updateProject } = useProject();
+    const project = useProjectData();
+    const { syncFx, syncMarket, updateProject } = useProjectActions();
+    const { isSyncing, isMarketSyncing, marketSyncProgress } = useProjectStoreShallow((state) => ({
+        isSyncing: state.isSyncing,
+        isMarketSyncing: state.isMarketSyncing,
+        marketSyncProgress: state.marketSyncProgress
+    }));
     const [selectedCurrency, setSelectedCurrency] = useState('USD');
     const [timeRange, setTimeRange] = useState('1J');
 
