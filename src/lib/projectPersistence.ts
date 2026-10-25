@@ -1,9 +1,7 @@
 import initSqlJs from 'sql.js';
-import { normalizeProjectWealthGoal } from '@/lib/wealthGoalUtils';
 import { OUTDATED_PROJECT_MESSAGE, parseNumberRecordMap, parseProjectData, ProjectFormatError } from '@/lib/schemas/project';
 import {
   InvalidPasswordError,
-  createProjectKey,
   decryptProjectBytes,
   encryptProjectBytes,
   isEncryptedProjectBytes,
@@ -15,7 +13,6 @@ const SQLITE_FILE_EXTENSIONS = ['.openfolio', '.sqlite', '.sqlite3', '.db'];
 const SQLITE_HEADER = 'SQLite format 3\u0000';
 const SQLITE_SCHEMA_VERSION = '3'; // v3: one ledger section instead of transactions + cash movements
 // Iteration default of the old hash-only "password protection" (pre-encryption files).
-const LEGACY_PASSWORD_ITERATIONS = 210000;
 
 const SQLITE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS project_meta (
@@ -31,20 +28,11 @@ CREATE TABLE IF NOT EXISTS project_sections (
 
 export type ProjectStorageFormat = 'json' | 'sqlite';
 
-// Hash-only password metadata written by files from before encryption existed.
-interface LegacyPasswordConfig {
-  salt: string;
-  hash: string;
-  iterations: number;
-}
-
 /**
  * - `none`: no password.
  * - `encrypted`: AES-GCM container (see projectCrypto).
- * - `legacy-unencrypted`: old file that only stored a password hash next to plain-text data.
- *   It opens with the password and is written encrypted on the next save.
  */
-export type ProjectEncryptionStatus = 'none' | 'encrypted' | 'legacy-unencrypted';
+export type ProjectEncryptionStatus = 'none' | 'encrypted';
 
 export interface SqliteProjectSession {
   readonly format: 'sqlite';
@@ -110,70 +98,6 @@ const sqlValueToText = (value: initSqlJs.SqlValue | null | undefined): string | 
   return String(value);
 };
 
-const base64ToBytes = (base64: string): Uint8Array => {
-  if (typeof Buffer !== 'undefined') {
-    return new Uint8Array(Buffer.from(base64, 'base64'));
-  }
-
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-};
-
-const constantTimeEqual = (a: Uint8Array, b: Uint8Array): boolean => {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    diff |= a[i] ^ b[i];
-  }
-  return diff === 0;
-};
-
-const derivePasswordHashBytes = async (
-  password: string,
-  salt: Uint8Array,
-  iterations: number
-): Promise<Uint8Array> => {
-  const subtle = globalThis.crypto?.subtle;
-  if (!subtle) {
-    throw new Error('WebCrypto ist in diesem Browser nicht verfuegbar.');
-  }
-
-  const keyMaterial = await subtle.importKey(
-    'raw',
-    new TextEncoder().encode(password),
-    'PBKDF2',
-    false,
-    ['deriveBits']
-  );
-
-  const normalizedSalt = new Uint8Array(salt.byteLength);
-  normalizedSalt.set(salt);
-
-  const bits = await subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      salt: normalizedSalt.buffer,
-      iterations,
-      hash: 'SHA-256'
-    },
-    keyMaterial,
-    256
-  );
-
-  return new Uint8Array(bits);
-};
-
-const verifyLegacyPassword = async (password: string, config: LegacyPasswordConfig): Promise<boolean> => {
-  const saltBytes = base64ToBytes(config.salt);
-  const expectedHash = base64ToBytes(config.hash);
-  const actualHash = await derivePasswordHashBytes(password, saltBytes, config.iterations || LEGACY_PASSWORD_ITERATIONS);
-  return constantTimeEqual(actualHash, expectedHash);
-};
-
 const detectFormatByFileName = (fileName?: string | null): ProjectStorageFormat => {
   const lower = (fileName || '').toLowerCase();
   return SQLITE_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext)) ? 'sqlite' : 'json';
@@ -228,20 +152,6 @@ const mergeSecurityPayload = (
   return result;
 };
 
-/**
- * Id for files written without one. Derived from stored metadata so the project keeps the
- * same identity every time it is opened (a random id would change on each open).
- */
-export const legacyProjectId = (meta: Record<string, string>): string => {
-  const source = `${meta.created || ''}|${meta.name || ''}`;
-  let hash = 0x811c9dc5; // FNV-1a
-  for (let i = 0; i < source.length; i += 1) {
-    hash ^= source.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return `legacy-${hash.toString(16).padStart(8, '0')}`;
-};
-
 class SqliteProjectSessionImpl implements SqliteProjectSession {
   readonly format = 'sqlite' as const;
   hasLazyPayload = false;
@@ -249,7 +159,6 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
   private readonly db: initSqlJs.Database;
   private heavyDataHydrated = true;
   private readonly sectionSnapshot = new Map<string, string>();
-  private legacyPasswordConfig: LegacyPasswordConfig | null = null;
 
   private constructor(db: initSqlJs.Database, isNewDatabase: boolean) {
     this.db = db;
@@ -261,7 +170,6 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
 
     this.hasLazyPayload = this.detectHeavyPayload();
     this.heavyDataHydrated = !this.hasLazyPayload;
-    this.legacyPasswordConfig = this.readLegacyPasswordConfig();
     this.primeSnapshots();
   }
 
@@ -297,21 +205,6 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
     return sqlValueToText(value);
   }
 
-  private tableExists(name: string): boolean {
-    const row = this.querySingleValue(
-      'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
-      ['table', name]
-    );
-    return Boolean(row);
-  }
-
-  private scalarCount(sql: string): number {
-    const value = this.db.exec(sql)[0]?.values?.[0]?.[0];
-    if (typeof value === 'number') return value;
-    if (typeof value === 'string') return Number(value) || 0;
-    return 0;
-  }
-
   private sectionPayloadLength(name: string): number {
     const value = this.querySingleValue('SELECT LENGTH(payload) FROM project_sections WHERE name = ?', [name]);
     if (typeof value === 'number') return value;
@@ -323,63 +216,14 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
     return this.sectionPayloadLength('security_price_history') > 2 || this.sectionPayloadLength('fx_rates') > 2;
   }
 
-  private readLegacyPasswordConfig(): LegacyPasswordConfig | null {
-    const enabled = this.getMetaValue('password_enabled');
-    if (enabled !== '1') return null;
-
-    const salt = this.getMetaValue('password_salt');
-    const hash = this.getMetaValue('password_hash');
-    const iterationsRaw = this.getMetaValue('password_iterations');
-    const iterations = Number(iterationsRaw || LEGACY_PASSWORD_ITERATIONS);
-
-    if (!salt || !hash || !Number.isFinite(iterations) || iterations <= 0) {
-      throw new Error('Ungueltige Passwort-Metadaten im Projekt.');
-    }
-
-    return {
-      salt,
-      hash,
-      iterations
-    };
-  }
-
   private assertSchemaVersion(): void {
     const version = this.getMetaValue('schema_version');
-    if (!version) {
-      const metaRows = this.scalarCount('SELECT COUNT(*) FROM project_meta');
-      const sectionRows = this.scalarCount('SELECT COUNT(*) FROM project_sections');
-
-      // Accept blank/new DBs and partially written v2 files without schema_version.
-      // This avoids false "old version" errors for freshly created files.
-      if (metaRows === 0 || sectionRows > 0) {
-        this.upsertMeta('schema_version', SQLITE_SCHEMA_VERSION);
-        return;
-      }
-
-      const hasLegacyTables = [
-        'portfolios',
-        'transactions',
-        'securities',
-        'cash_accounts',
-        'cash_movements',
-        'fx_rates',
-        'security_price_history',
-        'fx_rate_points'
-      ].some((name) => this.tableExists(name));
-
-      if (hasLegacyTables) {
-        throw new Error('Nicht unterstuetztes SQLite-Projektformat (alte Version). Bitte neu als .sqlite speichern.');
-      }
-
-      throw new Error('SQLite-Datei ist unvollstaendig oder beschaedigt.');
-    }
-
-    if (version !== SQLITE_SCHEMA_VERSION) {
-      throw new Error(Number(version) < Number(SQLITE_SCHEMA_VERSION)
-        ? OUTDATED_PROJECT_MESSAGE
-        : `Nicht unterstuetztes SQLite-Projektformat v${version}. Erwartet: v${SQLITE_SCHEMA_VERSION}.`);
-    }
+    if (version === SQLITE_SCHEMA_VERSION) return;
+    // No or an older schema version: written by an older test version of Openfolio
+    if (!version || Number(version) < Number(SQLITE_SCHEMA_VERSION)) throw new Error(OUTDATED_PROJECT_MESSAGE);
+    throw new Error(`Nicht unterstuetztes SQLite-Projektformat v${version}. Erwartet: v${SQLITE_SCHEMA_VERSION}.`);
   }
+
 
   private primeSnapshots(): void {
     this.sectionSnapshot.clear();
@@ -406,15 +250,6 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
     return safeJsonParse<T>(payloadText, fallback);
   }
 
-  getLegacyPasswordConfig(): LegacyPasswordConfig | null {
-    return this.legacyPasswordConfig;
-  }
-
-  async verifyLegacyPassword(password: string): Promise<boolean> {
-    if (!this.legacyPasswordConfig) return true;
-    return verifyLegacyPassword(password, this.legacyPasswordConfig);
-  }
-
   readProjectBase(lazy: boolean): ProjectData {
     const meta = this.readMetaMap();
 
@@ -435,7 +270,7 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
 
     const project: ProjectData = {
       version: Number(meta.version || '1'),
-      id: meta.id || legacyProjectId(meta),
+      id: meta.id || '',
       name: meta.name || 'Mein Portfolio',
       created: meta.created || new Date().toISOString(),
       modified: meta.modified || new Date().toISOString(),
@@ -451,7 +286,7 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
       }
     };
 
-    return normalizeProjectWealthGoal(parseProjectData(project));
+    return parseProjectData(project);
   }
 
   async hydrateHeavyData(baseProject: ProjectData): Promise<ProjectData> {
@@ -516,12 +351,6 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
       this.upsertMeta('settings_json', JSON.stringify(project.settings));
       this.upsertMeta('fx_base_currency', project.fxData.baseCurrency);
       this.upsertMeta('fx_last_updated', project.fxData.lastUpdated || '');
-      // The password now protects the whole file (encryption). Clear the old hash-only fields
-      // so they cannot be used for offline guessing.
-      this.upsertMeta('password_enabled', '0');
-      this.upsertMeta('password_salt', '');
-      this.upsertMeta('password_hash', '');
-      this.upsertMeta('password_iterations', '');
 
       this.upsertSection('portfolios', JSON.stringify(project.portfolios || []));
       this.upsertSection('ledger', JSON.stringify(project.ledger || []));
@@ -547,7 +376,6 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
     if (!preserveUnknownHeavyData || !this.hasLazyPayload) {
       this.heavyDataHydrated = true;
     }
-    this.legacyPasswordConfig = null;
 
     this.db.exec('VACUUM');
     return this.db.export();
@@ -597,19 +425,7 @@ export const openProjectFile = async (
   const format = detectFormatByFileName(file.name);
 
   if (format === 'sqlite' || isLikelySqliteBinary(bytes)) {
-    const session = await SqliteProjectSessionImpl.fromBytes(bytes);
-    const legacyConfig = session.getLegacyPasswordConfig();
-    if (!legacyConfig) {
-      return toOpenedSqliteProject(session, 'none', null);
-    }
-
-    if (!password || !(await session.verifyLegacyPassword(password))) {
-      session.close();
-      throw new Error(password ? 'INVALID_PASSWORD' : 'PASSWORD_REQUIRED');
-    }
-    // Derive a real encryption key now so the next save writes an encrypted file.
-    const encryptionKey = await createProjectKey(password);
-    return toOpenedSqliteProject(session, 'legacy-unencrypted', encryptionKey);
+    return toOpenedSqliteProject(await SqliteProjectSessionImpl.fromBytes(bytes), 'none', null);
   }
 
   const text = new TextDecoder().decode(bytes);
@@ -619,7 +435,7 @@ export const openProjectFile = async (
   } catch {
     throw new ProjectFormatError('kein gültiges JSON');
   }
-  const project = normalizeProjectWealthGoal(parseProjectData(parsed));
+  const project = parseProjectData(parsed);
 
   return {
     project,

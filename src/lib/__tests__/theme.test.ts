@@ -6,11 +6,6 @@ describe('resolveThemePreference', () => {
     expect(resolveThemePreference({ theme: 'light' })).toBe('light');
   });
 
-  it('migrates the old boolean dark mode', () => {
-    expect(resolveThemePreference({ isDarkMode: true })).toBe('dark');
-    expect(resolveThemePreference({ isDarkMode: false })).toBe('light');
-  });
-
   it('follows the system without a setting', () => {
     expect(resolveThemePreference({})).toBe('system');
     expect(resolveThemePreference(null)).toBe('system');

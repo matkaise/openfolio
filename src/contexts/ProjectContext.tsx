@@ -59,7 +59,6 @@ interface ProjectContextType {
     fileName: string | null;
     marketSyncProgress: MarketSyncProgress | null;
     isHydratingProject: boolean;
-    /** 'legacy-unencrypted' means the file on disk is still plain text until the next save. */
     encryptionStatus: ProjectEncryptionStatus;
     /** When the project was last written to (or read from) its file in this session. */
     lastSavedAt: string | null;
@@ -308,8 +307,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             setFileHandle(handle);
             setFileName(file.name);
             setLastSavedAt(new Date(file.lastModified).toISOString());
-            // A legacy file is still plain text on disk; flag it so the user saves (= encrypts) it.
-            setIsModified(opened.encryption === 'legacy-unencrypted' || data !== opened.project);
+            setIsModified(data !== opened.project);
 
             if (opened.hasLazyPayload && opened.sqliteSession) {
                 setIsHydratingProject(true);

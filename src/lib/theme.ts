@@ -4,11 +4,9 @@ export type ThemePreference = 'dark' | 'light' | 'system';
 
 export const THEME_STORAGE_KEY = 'openfolio-theme';
 
-/** Older project files stored a boolean dark mode; no setting at all means "follow the system". */
-export const resolveThemePreference = (settings?: Pick<ProjectSettings, 'theme' | 'isDarkMode'> | null): ThemePreference => {
+/** No setting means "follow the system". */
+export const resolveThemePreference = (settings?: Pick<ProjectSettings, 'theme'> | null): ThemePreference => {
     if (settings?.theme === 'dark' || settings?.theme === 'light' || settings?.theme === 'system') return settings.theme;
-    if (settings?.isDarkMode === true) return 'dark';
-    if (settings?.isDarkMode === false) return 'light';
     return 'system';
 };
 
