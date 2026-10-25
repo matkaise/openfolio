@@ -1,34 +1,75 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, FileText, Search, Wallet, X } from 'lucide-react';
+import {
+  ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, CalendarClock, Coins, FileText, Percent, Receipt, RotateCcw,
+  Search, ShoppingCart, Tag, Trash2, TrendingUp, Undo2
+} from 'lucide-react';
 import { useProjectActions, useProjectData } from '@/contexts/ProjectContext';
 import { useNotifications } from '@/components/ui/notifications';
+import { useFormatters } from '@/components/ui/useFormatters';
+import { Button, CardHeader, EmptyState, Field, GlassCard, IconButton, IconTile, Kpi, ListRow, Pill, Segmented, SelectInput, TextInput, toneOf } from '@/components/ui/primitives';
+import { Modal } from '@/components/ui/Modal';
 import { filterTransactionsByPortfolio } from '@/lib/portfolioSelectors';
-import { convertCurrency, getCurrencyOptions } from '@/lib/fxUtils';
+import { getCurrencyOptions } from '@/lib/fxUtils';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
+import { movementTypeLabel, transactionTypeLabel } from '@/lib/labels';
+import { summarizeCashMovements, summarizeTransactions } from '@/lib/transactionSummary';
 import { type DeletedTxEntry, type TransactionLike } from '@/types/portfolioView';
 import { type CashMovement, type Transaction } from '@/types/domain';
-import { Card } from '@/components/ui/Card';
 import { addTransactions, getCashMovements, getTransactions, hasTransaction, removeTransaction, updateTransaction } from '@/lib/domain/ledger/store';
 import { resolveEditedAmount } from '@/lib/transactionEdit';
 
+const EDITABLE_TYPES: Transaction['type'][] = ['Buy', 'Sparplan_Buy', 'Sell', 'Dividend', 'Tax', 'Fee', 'Interest', 'Deposit', 'Withdrawal'];
+
+type IconTone = 'accent' | 'gain' | 'loss' | 'teal' | 'amber' | 'neutral';
+const TYPE_ICONS: Record<string, { icon: React.ReactNode; tone: IconTone }> = {
+  Buy: { icon: <ShoppingCart size={17} />, tone: 'accent' },
+  Sparplan_Buy: { icon: <CalendarClock size={17} />, tone: 'accent' },
+  Sell: { icon: <Tag size={17} />, tone: 'gain' },
+  Dividend: { icon: <Coins size={17} />, tone: 'gain' },
+  Interest: { icon: <Percent size={17} />, tone: 'teal' },
+  Deposit: { icon: <ArrowDownToLine size={17} />, tone: 'teal' },
+  Withdrawal: { icon: <ArrowUpFromLine size={17} />, tone: 'amber' },
+  Tax: { icon: <Receipt size={17} />, tone: 'loss' },
+  Fee: { icon: <Receipt size={17} />, tone: 'loss' },
+  Transfer: { icon: <ArrowLeftRight size={17} />, tone: 'neutral' },
+  Adjustment: { icon: <ArrowLeftRight size={17} />, tone: 'neutral' }
+};
+const typeIcon = (type: string) => {
+  const entry = TYPE_ICONS[type] ?? { icon: <FileText size={17} />, tone: 'neutral' as const };
+  return <IconTile tone={entry.tone} size={40}>{entry.icon}</IconTile>;
+};
+
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+const monthLabel = (date: string) => new Date(`${date.slice(0, 7)}-01T00:00:00`).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+const dayLabel = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+/** Rows grouped under month headers; the list is already sorted newest first. */
+function groupByMonth<T extends { date: string }>(items: T[]): { month: string; items: T[] }[] {
+  const groups: { month: string; items: T[] }[] = [];
+  items.forEach((item) => {
+    const month = item.date.slice(0, 7);
+    const last = groups[groups.length - 1];
+    if (last && last.month === month) last.items.push(item);
+    else groups.push({ month, items: [item] });
+  });
+  return groups;
+}
+
 const TransactionEditModal = ({
-  isOpen,
-  onClose,
   transaction,
-  typeOptions,
   currencies,
+  onClose,
   onSave,
   onDelete
 }: {
-  isOpen: boolean;
-  onClose: () => void;
   transaction: TransactionLike | null;
-  typeOptions: string[];
   currencies: string[];
+  onClose: () => void;
   onSave: (updated: TransactionLike) => void;
   onDelete: (target: TransactionLike) => void;
 }) => {
   const { confirm } = useNotifications();
+  const formatters = useFormatters();
   const [type, setType] = useState(() => transaction?.type || 'Buy');
   const [date, setDate] = useState(() => transaction?.date || new Date().toISOString().split('T')[0]);
   const [shares, setShares] = useState(() => {
@@ -41,7 +82,9 @@ const TransactionEditModal = ({
   });
   const [currency, setCurrency] = useState(() => transaction?.currency || 'EUR');
 
-  if (!isOpen || !transaction) return null;
+  if (!transaction) return null;
+  const isTrade = type === 'Buy' || type === 'Sell' || type === 'Sparplan_Buy';
+  const amount = resolveEditedAmount({ type, shares, pricePerShare, storedAmount: transaction.amount });
 
   const handleSave = () => {
     const parsedShares = shares === '' ? (transaction.shares ?? transaction.quantity ?? undefined) : Number(shares);
@@ -52,9 +95,6 @@ const TransactionEditModal = ({
       if (type === 'Sell') finalShares = -Math.abs(parsedShares);
       else if (type === 'Buy' || type === 'Sparplan_Buy') finalShares = Math.abs(parsedShares);
     }
-
-    const finalAmount = resolveEditedAmount({ type, shares, pricePerShare, storedAmount: transaction.amount });
-
     const shareKey = transaction.shares !== undefined ? 'shares' : (transaction.quantity !== undefined ? 'quantity' : 'shares');
 
     onSave({
@@ -64,134 +104,65 @@ const TransactionEditModal = ({
       currency,
       pricePerShare: parsedPrice,
       [shareKey]: finalShares,
-      amount: finalAmount
+      amount
+    });
+  };
+
+  const handleDelete = () => {
+    void confirm({
+      title: 'Buchung löschen?',
+      message: 'Sie landet im Papierkorb und lässt sich bis zum Schließen des Projekts wiederherstellen.',
+      confirmLabel: 'Löschen',
+      tone: 'danger'
+    }).then((ok) => {
+      if (ok) onDelete(transaction);
     });
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="md3-card w-full max-w-xl rounded-[28px] p-6 md:p-7"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="md3-text-main text-xl font-bold">Transaktion bearbeiten</h3>
-            <p className="md3-text-muted mt-1 text-xs">{transaction.name || transaction.isin}</p>
-          </div>
-          <button type="button" onClick={onClose} className="md3-icon-btn" aria-label="Schließen">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <label className="md3-text-muted text-xs font-bold uppercase tracking-wider">Typ</label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as Transaction['type'])}
-              className="md3-field w-full px-4 py-3 text-sm outline-none"
-            >
-              {(typeOptions.length ? typeOptions : ['Buy', 'Sell', 'Dividend', 'Sparplan_Buy']).map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="md3-text-muted text-xs font-bold uppercase tracking-wider">Datum</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="md3-field w-full px-4 py-3 text-sm outline-none"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="md3-text-muted text-xs font-bold uppercase tracking-wider">Stück</label>
-            <input
-              type="number"
-              step="0.0001"
-              value={shares}
-              onChange={(e) => setShares(e.target.value)}
-              className="md3-field w-full px-4 py-3 text-sm outline-none"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="md3-text-muted text-xs font-bold uppercase tracking-wider">Preis pro Stk.</label>
-            <input
-              type="number"
-              step="0.0001"
-              value={pricePerShare}
-              onChange={(e) => setPricePerShare(e.target.value)}
-              className="md3-field w-full px-4 py-3 text-sm outline-none"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="md3-text-muted text-xs font-bold uppercase tracking-wider">Betrag</label>
-            <div className="md3-field flex w-full items-center px-4 py-3 text-sm font-semibold">
-              {(() => {
-                const amount = resolveEditedAmount({ type, shares, pricePerShare, storedAmount: transaction.amount });
-                return amount.toLocaleString('de-DE', { style: 'currency', currency });
-              })()}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="md3-text-muted text-xs font-bold uppercase tracking-wider">Währung</label>
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="md3-field w-full px-4 py-3 text-sm outline-none"
-            >
-              {currencies.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="mt-6 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              if (!transaction) return;
-              void confirm({
-                title: 'Transaktion löschen?',
-                message: 'Die Buchung wird aus dem Projekt entfernt.',
-                confirmLabel: 'Löschen',
-                tone: 'danger'
-              }).then((ok) => {
-                if (ok) onDelete(transaction);
-              });
-            }}
-            className="md3-negative-soft rounded-2xl px-4 py-2 text-sm font-semibold transition hover:brightness-105"
-          >
-            Löschen
-          </button>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="md3-text-muted rounded-2xl px-4 py-2 text-sm font-semibold transition hover:brightness-95"
-            >
-              Abbrechen
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="md3-filled-btn px-6 text-sm font-bold"
-            >
-              Speichern
-            </button>
-          </div>
-        </div>
+    <Modal
+      open
+      onClose={onClose}
+      title="Buchung bearbeiten"
+      subtitle={transaction.name || transaction.isin || transactionTypeLabel(transaction.type)}
+      icon={TYPE_ICONS[type]?.icon}
+      footer={(
+        <>
+          <Button variant="danger" icon={<Trash2 size={15} />} onClick={handleDelete} className="ui-foot-start">Löschen</Button>
+          <Button variant="ghost" onClick={onClose}>Abbrechen</Button>
+          <Button variant="primary" onClick={handleSave}>Speichern</Button>
+        </>
+      )}
+    >
+      <div className="ui-grid-2">
+        <Field label="Art">
+          <SelectInput value={type} onChange={(e) => setType(e.target.value as Transaction['type'])}>
+            {EDITABLE_TYPES.map((t) => <option key={t} value={t}>{transactionTypeLabel(t)}</option>)}
+          </SelectInput>
+        </Field>
+        <Field label="Datum">
+          <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+        {isTrade && (
+          <>
+            <Field label="Stück">
+              <TextInput type="number" step="0.0001" inputMode="decimal" value={shares} onChange={(e) => setShares(e.target.value)} />
+            </Field>
+            <Field label="Preis pro Stück">
+              <TextInput type="number" step="0.0001" inputMode="decimal" value={pricePerShare} onChange={(e) => setPricePerShare(e.target.value)} placeholder="unverändert" />
+            </Field>
+          </>
+        )}
+        <Field label="Währung">
+          <SelectInput value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
+          </SelectInput>
+        </Field>
+        <Field label="Betrag" hint={isTrade ? 'Aus Stück × Preis; ohne Preis bleibt der gespeicherte Betrag.' : undefined}>
+          <div className={`ui-input ui-input-static is-${toneOf(amount)}`}>{formatters.moneyIn(amount, currency, { sign: true })}</div>
+        </Field>
       </div>
-    </div>
+    </Modal>
   );
 };
 
@@ -207,61 +178,30 @@ const DeletedTransactionsModal = ({
   items: DeletedTxEntry[];
   onRestore: (entry: DeletedTxEntry) => void;
   onPurge: (entry: DeletedTxEntry) => void;
-}) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="md3-card w-full max-w-2xl rounded-[28px] p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="md3-text-main text-xl font-bold">Papierkorb</h3>
-            <p className="md3-text-muted mt-1 text-xs">{items.length} Einträge</p>
-          </div>
-          <button type="button" onClick={onClose} className="md3-icon-btn" aria-label="Schließen">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="custom-scrollbar max-h-[60vh] space-y-2 overflow-y-auto pr-1">
-          {items.length === 0 ? (
-            <div className="md3-list-item p-6 text-center text-sm md3-text-muted">Keine gelöschten Transaktionen.</div>
-          ) : (
-            items.map((entry) => (
-              <div key={entry.tx.id} className="md3-list-item flex items-center justify-between gap-4 p-3.5">
-                <div className="min-w-0">
-                  <div className="md3-text-main truncate text-sm font-medium">{entry.tx.name || entry.tx.isin}</div>
-                  <div className="md3-text-muted mt-0.5 text-xs">
-                    {new Date(entry.tx.date).toLocaleDateString('de-DE')} - {entry.tx.type}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onRestore(entry)}
-                    className="md3-chip-tonal rounded-xl px-3 py-1.5 text-xs font-semibold"
-                  >
-                    Wiederherstellen
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onPurge(entry)}
-                    className="md3-negative-soft rounded-xl px-3 py-1.5 text-xs font-semibold"
-                  >
-                    Endgültig löschen
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+}) => (
+  <Modal open={isOpen} onClose={onClose} size="lg" title="Papierkorb" subtitle={`${items.length} ${items.length === 1 ? 'Buchung' : 'Buchungen'}, bis zum Schließen des Projekts wiederherstellbar`} icon={<Trash2 size={20} />}>
+    {items.length === 0 ? (
+      <EmptyState icon={<Trash2 size={22} />} title="Der Papierkorb ist leer" text="Gelöschte Buchungen erscheinen hier und lassen sich wiederherstellen." />
+    ) : (
+      <div className="ui-rows">
+        {items.map((entry) => (
+          <ListRow
+            key={entry.tx.id}
+            leading={typeIcon(entry.tx.type)}
+            title={entry.tx.name || entry.tx.isin || transactionTypeLabel(entry.tx.type)}
+            meta={<span>{transactionTypeLabel(entry.tx.type)} · {dayLabel(entry.tx.date)}</span>}
+            trailing={(
+              <span className="ui-row-actions">
+                <Button size="sm" icon={<RotateCcw size={14} />} onClick={() => onRestore(entry)}>Wiederherstellen</Button>
+                <IconButton label="Endgültig entfernen" className="is-danger" onClick={() => onPurge(entry)}><Trash2 size={15} /></IconButton>
+              </span>
+            )}
+          />
+        ))}
       </div>
-    </div>
-  );
-};
+    )}
+  </Modal>
+);
 
 export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: string[] }) => {
   const project = useProjectData();
@@ -349,80 +289,19 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [filteredCashMovements, txSearch, txDateFrom, txDateTo]);
 
-  const cashMovementSummary = useMemo(() => {
-    const summary = {
-      count: visibleCashMovements.length,
-      internalCount: 0,
-      externalCount: 0,
-      net: 0
-    };
-
-    if (!project) return summary;
-
-    visibleCashMovements.forEach((entry) => {
-      if (entry.isInternal) summary.internalCount += 1;
-      else summary.externalCount += 1;
-      summary.net += convertCurrency(project.fxData, entry.amount, entry.currency, baseCurrency, entry.date);
-    });
-
-    return summary;
-  }, [visibleCashMovements, project, baseCurrency]);
+  const cashMovementSummary = useMemo(() => (
+    project ? summarizeCashMovements(visibleCashMovements, project.fxData, baseCurrency) : { count: 0, internalCount: 0, externalCount: 0, net: 0 }
+  ), [visibleCashMovements, project, baseCurrency]);
 
   const activeFilterCount = (txSearch ? 1 : 0)
     + (txType !== 'Alle' ? 1 : 0)
     + (txDateFrom ? 1 : 0)
     + (txDateTo ? 1 : 0);
 
-  const summary = useMemo(() => {
-    const result = {
-      count: visibleTransactions.length,
-      volume: 0,
-      net: 0,
-      inflow: 0,
-      outflow: 0,
-      buyCount: 0,
-      sellCount: 0,
-      dividendCount: 0,
-      feeCount: 0,
-      otherCount: 0,
-      lastTx: visibleTransactions[0] ?? null
-    };
-
-    if (!project) return result;
-
-    visibleTransactions.forEach((t) => {
-      const amount = Number(t.amount) || 0;
-      const currency = t.currency || baseCurrency;
-      const converted = convertCurrency(project.fxData, amount, currency, baseCurrency, t.date);
-
-      result.net += converted;
-      result.volume += Math.abs(converted);
-      if (converted >= 0) result.inflow += converted;
-      else result.outflow += Math.abs(converted);
-
-      switch (t.type) {
-        case 'Buy':
-        case 'Sparplan_Buy':
-          result.buyCount += 1;
-          break;
-        case 'Sell':
-          result.sellCount += 1;
-          break;
-        case 'Dividend':
-          result.dividendCount += 1;
-          break;
-        case 'Fee':
-        case 'Tax':
-          result.feeCount += 1;
-          break;
-        default:
-          result.otherCount += 1;
-          break;
-      }
-    });
-
-    return result;
-  }, [visibleTransactions, project, baseCurrency]);
+  const summary = useMemo(() => (
+    project ? summarizeTransactions(visibleTransactions, project.fxData, baseCurrency) : null
+  ), [visibleTransactions, project, baseCurrency]);
+  const lastTx = visibleTransactions[0] ?? null;
 
   useEffect(() => {
     if (!toastEntry) return;
@@ -478,332 +357,172 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
     setToastEntry(null);
   };
 
+  const formatters = useFormatters();
+  const resetFilters = () => {
+    setTxSearch('');
+    setTxType('Alle');
+    setTxDateFrom('');
+    setTxDateTo('');
+  };
+  const nameOf = (tx: TransactionLike) => project?.securities?.[tx.isin || '']?.name || tx.name || tx.isin || transactionTypeLabel(tx.type);
+  const amountText = (amount: number, currency: string | undefined) => formatters.moneyIn(amount, currency || baseCurrency, { sign: true });
+  const isTransactions = activeTab === 'transactions';
+  const shownCount = isTransactions ? visibleTransactions.length : visibleCashMovements.length;
+  const totalCount = isTransactions ? filteredTransactions.length : filteredCashMovements.length;
+
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:items-stretch">
-        <Card className="relative overflow-hidden group md3-card-primary !p-8">
-          <div className="absolute top-0 right-0 p-4 opacity-10 transition-opacity group-hover:opacity-20">
-            <FileText size={120} className="md3-accent" />
-          </div>
-          <div className="relative z-10">
-            <div className="flex items-center justify-between gap-3">
-              <p className="md3-text-muted text-xs uppercase tracking-wider">Transaktionen</p>
-              {activeFilterCount > 0 && (
-                <span className="md3-segment rounded-full px-2.5 py-1 text-[10px] font-semibold">
-                  Filter aktiv: {activeFilterCount}
-                </span>
-              )}
-            </div>
-            <div className="mt-2 flex items-baseline gap-3">
-              <span className="md3-text-main text-4xl font-bold">{summary.count}</span>
-              <span className="md3-text-muted text-sm">Einträge</span>
-            </div>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <span className="md3-segment rounded-full px-3 py-1 text-[11px] font-semibold">Käufe {summary.buyCount}</span>
-              <span className="md3-segment rounded-full px-3 py-1 text-[11px] font-semibold">Verkäufe {summary.sellCount}</span>
-              {summary.dividendCount > 0 && (
-                <span className="md3-segment rounded-full px-3 py-1 text-[11px] font-semibold">Dividenden {summary.dividendCount}</span>
-              )}
-              {summary.feeCount > 0 && (
-                <span className="md3-segment rounded-full px-3 py-1 text-[11px] font-semibold">Gebühren {summary.feeCount}</span>
-              )}
-            </div>
-            <div className="mt-5">
-              <p className="md3-text-muted text-xs uppercase tracking-wider">Volumen</p>
-              <p className="md3-text-main text-lg font-semibold">
-                {summary.volume.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="md3-card-secondary !p-7 flex flex-col justify-between">
-          <div>
-            <p className="md3-text-muted text-xs uppercase tracking-wider">Nettofluss</p>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className={`text-3xl font-bold ${summary.net >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                {summary.net >= 0 ? '+' : ''}{summary.net.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}
-              </span>
-            </div>
-          </div>
-          <div className="mt-6 flex items-center justify-between gap-4 text-xs">
-            <div>
-              <p className="md3-text-muted uppercase tracking-wider">Zufluss</p>
-              <p className="md3-positive font-semibold flex items-center gap-1">
-                <ArrowUpRight size={14} />
-                +{summary.inflow.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="md3-text-muted uppercase tracking-wider">Abfluss</p>
-              <p className="md3-negative font-semibold flex items-center justify-end gap-1">
-                <ArrowDownRight size={14} />
-                -{summary.outflow.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="!p-6 flex flex-col justify-between">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="md3-text-main text-sm font-semibold uppercase tracking-wider">Letzte Transaktion</h3>
-            {summary.lastTx && (
-              <span className="md3-text-muted text-xs">
-                {new Date(summary.lastTx.date).toLocaleDateString('de-DE')}
-              </span>
-            )}
-          </div>
-          {summary.lastTx ? (
-            <div className="md3-list-item flex items-center justify-between gap-3 p-4">
-              <div className="min-w-0">
-                <p className="md3-text-main truncate text-sm font-semibold">
-                  {project?.securities?.[summary.lastTx.isin || '']?.name || summary.lastTx.name || summary.lastTx.isin}
-                </p>
-                <div className="md3-text-muted mt-1 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="md3-segment rounded-md px-2 py-0.5 font-semibold">{summary.lastTx.type}</span>
-                  {summary.lastTx.portfolioId && portfolioNameById[summary.lastTx.portfolioId] ? (
-                    <span className="md3-chip-tonal rounded-md px-2 py-0.5 font-semibold">{portfolioNameById[summary.lastTx.portfolioId]}</span>
-                  ) : null}
-                  {summary.lastTx.shares ? (
-                    <span>{Math.abs(summary.lastTx.shares)} Stk.</span>
-                  ) : null}
-                </div>
-              </div>
-              <div className="text-right">
-                <p className={`text-sm font-semibold ${summary.lastTx.amount >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                  {summary.lastTx.amount >= 0 ? '+' : '-'}
-                  {Math.abs(summary.lastTx.amount || 0).toLocaleString('de-DE', { style: 'currency', currency: summary.lastTx.currency || baseCurrency })}
-                </p>
-                <p className="md3-text-muted text-xs">
-                  {summary.lastTx.currency || baseCurrency}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="md3-list-item p-6 text-center text-sm md3-text-muted">Keine Transaktionen vorhanden.</div>
-          )}
-        </Card>
+    <>
+      <div className="ui-kpis">
+        <Kpi
+          label="Buchungen"
+          value={formatters.number(summary?.count ?? 0)}
+          sub={summary ? [plural(summary.buyCount, 'Kauf', 'Käufe'), plural(summary.sellCount, 'Verkauf', 'Verkäufe'), plural(summary.dividendCount, 'Dividende', 'Dividenden')].join(' · ') : undefined}
+          icon={<FileText size={16} />}
+          tone="accent"
+        />
+        <Kpi
+          label="Nettofluss"
+          value={formatters.money(summary?.net ?? 0, { sign: true })}
+          valueTone={toneOf(summary?.net ?? 0)}
+          sub={summary ? `Zufluss ${formatters.money(summary.inflow)} · Abfluss ${formatters.money(summary.outflow)}` : undefined}
+          icon={<TrendingUp size={16} />}
+          tone="gain"
+        />
+        <Kpi label="Volumen" value={formatters.money(summary?.volume ?? 0)} sub="Summe aller Beträge" icon={<ArrowLeftRight size={16} />} tone="teal" />
+        <Kpi
+          label="Letzte Buchung"
+          value={lastTx ? dayLabel(lastTx.date) : '–'}
+          sub={lastTx ? `${transactionTypeLabel(lastTx.type)} · ${amountText(lastTx.amount || 0, lastTx.currency)}` : 'Noch keine Buchungen'}
+          icon={<CalendarClock size={16} />}
+          tone="amber"
+        />
       </div>
 
-      <Card className="w-full !p-6">
-        <div className="mb-5 inline-flex rounded-2xl p-1 md3-segment">
-          <button
-            type="button"
-            onClick={() => setActiveTab('transactions')}
-            className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${activeTab === 'transactions' ? 'md3-chip-tonal' : 'md3-text-muted'}`}
-          >
-            Transaktionen
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('cash')}
-            className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${activeTab === 'cash' ? 'md3-chip-tonal' : 'md3-text-muted'}`}
-          >
-            Kontobewegungen
-          </button>
-        </div>
-
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="md3-text-main flex items-center gap-2 text-lg font-bold">
-              {activeTab === 'transactions' ? <FileText size={20} className="md3-accent" /> : <Wallet size={20} className="md3-accent" />}
-              {activeTab === 'transactions' ? 'Transaktionen' : 'Kontobewegungen'}
-            </h2>
-            <p className="md3-text-muted mt-1 text-xs">
-              {activeTab === 'transactions'
-                ? `${filteredTransactions.length} gesamt ${visibleTransactions.length !== filteredTransactions.length ? `- ${visibleTransactions.length} gefiltert` : ''}`
-                : `${filteredCashMovements.length} gesamt ${visibleCashMovements.length !== filteredCashMovements.length ? `- ${visibleCashMovements.length} gefiltert` : ''}`}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 md:gap-3">
-            {activeTab === 'transactions' && (
-              <button
-                type="button"
-                onClick={() => setShowDeletedModal(true)}
-                className="md3-chip-tonal rounded-xl px-3 py-1.5 text-xs font-semibold"
-              >
-                Papierkorb ({deletedTxs.length})
-              </button>
-            )}
-
-            {activeTab === 'transactions' ? (
-              <span className="md3-segment rounded-full px-3 py-1.5 text-xs font-semibold">
-                {visibleTransactions.length}
-                {visibleTransactions.length !== filteredTransactions.length ? ` / ${filteredTransactions.length}` : ''}
-                {' '}Einträge
-              </span>
-            ) : (
-              <>
-                <span className="md3-segment rounded-full px-3 py-1.5 text-xs font-semibold">
-                  Intern {cashMovementSummary.internalCount}
-                </span>
-                <span className="md3-segment rounded-full px-3 py-1.5 text-xs font-semibold">
-                  Extern {cashMovementSummary.externalCount}
-                </span>
-                <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${cashMovementSummary.net >= 0 ? 'md3-positive-soft md3-positive' : 'md3-negative-soft md3-negative'}`}>
-                  Netto {cashMovementSummary.net >= 0 ? '+' : ''}{cashMovementSummary.net.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency })}
-                </span>
-                <span className="md3-segment rounded-full px-3 py-1.5 text-xs font-semibold">
-                  {visibleCashMovements.length}
-                  {visibleCashMovements.length !== filteredCashMovements.length ? ` / ${filteredCashMovements.length}` : ''}
-                  {' '}Einträge
-                </span>
-              </>
+      <GlassCard>
+        <CardHeader title={isTransactions ? 'Buchungen' : 'Kontobewegungen'}>
+          <div className="ui-head-actions">
+            <Segmented
+              options={[{ value: 'transactions', label: 'Buchungen' }, { value: 'cash', label: 'Konto' }]}
+              value={activeTab}
+              onChange={setActiveTab}
+              ariaLabel="Ansicht"
+              size="sm"
+            />
+            {isTransactions && (
+              <Button size="sm" variant="ghost" icon={<Trash2 size={14} />} onClick={() => setShowDeletedModal(true)}>
+                Papierkorb{deletedTxs.length > 0 ? ` (${deletedTxs.length})` : ''}
+              </Button>
             )}
           </div>
-        </div>
+        </CardHeader>
 
-        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:flex-wrap">
-          <div className="md3-field relative flex-1 min-w-[220px]">
-            <Search className="md3-text-muted pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" size={16} />
+        <div className="ui-filters">
+          <label className="ui-search-input">
+            <Search size={16} aria-hidden="true" />
             <input
-              type="text"
+              type="search"
               value={txSearch}
               onChange={(e) => setTxSearch(e.target.value)}
-              placeholder={activeTab === 'transactions' ? 'ISIN, Name oder Typ suchen...' : 'Beschreibung, Typ oder Währung suchen...'}
-              className="h-12 w-full border-none bg-transparent pl-9 pr-3 text-sm outline-none"
+              placeholder={isTransactions ? 'Name, ISIN oder Art suchen' : 'Beschreibung, Art oder Währung suchen'}
+              aria-label="Suchen"
             />
-          </div>
-
-          {activeTab === 'transactions' && (
-            <div className="md3-field flex items-center gap-2 px-3">
-              <span className="md3-text-muted text-xs font-semibold">Typ</span>
-              <select
-                value={txType}
-                onChange={(e) => setTxType(e.target.value)}
-                className="h-10 cursor-pointer border-none bg-transparent text-sm font-semibold outline-none"
-              >
-                {transactionTypes.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-            </div>
+          </label>
+          {isTransactions && (
+            <SelectInput aria-label="Art" value={txType} onChange={(e) => setTxType(e.target.value)} className="ui-input-compact">
+              {transactionTypes.map((type) => <option key={type} value={type}>{type === 'Alle' ? 'Alle Arten' : transactionTypeLabel(type)}</option>)}
+            </SelectInput>
           )}
-
-          <div className="md3-field flex items-center gap-2 px-3">
-            <span className="md3-text-muted text-xs font-semibold">Von</span>
-            <input
-              type="date"
-              value={txDateFrom}
-              onChange={(e) => setTxDateFrom(e.target.value)}
-              className="h-10 border-none bg-transparent text-sm outline-none"
-            />
-          </div>
-
-          <div className="md3-field flex items-center gap-2 px-3">
-            <span className="md3-text-muted text-xs font-semibold">Bis</span>
-            <input
-              type="date"
-              value={txDateTo}
-              onChange={(e) => setTxDateTo(e.target.value)}
-              className="h-10 border-none bg-transparent text-sm outline-none"
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setTxSearch('');
-              setTxType('Alle');
-              setTxDateFrom('');
-              setTxDateTo('');
-            }}
-            className="md3-chip-tonal rounded-2xl px-4 py-2 text-sm font-semibold lg:ml-auto"
-          >
-            Filter zurücksetzen
-          </button>
+          <label className="ui-date-filter"><span>Von</span><input type="date" value={txDateFrom} onChange={(e) => setTxDateFrom(e.target.value)} /></label>
+          <label className="ui-date-filter"><span>Bis</span><input type="date" value={txDateTo} onChange={(e) => setTxDateTo(e.target.value)} /></label>
+          {activeFilterCount > 0 && (
+            <Button size="sm" variant="ghost" icon={<RotateCcw size={14} />} onClick={resetFilters}>Filter zurücksetzen</Button>
+          )}
         </div>
 
-        <div className="custom-scrollbar max-h-[66vh] space-y-3 overflow-y-auto pr-1">
-          {activeTab === 'transactions' ? (
-            visibleTransactions.length === 0 ? (
-              <div className="md3-list-item p-8 text-center text-sm md3-text-muted">Keine Transaktionen vorhanden.</div>
-            ) : (
-              visibleTransactions.map((tx) => {
-                const txAmount = tx.amount || 0;
-                const prefix = txAmount > 0 ? '+' : txAmount < 0 ? '-' : '';
-                return (
-                  <div
-                    key={tx.id}
-                    onClick={() => setEditingTx(tx)}
-                    className="md3-list-item flex cursor-pointer items-center justify-between gap-4 p-4"
-                  >
-                    <div className="min-w-0">
-                      <p className="md3-text-main truncate text-sm font-semibold">
-                        {project?.securities?.[tx.isin || '']?.name || tx.name || tx.isin}
-                      </p>
-                      <div className="md3-text-muted mt-1 flex flex-wrap items-center gap-2 text-xs">
-                        <span className="md3-segment rounded-md px-2 py-0.5 font-semibold">{tx.type}</span>
-                        {tx.portfolioId && portfolioNameById[tx.portfolioId] ? (
-                          <span className="md3-chip-tonal rounded-md px-2 py-0.5 font-semibold">{portfolioNameById[tx.portfolioId]}</span>
-                        ) : null}
-                        <span>{new Date(tx.date).toLocaleDateString('de-DE')}</span>
-                        {tx.shares ? (
-                          <span>{Math.abs(tx.shares)} Stk.</span>
-                        ) : null}
-                      </div>
-                    </div>
+        <div className="ui-list-meta">
+          <span>{shownCount === totalCount ? `${totalCount} Einträge` : `${shownCount} von ${totalCount} Einträgen`}</span>
+          {!isTransactions && (
+            <span className="ui-row-sub">
+              <Pill>{cashMovementSummary.externalCount} extern</Pill>
+              <Pill>{cashMovementSummary.internalCount} intern</Pill>
+              <Pill tone={toneOf(cashMovementSummary.net)}>Netto {formatters.money(cashMovementSummary.net, { sign: true })}</Pill>
+            </span>
+          )}
+        </div>
 
-                    <div className="text-right">
-                      <p className={`text-sm font-semibold ${txAmount >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                        {prefix}
-                        {Math.abs(txAmount).toLocaleString('de-DE', { style: 'currency', currency: tx.currency || project?.settings.baseCurrency || 'EUR' })}
-                      </p>
-                      <p className="md3-text-muted text-xs">
-                        {tx.currency || project?.settings.baseCurrency || 'EUR'}
-                      </p>
-                    </div>
+        <div className="ui-scroll" style={{ maxHeight: '68vh' }}>
+          {isTransactions ? (
+            visibleTransactions.length === 0 ? (
+              <EmptyState icon={<FileText size={22} />} title={activeFilterCount > 0 ? 'Keine Treffer' : 'Noch keine Buchungen'} text={activeFilterCount > 0 ? 'Passe die Filter an oder setze sie zurück.' : 'Importiere eine Datei oder erfasse eine Transaktion.'} />
+            ) : (
+              groupByMonth(visibleTransactions).map((group) => (
+                <section key={group.month} className="ui-group">
+                  <h3 className="ui-group-title">{monthLabel(group.month)}</h3>
+                  <div className="ui-rows">
+                    {group.items.map((tx) => {
+                      const amount = tx.amount || 0;
+                      const depot = tx.portfolioId ? portfolioNameById[tx.portfolioId] : undefined;
+                      return (
+                        <ListRow
+                          key={tx.id}
+                          onClick={() => setEditingTx(tx)}
+                          leading={typeIcon(tx.type)}
+                          title={nameOf(tx)}
+                          meta={(
+                            <>
+                              {nameOf(tx) !== transactionTypeLabel(tx.type) && <span>{transactionTypeLabel(tx.type)}</span>}
+                              <span>{dayLabel(tx.date)}</span>
+                              {tx.shares ? <span>{formatters.number(Math.abs(tx.shares), Math.abs(tx.shares) % 1 === 0 ? 0 : 3)} Stk.</span> : null}
+                              {depot && (project?.portfolios.length ?? 0) > 1 && <Pill>{depot}</Pill>}
+                            </>
+                          )}
+                          trailing={<span className={`ui-row-value is-${toneOf(amount)}`}>{amountText(amount, tx.currency)}</span>}
+                        />
+                      );
+                    })}
                   </div>
-                );
-              })
+                </section>
+              ))
             )
           ) : (
             visibleCashMovements.length === 0 ? (
-              <div className="md3-list-item p-8 text-center text-sm md3-text-muted">Keine Kontobewegungen vorhanden.</div>
+              <EmptyState title={activeFilterCount > 0 ? 'Keine Treffer' : 'Keine Kontobewegungen'} text={activeFilterCount > 0 ? 'Passe die Filter an oder setze sie zurück.' : 'Kontobewegungen kommen aus Kontoauszügen und Broker-Importen.'} />
             ) : (
-              visibleCashMovements.map((entry: CashMovement) => {
-                const amount = entry.amount || 0;
-                const prefix = amount > 0 ? '+' : amount < 0 ? '-' : '';
-                return (
-                  <div key={entry.id} className="md3-list-item flex items-center justify-between gap-4 p-4">
-                    <div className="min-w-0">
-                      <p className="md3-text-main truncate text-sm font-semibold">{entry.description || entry.type}</p>
-                      <div className="md3-text-muted mt-1 flex flex-wrap items-center gap-2 text-xs">
-                        <span className="md3-segment rounded-md px-2 py-0.5 font-semibold">{entry.type}</span>
-                        {entry.isInternal ? (
-                          <span className="md3-chip-tonal rounded-md px-2 py-0.5 font-semibold">Intern</span>
-                        ) : (
-                          <span className="md3-chip-tonal rounded-md px-2 py-0.5 font-semibold">Extern</span>
-                        )}
-                        {entry.portfolioId && portfolioNameById[entry.portfolioId] ? (
-                          <span className="md3-chip-tonal rounded-md px-2 py-0.5 font-semibold">{portfolioNameById[entry.portfolioId]}</span>
-                        ) : null}
-                        <span>{new Date(entry.date).toLocaleDateString('de-DE')}</span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-semibold ${amount >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                        {prefix}
-                        {Math.abs(amount).toLocaleString('de-DE', { style: 'currency', currency: entry.currency || baseCurrency })}
-                      </p>
-                      <p className="md3-text-muted text-xs">{entry.currency || baseCurrency}</p>
-                    </div>
+              groupByMonth(visibleCashMovements).map((group) => (
+                <section key={group.month} className="ui-group">
+                  <h3 className="ui-group-title">{monthLabel(group.month)}</h3>
+                  <div className="ui-rows">
+                    {group.items.map((entry: CashMovement) => {
+                      const amount = entry.amount || 0;
+                      return (
+                        <ListRow
+                          key={entry.id}
+                          leading={typeIcon(entry.type)}
+                          title={entry.description || movementTypeLabel(entry.type)}
+                          meta={(
+                            <>
+                              {entry.description && <span>{movementTypeLabel(entry.type)}</span>}
+                              <span>{dayLabel(entry.date)}</span>
+                              {entry.isInternal && <Pill>intern</Pill>}
+                            </>
+                          )}
+                          trailing={<span className={`ui-row-value is-${toneOf(amount)}`}>{amountText(amount, entry.currency)}</span>}
+                        />
+                      );
+                    })}
                   </div>
-                );
-              })
+                </section>
+              ))
             )
           )}
         </div>
-      </Card>
+      </GlassCard>
 
       <TransactionEditModal
         key={editingTx?.id ?? 'edit'}
-        isOpen={!!editingTx}
-        onClose={() => setEditingTx(null)}
         transaction={editingTx}
-        typeOptions={transactionTypes.filter((type) => type !== 'Alle')}
         currencies={currencies}
+        onClose={() => setEditingTx(null)}
         onSave={(updated) => {
           if (!updateProject) return;
           updateProject((prev) => {
@@ -857,26 +576,17 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
       />
 
       {toastEntry ? (
-        <div className="fixed bottom-6 right-6 z-50">
-          <div className="md3-card flex items-center gap-3 rounded-2xl px-4 py-3">
-            <div className="md3-text-main text-sm">Transaktion gelöscht</div>
-            <button
-              type="button"
-              onClick={() => handleRestoreTransaction(toastEntry)}
-              className="md3-chip-tonal rounded-xl px-3 py-1.5 text-xs font-semibold"
-            >
-              Rückgängig
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowDeletedModal(true)}
-              className="md3-segment rounded-xl px-3 py-1.5 text-xs font-semibold md3-text-main"
-            >
-              Papierkorb
-            </button>
+        <div className="ui-toasts" role="status">
+          <div className="ui-toast glass">
+            <span className="ui-toast-icon"><Trash2 size={18} /></span>
+            <span className="ui-toast-text">
+              <span className="ui-toast-title">Buchung gelöscht</span>
+              <span className="ui-toast-message">Im Papierkorb bis zum Schließen des Projekts.</span>
+            </span>
+            <Button size="sm" variant="tonal" icon={<Undo2 size={14} />} onClick={() => handleRestoreTransaction(toastEntry)}>Rückgängig</Button>
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 };
