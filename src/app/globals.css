@@ -941,6 +941,25 @@ body {
 .ui-option-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ui-option-check { flex: none; color: var(--accent); }
 .ui-error { display: inline-flex; align-items: center; gap: 6px; color: var(--loss); font-weight: 600; }
+.ui-input-static { display: flex; align-items: center; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ui-input-static.is-up { color: var(--gain); }
+.ui-input-static.is-down { color: var(--loss); }
+.ui-foot-start { margin-right: auto; }
+.ui-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.ui-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+.ui-search-input { flex: 1 1 240px; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--stroke2); background: var(--surface2); color: var(--text3); }
+.ui-search-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ui-search-input input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; color: var(--text); font: inherit; font-weight: 600; font-size: 13px; }
+.ui-search-input input::placeholder { color: var(--text3); font-weight: 500; }
+.ui-list-meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; font-weight: 600; color: var(--text3); margin: 4px 0 8px; }
+.ui-group + .ui-group { margin-top: 10px; }
+.ui-group-title { margin: 0; padding: 8px 0 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.02em; color: var(--text3); }
+.ui-date-filter { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px 0 12px; border-radius: 12px; border: 1px solid var(--stroke2); background: var(--surface2); font-size: 12px; font-weight: 700; color: var(--text3); }
+.ui-date-filter:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ui-date-filter input { border: 0; background: transparent; outline: none; color: var(--text); font: inherit; font-weight: 600; font-size: 13px; color-scheme: inherit; }
+.ui-row-value.is-up { color: var(--gain); }
+.ui-row-value.is-down { color: var(--loss); }
+.ui-row-actions { display: inline-flex; align-items: center; gap: 8px; flex-direction: row; }
 .ui-stack { display: flex; flex-direction: column; gap: 18px; }
 .ui-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .ui-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
