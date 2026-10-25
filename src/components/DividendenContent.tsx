@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Activity, BarChart3, CalendarCheck, Coins, PiggyBank, Timer, TrendingUp, Wallet, X } from 'lucide-react';
+import { Activity, CalendarCheck, Coins, PiggyBank, Timer } from 'lucide-react';
 import { selectCalculationTransactions, calculateProjectHoldings } from '@/lib/portfolioSelectors';
 import { buildSplitIgnoreDates } from '@/lib/portfolioUtils';
 import { convertCurrency } from '@/lib/fxUtils';
 import { getRangeStartDate, toDateKeyLocal } from '@/lib/dateUtils';
 import { useProjectData } from '@/contexts/ProjectContext';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
-import { Card } from '@/components/ui/Card';
+import { useFormatters } from '@/components/ui/useFormatters';
+import { Avatar, CardHeader, EmptyState, GlassCard, Kpi, ListRow, Segmented } from '@/components/ui/primitives';
+import { Modal } from '@/components/ui/Modal';
 import { type DividendHistoryEntry, type EventEntry, type TransactionLike, type UpcomingDividendEntry } from '@/types/portfolioView';
 import { type Security, type Transaction } from '@/types/domain';
 
@@ -14,68 +16,28 @@ const DividendListModal = ({
   isOpen,
   onClose,
   title,
-  items,
-  currency
+  items
 }: {
   isOpen: boolean;
   onClose: () => void;
   title: string;
   items: { id: string; name: string; date: string; amount: number; type: string }[];
-  currency: string;
 }) => {
-  if (!isOpen) return null;
-
-  const formatCurrency = (value: number) => value.toLocaleString('de-DE', { style: 'currency', currency });
-
+  const formatters = useFormatters();
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <style>{`
-        .dividend-modal-scroll::-webkit-scrollbar { width: 8px; }
-        .dividend-modal-scroll::-webkit-scrollbar-track {
-          background: rgba(15, 23, 42, 0.35);
-          border-radius: 999px;
-        }
-        .dividend-modal-scroll::-webkit-scrollbar-thumb {
-          background: rgba(148, 163, 184, 0.55);
-          border-radius: 999px;
-          border: 2px solid rgba(15, 23, 42, 0.35);
-        }
-        .dividend-modal-scroll::-webkit-scrollbar-thumb:hover {
-          background: rgba(203, 213, 225, 0.75);
-        }
-      `}</style>
-      <div
-        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h3 className="text-xl font-bold text-white">{title}</h3>
-            <p className="text-xs text-slate-400 mt-1">{items.length} Einträge</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
-            <X className="text-slate-400 hover:text-white" />
-          </button>
-        </div>
-
-        <div
-          className="dividend-modal-scroll max-h-[60vh] overflow-y-auto divide-y divide-slate-800 pr-2 -mr-2 [scrollbar-width:thin] [scrollbar-color:rgba(148,163,184,0.5)_rgba(15,23,42,0.3)]"
-          style={{ scrollbarGutter: 'stable both-edges' }}
-        >
-          {items.map(item => (
-            <div key={item.id} className="py-3 flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-200 truncate">{item.name}</div>
-                <div className="text-xs text-slate-500">{item.date} - {item.type}</div>
-              </div>
-              <div className="text-emerald-400 font-medium text-sm whitespace-nowrap">
-                +{formatCurrency(item.amount)}
-              </div>
-            </div>
-          ))}
-        </div>
+    <Modal open={isOpen} onClose={onClose} size="lg" title={title} subtitle={`${items.length} Einträge`} icon={<Coins size={20} />}>
+      <div className="ui-rows ui-scroll" style={{ maxHeight: '60vh' }}>
+        {items.map((item) => (
+          <ListRow
+            key={item.id}
+            leading={<Avatar seed={item.name} label={item.name} size={38} />}
+            title={item.name}
+            meta={<span>{item.date} · {item.type}</span>}
+            trailing={<span className="ui-row-value is-up">{formatters.money(item.amount, { sign: true })}</span>}
+          />
+        ))}
       </div>
-    </div>
+    </Modal>
   );
 };
 
@@ -89,7 +51,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
   } | null>(null);
   const [cumulativeRange, setCumulativeRange] = useState<'1M' | '6M' | 'YTD' | '1J' | '3J' | '5J' | 'MAX'>('1J');
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
-  const formatCurrency = (value: number) => value.toLocaleString('de-DE', { style: 'currency', currency: baseCurrency });
+  const formatters = useFormatters();
 
   // 1. Filter Transactions (same logic as other tabs)
   const filteredTransactions = useMemo(() => (
@@ -623,303 +585,150 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
   }, [combinedMonthlyMap, cumulativeRange]);
 
   const currentYear = new Date().getFullYear();
-  const pastBarColor = 'color-mix(in srgb, var(--md3-outline) 55%, transparent 45%)';
+  const changeVsLastYear = receivedLastYear > 0 ? ((receivedCurrentYear - receivedLastYear) / receivedLastYear) * 100 : 0;
+  const RANGE_OPTIONS = (['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map((value) => ({ value, label: value }));
+  const showAll = (title: string, items: { id: string; name: string; date: string; amount: number; type: string }[]) => setDividendListModal({ title, items });
+
+  const yearlyMax = Math.max(...yearlyDisplayData.map((d) => d.amount), 0) * 1.1 || 1;
+  const monthlyMax = Math.max(...monthlyData.flatMap((d) => d.years.map((y) => y.amount)), 0) * 1.1 || 1;
+
+  const paymentRows = (items: { key: string; name: string; date: string; type: string; amount: number }[]) => (
+    <div className="ui-rows">
+      {items.map((item) => (
+        <ListRow
+          key={item.key}
+          leading={<Avatar seed={item.name} label={item.name} size={38} />}
+          title={item.name}
+          meta={<span>{item.date} · {item.type}</span>}
+          trailing={<span className="ui-row-value is-up">{formatters.money(item.amount, { sign: true })}</span>}
+        />
+      ))}
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Top KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="flex items-center space-x-4">
-          <div className="p-3 bg-emerald-500/10 rounded-xl">
-            <PiggyBank size={28} className="text-emerald-500" />
-          </div>
-          <div>
-            <p className="text-sm text-slate-500">Erhalten {currentYear}</p>
-            <p className="text-2xl font-bold text-white">{receivedCurrentYear.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}</p>
-            <p className={`text-xs flex items-center mt-0.5 ${receivedCurrentYear >= receivedLastYear ? 'text-emerald-400' : 'text-rose-400'}`}>
-              <TrendingUp size={12} className="mr-1" /> {receivedLastYear > 0 ? ((receivedCurrentYear - receivedLastYear) / receivedLastYear * 100).toFixed(1) : 0}% vs. Vorjahr
-            </p>
-          </div>
-        </Card>
-        <Card className="flex items-center space-x-4">
-          <div className="p-3 bg-blue-500/10 rounded-xl">
-            <Timer size={28} className="text-blue-500" />
-          </div>
-          <div>
-            <p className="text-sm text-slate-500">Erwartet (Restjahr)</p>
-            <p className="text-2xl font-bold text-white">{projectedRestYear.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}</p>
-            <p className="text-xs text-slate-400 mt-0.5">Prognose auf Basis von Positionen</p>
-          </div>
-        </Card>
-        <Card className="flex items-center space-x-4">
-          <div className="p-3 bg-purple-500/10 rounded-xl">
-            <Activity size={28} className="text-purple-500" />
-          </div>
-          <div>
-            <p className="text-sm text-slate-500">Pers. Dividendenrendite</p>
-            <p className="text-2xl font-bold text-white">{personalYield.toFixed(2)} %</p>
-            <p className="text-xs text-slate-400 mt-0.5">Yield on Cost: {yieldOnCost.toFixed(2)}%</p>
-          </div>
-        </Card>
+    <>
+      <div className="ui-kpis is-3">
+        <Kpi
+          label={`Erhalten ${currentYear}`}
+          value={formatters.money(receivedCurrentYear)}
+          sub={receivedLastYear > 0 ? `${formatters.percent(changeVsLastYear, { sign: true, decimals: 1 })} gegenüber Vorjahr` : 'Kein Vorjahreswert'}
+          icon={<PiggyBank size={16} />}
+          tone="gain"
+        />
+        <Kpi label="Erwartet (Restjahr)" value={formatters.money(projectedRestYear)} sub="Prognose aus den aktuellen Positionen" icon={<Timer size={16} />} tone="teal" />
+        <Kpi
+          label="Dividendenrendite"
+          value={formatters.percent(personalYield)}
+          sub={`Auf den Einstand: ${formatters.percent(yieldOnCost)}`}
+          icon={<Activity size={16} />}
+          tone="accent"
+        />
       </div>
 
-      {/* Dividend Chart (Year over Year) */}
-      <Card className="h-96 flex flex-col">
-        <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-          <h3 className="font-semibold text-white flex items-center gap-2">
-            <BarChart3 size={18} className="text-emerald-400" />
-            Dividendenentwicklung
-          </h3>
-          <div className="flex flex-wrap gap-2 items-center">
-            {/* View Toggles */}
-            <div className="flex bg-slate-900/50 p-1 rounded-lg">
-              <button
-                onClick={() => setChartView('monthly')}
-                className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${chartView === 'monthly' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                Monatlich
-              </button>
-              <button
-                onClick={() => setChartView('yearly')}
-                className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${chartView === 'yearly' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                Jährlich
-              </button>
-            </div>
-
-            {/* Range Toggles (Only for Yearly) */}
+      <GlassCard>
+        <CardHeader title="Dividendenentwicklung">
+          <div className="ui-head-actions">
+            <Segmented
+              options={[{ value: 'yearly', label: 'Jährlich' }, { value: 'monthly', label: 'Monatlich' }]}
+              value={chartView}
+              onChange={setChartView}
+              ariaLabel="Ansicht"
+              size="sm"
+            />
             {chartView === 'yearly' && (
-              <div className="flex bg-slate-900/50 p-1 rounded-lg">
-                <button
-                  onClick={() => setHistoryRange('5Y')}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${historyRange === '5Y' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
-                >
-                  5J
-                </button>
-                <button
-                  onClick={() => setHistoryRange('MAX')}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-all ${historyRange === 'MAX' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
-                >
-                  max
-                </button>
-              </div>
+              <Segmented options={[{ value: '5Y', label: '5 Jahre' }, { value: 'MAX', label: 'Alle' }]} value={historyRange} onChange={setHistoryRange} ariaLabel="Zeitraum" size="sm" />
             )}
           </div>
-        </div>
+        </CardHeader>
 
-        <div className="flex-1 w-full flex items-end justify-between gap-2 sm:gap-4 px-2">
+        <div className="ui-bars" role="img" aria-label="Dividenden je Zeitraum">
           {chartView === 'monthly' ? (
-            // --- MONTHLY VIEW (Last 5 Years) ---
-            monthlyData.map((m, i) => {
-              // Find global max for scale
-              const allAmounts = monthlyData.flatMap(d => d.years.map(y => y.amount));
-              const maxVal = Math.max(...allAmounts, 1);
-              const max = maxVal * 1.1;
-
-              return (
-                <div key={i} className="flex-1 flex flex-col justify-end items-center h-full group relative">
-                  <div className="w-full flex justify-center items-end gap-px sm:gap-1 h-full px-0.5">
-                    {m.years.map((yData) => {
-                      const isCurrent = yData.year === currentYear;
-                      const barColor = isCurrent
-                        ? 'var(--md3-primary)'
-                        : pastBarColor;
-                      return (
-                      <div
-                        key={yData.year}
-                        className="flex-1 rounded-t-sm transition-all relative group-hover:brightness-110"
-                        style={{ backgroundColor: barColor, height: `${(yData.amount / max) * 100}%` }}
-                      >
-                      </div>
-                    )})}
-                  </div>
-                  <span className="text-[10px] sm:text-xs text-slate-500 mt-3 truncate w-full text-center">{m.month}</span>
-
-                  {/* Hover Tooltip (Detailed) */}
-                  <div className="absolute bottom-full mb-2 bg-slate-800 border border-slate-700 p-2 rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 w-48 text-left">
-                    <div className="text-xs text-slate-400 mb-2 font-bold border-b border-slate-700 pb-1">{m.month} Historie</div>
-                    {m.years.slice().reverse().map(yData => (
-                      <div key={yData.year} className="flex justify-between text-xs mb-0.5">
-                        <span className={yData.year === currentYear ? "text-emerald-400 font-bold" : "text-slate-400"}>{yData.year}</span>
-                        <span className="text-white font-medium">{formatCurrency(yData.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
+            monthlyData.map((m) => (
+              <div key={m.month} className="ui-bar-col">
+                <div className="ui-bar-group">
+                  {m.years.map((yData) => (
+                    <div
+                      key={yData.year}
+                      className={`ui-bar${yData.year === currentYear ? ' is-current' : ''}`}
+                      style={{ height: `${(yData.amount / monthlyMax) * 100}%` }}
+                    />
+                  ))}
                 </div>
-              )
-            })
+                <span className="ui-bar-label">{m.month}</span>
+                <div className="ui-bar-tip glass">
+                  <div className="ui-bar-tip-title">{m.month}</div>
+                  {m.years.slice().reverse().map((yData) => (
+                    <div key={yData.year} className={`ui-bar-tip-row${yData.year === currentYear ? ' is-current' : ''}`}>
+                      <span>{yData.year}</span>
+                      <span>{formatters.money(yData.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
           ) : (
-            // --- YEARLY VIEW ---
-            (() => {
-              const maxVal = Math.max(...yearlyDisplayData.map(d => d.amount));
-              const max = maxVal > 0 ? maxVal * 1.1 : 100;
-
-              return yearlyDisplayData.map((d) => {
-                const barColor = d.isCurrent
-                  ? 'var(--md3-primary)'
-                  : pastBarColor;
-                return (
-                <div key={d.year} className="flex-1 flex flex-col justify-end items-center h-full group relative">
-                  <div
-                    className="w-4 sm:w-8 rounded-t-lg transition-all group-hover:brightness-110"
-                    style={{ backgroundColor: barColor, height: `${(d.amount / max) * 100}%` }}
-                  ></div>
-                  <span className="text-xs text-slate-500 mt-3">{d.year}</span>
-
-                  <div className="absolute bottom-full mb-2 bg-slate-800 border border-slate-700 p-2 rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 min-w-[80px] text-center">
-                    <div className="text-xs text-slate-400 mb-1">{d.year}</div>
-                    <div className="text-sm font-bold text-white">{formatCurrency(d.amount)}</div>
-                  </div>
+            yearlyDisplayData.map((d) => (
+              <div key={d.year} className="ui-bar-col">
+                <div className="ui-bar-group">
+                  <div className={`ui-bar is-wide${d.isCurrent ? ' is-current' : ''}`} style={{ height: `${(d.amount / yearlyMax) * 100}%` }} />
                 </div>
-              )});
-            })()
-          )}
-        </div>
-      </Card>
-
-      {/* Cumulative Dividend Chart */}
-      <Card className="h-80 flex flex-col">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-          <h3 className="font-semibold md3-text-main flex items-center gap-2">
-            <Coins size={18} className="md3-accent" />
-            Kumulierte Dividenden
-          </h3>
-          <div className="md3-segment flex flex-wrap gap-1 p-1 rounded-lg">
-            {(['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map(range => (
-              <button
-                key={range}
-                onClick={() => setCumulativeRange(range)}
-                className={`px-2 py-1 text-xs rounded-md font-medium transition-all ${cumulativeRange === range ? 'md3-chip-tonal' : 'md3-text-muted hover:opacity-90'}`}
-              >
-                {range}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex-1 w-full">
-          <SimpleAreaChart
-            data={cumulativeDividendData}
-            color="var(--md3-primary)"
-            height={240}
-            showAxes={true}
-            timeRange={cumulativeRange}
-            currency={baseCurrency}
-            tooltipLabel="Kumuliert"
-          />
-        </div>
-      </Card>
-
-      {/* Bottom Section: Calendar & History */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Upcoming Payments */}
-        <Card className="flex flex-col h-full">
-          <div className="flex justify-between items-start mb-4">
-            <h3 className="font-semibold text-white flex items-center gap-2">
-              <CalendarCheck size={18} className="text-blue-400" />
-              {'N\u00e4chste Auszahlungen'}
-            </h3>
-          </div>
-          <div className="space-y-3 flex-1">
-            {upcomingDividends.length === 0 ? (
-              <div className="text-slate-400 text-sm p-4 text-center">
-                {'Keine best\u00e4tigten Ex-Dates.'}
-                <br />
-                <span className="text-xs text-slate-500">Prognose basiert auf aktuellen Positionen.</span>
+                <span className="ui-bar-label">{d.year}</span>
+                <div className="ui-bar-tip glass">
+                  <div className="ui-bar-tip-title">{d.year}</div>
+                  <div className="ui-bar-tip-row is-current"><span>Summe</span><span>{formatters.money(d.amount)}</span></div>
+                </div>
               </div>
-            ) : (
-              upcomingDividends.slice(0, 5).map((div, i) => (
-                <div key={`${div.ticker}-${div.date}-${i}`} className={`flex items-center justify-between py-3 ${i !== Math.min(upcomingDividends.length, 5) - 1 ? 'border-b border-slate-700/50' : ''}`}>
-                  <div>
-                    <div className="text-sm font-medium text-slate-200">{div.name}</div>
-                    <div className="text-xs text-slate-500">{div.date} - {div.type}</div>
-                  </div>
-                  <div className="text-emerald-400 font-medium text-sm">
-                    +{formatCurrency(div.amount)}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          {upcomingDividends.length > 0 && (
-            <div className="pt-2">
-              <button
-                onClick={() => {
-                  if (upcomingDividends.length <= 5) return;
-                  setDividendListModal({
-                    title: 'N\u00e4chste Auszahlungen',
-                    items: upcomingDividends.map((div, i) => ({
-                      id: `${div.ticker}-${div.date}-${i}`,
-                      name: div.name,
-                      date: div.date,
-                      amount: div.amount,
-                      type: div.type
-                    }))
-                  });
-                }}
-                disabled={upcomingDividends.length <= 5}
-                className="text-xs text-slate-300 hover:text-white transition-colors disabled:opacity-50"
-              >
-                {upcomingDividends.length <= 5
-                  ? `Alle angezeigt (${upcomingDividends.length})`
-                  : `Alle anzeigen (${upcomingDividends.length})`}
-              </button>
-            </div>
+            ))
           )}
-        </Card>
+        </div>
+      </GlassCard>
 
-        {/* Recent History */}
-        <Card className="flex flex-col h-full">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold text-white flex items-center gap-2">
-              <Wallet size={18} className="text-slate-400" />
-              Zahlungshistorie
-            </h3>
-          </div>
-          <div className="space-y-0 flex-1">
-            {recentDividends.length === 0 ? (
-              <div className="text-slate-400 text-sm p-4 text-center">
-                Keine Auszahlungen gefunden.
-              </div>
-            ) : (
-              recentDividends.slice(0, 5).map((div, i) => (
-                <div key={div.id} className={`flex items-center justify-between py-3 ${i !== Math.min(recentDividends.length, 5) - 1 ? 'border-b border-slate-700/50' : ''}`}>
-                  <div>
-                    <div className="text-sm font-medium text-slate-200">{div.name}</div>
-                    <div className="text-xs text-slate-500">{div.date} - {div.type}</div>
-                  </div>
-                  <div className="text-emerald-400 font-medium text-sm">
-                    +{formatCurrency(div.amount)}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          {recentDividends.length > 0 && (
-            <div className="pt-2">
-              <button
-                onClick={() => {
-                  if (recentDividends.length <= 5) return;
-                  setDividendListModal({
-                    title: 'Zahlungshistorie',
-                    items: recentDividends.map(div => ({
-                      id: div.id,
-                      name: div.name || '',
-                      date: div.date,
-                      amount: div.amount,
-                      type: div.type
-                    }))
-                  });
-                }}
-                disabled={recentDividends.length <= 5}
-                className="text-xs text-slate-300 hover:text-white transition-colors disabled:opacity-50"
-              >
-                {recentDividends.length <= 5
-                  ? `Alle angezeigt (${recentDividends.length})`
-                  : `Alle anzeigen (${recentDividends.length})`}
+      <GlassCard>
+        <CardHeader title="Kumulierte Dividenden">
+          <Segmented options={RANGE_OPTIONS} value={cumulativeRange} onChange={setCumulativeRange} ariaLabel="Zeitraum" size="sm" />
+        </CardHeader>
+        <SimpleAreaChart
+          data={cumulativeDividendData}
+          color="var(--accent)"
+          height={240}
+          showAxes={true}
+          timeRange={cumulativeRange}
+          currency={baseCurrency}
+          tooltipLabel="Kumuliert"
+        />
+      </GlassCard>
+
+      <div className="ui-grid-2" style={{ alignItems: 'start' }}>
+        <GlassCard>
+          <CardHeader title="Nächste Auszahlungen">
+            {upcomingDividends.length > 5 && (
+              <button type="button" className="ui-link" onClick={() => showAll('Nächste Auszahlungen', upcomingDividends.map((div, i) => ({ id: `${div.ticker}-${div.date}-${i}`, name: div.name, date: div.date, amount: div.amount, type: div.type })))}>
+                Alle {upcomingDividends.length} →
               </button>
-            </div>
+            )}
+          </CardHeader>
+          {upcomingDividends.length === 0 ? (
+            <EmptyState icon={<CalendarCheck size={22} />} title="Keine bestätigten Termine" text="Die Prognose basiert auf deinen aktuellen Positionen und den Zahlungen des Vorjahres." />
+          ) : (
+            paymentRows(upcomingDividends.slice(0, 5).map((div, i) => ({ key: `${div.ticker}-${div.date}-${i}`, name: div.name, date: div.date, type: div.type, amount: div.amount })))
           )}
-        </Card>
+        </GlassCard>
+
+        <GlassCard>
+          <CardHeader title="Zahlungshistorie">
+            {recentDividends.length > 5 && (
+              <button type="button" className="ui-link" onClick={() => showAll('Zahlungshistorie', recentDividends.map((div) => ({ id: div.id, name: div.name || '', date: div.date, amount: div.amount, type: div.type })))}>
+                Alle {recentDividends.length} →
+              </button>
+            )}
+          </CardHeader>
+          {recentDividends.length === 0 ? (
+            <EmptyState icon={<Coins size={22} />} title="Noch keine Auszahlungen" text="Dividenden aus Importen oder manuellen Buchungen erscheinen hier." />
+          ) : (
+            paymentRows(recentDividends.slice(0, 5).map((div) => ({ key: div.id, name: div.name || '', date: div.date, type: div.type, amount: div.amount })))
+          )}
+        </GlassCard>
       </div>
 
       <DividendListModal
@@ -927,12 +736,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
         onClose={() => setDividendListModal(null)}
         title={dividendListModal?.title || ''}
         items={dividendListModal?.items || []}
-        currency={baseCurrency}
       />
-    </div>
+    </>
   );
 };
-
-
-
-

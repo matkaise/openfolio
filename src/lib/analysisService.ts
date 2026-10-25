@@ -252,3 +252,22 @@ export function calculateAnalysisMetrics(
         availableYears
     };
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Total time-weighted return of a TWR series (values in %, starting at 0) and the same
+ * return per year. The annual figure is only given for periods of at least a year.
+ */
+export function summarizeTwrSeries(series: { date: string; value: number }[]): { total: number; annualized: number | null; since: string } | null {
+    if (series.length < 2) return null;
+    const first = series[0];
+    const last = series[series.length - 1];
+    const growth = (1 + last.value / 100) / (1 + first.value / 100);
+    const years = (parseDateOnlyUTC(last.date).getTime() - parseDateOnlyUTC(first.date).getTime()) / (DAY_MS * 365.25);
+    return {
+        total: (growth - 1) * 100,
+        annualized: years >= 1 && growth > 0 ? (Math.pow(growth, 1 / years) - 1) * 100 : null,
+        since: first.date
+    };
+}
