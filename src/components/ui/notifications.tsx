@@ -2,6 +2,8 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
+import { Modal } from './Modal';
+import { Button } from './primitives';
 
 // In-app replacements for window.alert / window.confirm: toasts and a confirm dialog.
 
@@ -41,42 +43,27 @@ const ConfirmDialog = ({ request, onClose }: { request: ConfirmRequest; onClose:
     const confirmRef = useRef<HTMLButtonElement>(null);
     useEffect(() => {
         confirmRef.current?.focus();
-        const onKey = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') onClose(false);
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [onClose]);
+    }, []);
+    const danger = request.tone === 'danger';
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 p-4 backdrop-blur-[2px]" onClick={() => onClose(false)}>
-            <div
-                className="glass w-full max-w-sm rounded-3xl p-6"
-                role="alertdialog"
-                aria-modal="true"
-                aria-labelledby="confirm-title"
-                aria-describedby={request.message ? 'confirm-message' : undefined}
-                onClick={(e) => e.stopPropagation()}
-                style={{ background: 'color-mix(in oklch, var(--surface) 92%, transparent)' }}
-            >
-                <h2 id="confirm-title" className="text-base font-extrabold">{request.title}</h2>
-                {request.message && <p id="confirm-message" className="mt-2 text-sm" style={{ color: 'var(--text2)' }}>{request.message}</p>}
-                <div className="mt-5 flex justify-end gap-2">
-                    <button type="button" className="md3-tonal-btn px-4 text-sm" onClick={() => onClose(false)}>
-                        {request.cancelLabel || 'Abbrechen'}
-                    </button>
-                    <button
-                        ref={confirmRef}
-                        type="button"
-                        className="md3-filled-btn px-4 text-sm"
-                        style={request.tone === 'danger' ? { background: 'var(--loss)', color: 'oklch(0.99 0 0)', boxShadow: 'none' } : undefined}
-                        onClick={() => onClose(true)}
-                    >
+        <Modal
+            open
+            size="sm"
+            onClose={() => onClose(false)}
+            title={request.title}
+            icon={danger ? <AlertTriangle size={20} /> : <Info size={20} />}
+            footer={(
+                <>
+                    <Button variant="ghost" onClick={() => onClose(false)}>{request.cancelLabel || 'Abbrechen'}</Button>
+                    <Button ref={confirmRef} variant={danger ? 'danger' : 'primary'} onClick={() => onClose(true)}>
                         {request.confirmLabel || 'OK'}
-                    </button>
-                </div>
-            </div>
-        </div>
+                    </Button>
+                </>
+            )}
+        >
+            {request.message && <p className="ui-modal-text">{request.message}</p>}
+        </Modal>
     );
 };
 

@@ -268,7 +268,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                     imported: 0,
                     importedMovements: 0,
                     skipped: genericRows.length,
-                    errors: errors.length ? errors.slice(0, 3) : ['Keine gueltigen Zeilen gefunden.']
+                    errors: errors.length ? errors.slice(0, 3) : ['Keine gültigen Zeilen gefunden.']
                 });
                 return;
             }
@@ -292,7 +292,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             setGenericImportSummary({
                 imported: 0,
                 skipped: genericRows.length,
-                errors: errors.length ? errors.slice(0, 3) : ['Keine gueltigen Zeilen gefunden.']
+                errors: errors.length ? errors.slice(0, 3) : ['Keine gültigen Zeilen gefunden.']
             });
             return;
         }
@@ -506,7 +506,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 Withdrawal: 'Auszahlung',
                 Dividend: 'Zinsen / Dividende',
                 Tax: 'Steuern',
-                Fee: 'Gebuehren'
+                Fee: 'Gebühren'
             };
 
             newTransaction = {
@@ -587,14 +587,14 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             <div className="flex items-center justify-between p-6 border-b md3-divider">
                 <div className="flex items-center gap-3">
                     <div>
-                        <h2 className="text-xl font-semibold md3-text-main leading-tight">Transaktionen hinzufuegen</h2>
+                        <h2 className="text-xl font-semibold md3-text-main leading-tight">Transaktionen hinzufügen</h2>
                         <p className="text-xs md3-text-muted mt-0.5 flex items-center gap-1">
                             <Briefcase size={10} className="md3-text-muted" />
                             {targetPortfolio?.name || 'Unbekanntes Depot'}
                         </p>
                     </div>
                 </div>
-                <button type="button" onClick={onClose} className="md3-icon-btn" aria-label="Schliessen">
+                <button type="button" onClick={onClose} className="md3-icon-btn" aria-label="Schließen">
                     <X size={20} />
                 </button>
             </div>
@@ -692,7 +692,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     : 'CSV Datei hier ablegen'}
                                             </h3>
                                             <p className="text-xs md3-text-muted mt-1">
-                                                {genericHeaders.length > 0 ? 'Neue Datei ziehen, um erneut zu mappen' : 'oder klicken zum Auswaehlen (CSV)'}
+                                                {genericHeaders.length > 0 ? 'Neue Datei ziehen, um erneut zu mappen' : 'oder klicken zum Auswählen (CSV)'}
                                             </p>
                                         </div>
 
@@ -746,7 +746,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                         onChange={(e) => updateMapping('date', e.target.value)}
                                                         className="md3-field w-full px-3 py-2 text-sm outline-none"
                                                     >
-                                                        <option value="">Bitte waehlen...</option>
+                                                        <option value="">Bitte wählen...</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`date_${h}`} value={h}>{h}</option>
                                                         ))}
@@ -759,7 +759,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                         onChange={(e) => updateMapping('identifier', e.target.value)}
                                                         className="md3-field w-full px-3 py-2 text-sm outline-none"
                                                     >
-                                                        <option value="">Bitte waehlen...</option>
+                                                        <option value="">Bitte wählen...</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`id_${h}`} value={h}>{h}</option>
                                                         ))}
@@ -772,20 +772,20 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                         onChange={(e) => updateMapping('shares', e.target.value)}
                                                         className="md3-field w-full px-3 py-2 text-sm outline-none"
                                                     >
-                                                        <option value="">Bitte waehlen...</option>
+                                                        <option value="">Bitte wählen...</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`shares_${h}`} value={h}>{h}</option>
                                                         ))}
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Preis pro Stueck *</label>
+                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Preis pro Stück *</label>
                                                     <select
                                                         value={genericMapping.price || ''}
                                                         onChange={(e) => updateMapping('price', e.target.value)}
                                                         className="md3-field w-full px-3 py-2 text-sm outline-none"
                                                     >
-                                                        <option value="">Bitte waehlen...</option>
+                                                        <option value="">Bitte wählen...</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`price_${h}`} value={h}>{h}</option>
                                                         ))}
@@ -801,14 +801,14 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                         onChange={(e) => updateMapping('date', e.target.value)}
                                                         className="md3-field w-full px-3 py-2 text-sm outline-none"
                                                     >
-                                                        <option value="">Bitte waehlen...</option>
+                                                        <option value="">Bitte wählen...</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`date_${h}`} value={h}>{h}</option>
                                                         ))}
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Aenderung (optional bei Saldo)</label>
+                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Änderung (optional bei Saldo)</label>
                                                     <select
                                                         value={genericMapping.amount || ''}
                                                         onChange={(e) => updateMapping('amount', e.target.value)}
@@ -821,7 +821,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Saldo (optional bei Aenderung)</label>
+                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Saldo (optional bei Änderung)</label>
                                                     <select
                                                         value={genericMapping.balance || ''}
                                                         onChange={(e) => updateMapping('balance', e.target.value)}
@@ -834,7 +834,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Waehrung (optional)</label>
+                                                    <label className="text-[11px] uppercase tracking-wider md3-text-muted">Währung (optional)</label>
                                                     <select
                                                         value={genericMapping.currency || ''}
                                                         onChange={(e) => updateMapping('currency', e.target.value)}
@@ -863,7 +863,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                     {genericImportType === 'security' && (
                                                         <div className="space-y-1">
-                                                            <label className="text-[11px] uppercase tracking-wider md3-text-muted">Waehrung (optional)</label>
+                                                            <label className="text-[11px] uppercase tracking-wider md3-text-muted">Währung (optional)</label>
                                                             <select
                                                                 value={genericMapping.currency || ''}
                                                                 onChange={(e) => updateMapping('currency', e.target.value)}
@@ -907,7 +907,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                         </div>
                                                     )}
                                                     <div className="space-y-1">
-                                                        <label className="text-[11px] uppercase tracking-wider md3-text-muted">Standard Waehrung</label>
+                                                        <label className="text-[11px] uppercase tracking-wider md3-text-muted">Standard Währung</label>
                                                         <select
                                                             value={genericDefaultCurrency}
                                                             onChange={(e) => setGenericDefaultCurrency(e.target.value)}
@@ -935,7 +935,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                 <div className="text-xs md3-text-muted">
                                                     {genericImportType === 'security'
                                                         ? 'Hinweis: Negative Anzahl wird als Verkauf interpretiert, positive als Kauf.'
-                                                        : 'Hinweis: Wenn Saldo gesetzt ist, wird er fuer den Kontostand genutzt. Sonst wird der Saldo aus der Aenderung kumuliert.'}
+                                                        : 'Hinweis: Wenn Saldo gesetzt ist, wird er für den Kontostand genutzt. Sonst wird der Saldo aus der Änderung kumuliert.'}
                                                 </div>
                                             </div>
                                         )}
@@ -946,7 +946,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                 onClick={() => setGenericStep('upload')}
                                                 className="md3-text-muted px-3 py-2 text-xs font-semibold hover:opacity-80"
                                             >
-                                                Zurueck
+                                                Zurück
                                             </button>
                                             <button
                                                 type="button"
@@ -986,11 +986,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
                                 {genericImportSummary && (
                                     <div className="md3-list-item p-3 text-xs md3-text-muted">
-                                        Importiert: {genericImportSummary.imported} {genericImportType === 'cash' ? 'Kontostaende' : 'Transaktionen'}
+                                        Importiert: {genericImportSummary.imported} {genericImportType === 'cash' ? 'Kontostände' : 'Transaktionen'}
                                         {genericImportType === 'cash' && (
                                             <> - Kontobewegungen: {genericImportSummary.importedMovements || 0}</>
                                         )}
-                                        {' '} - Uebersprungen: {genericImportSummary.skipped}
+                                        {' '} - Übersprungen: {genericImportSummary.skipped}
                                         {genericImportSummary.duplicates ? <> (davon {genericImportSummary.duplicates} Duplikate)</> : null}
                                         {genericImportSummary.errors.length > 0 && (
                                             <div className="mt-2 text-xs md3-negative">{genericImportSummary.errors.join(' ')}</div>
@@ -1001,17 +1001,17 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                         ) : (
                             <div className="space-y-5">
                                 <div className="space-y-2">
-                                    <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Broker auswaehlen</label>
+                                    <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Broker auswählen</label>
                                     <select
                                         value={selectedBroker}
                                         onChange={(e) => setSelectedBroker(e.target.value)}
                                         className="md3-field w-full px-4 py-3 text-sm outline-none"
                                     >
-                                        <option value="" disabled>Bitte waehlen...</option>
+                                        <option value="" disabled>Bitte wählen...</option>
                                         <option value="Flatex">Flatex</option>
                                         <option value="TR">Trade Republic (Coming Soon)</option>
                                     </select>
-                                    <p className="text-xs md3-text-muted">Aktuell wird nur der Flatex CSV Export (Account & Transactions) unterstuetzt.</p>
+                                    <p className="text-xs md3-text-muted">Aktuell wird nur der Flatex CSV Export (Account & Transactions) unterstützt.</p>
                                 </div>
 
                                 <div
@@ -1034,11 +1034,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     </div>
                                     <h3 className="text-sm font-semibold md3-text-main">
                                         {importStatus === 'ready'
-                                            ? `${parsedBatch.entries.filter(isTradeEntry).length} Transaktionen${importPreviewDuplicates > 0 ? ` (${importPreviewDuplicates} bereits vorhanden)` : ''}, ${parsedBatch.cashBalances.length} Kontostaende, ${parsedBatch.entries.filter((entry) => !isTradeEntry(entry)).length} Kontobewegungen erkannt`
+                                            ? `${parsedBatch.entries.filter(isTradeEntry).length} Transaktionen${importPreviewDuplicates > 0 ? ` (${importPreviewDuplicates} bereits vorhanden)` : ''}, ${parsedBatch.cashBalances.length} Kontostände, ${parsedBatch.entries.filter((entry) => !isTradeEntry(entry)).length} Kontobewegungen erkannt`
                                             : 'Datei hier ablegen'}
                                     </h3>
                                     <p className="text-xs md3-text-muted mt-1">
-                                        {importStatus === 'ready' ? 'Klicken zum Aendern oder Import starten' : 'oder klicken zum Auswaehlen (CSV)'}
+                                        {importStatus === 'ready' ? 'Klicken zum Ändern oder Import starten' : 'oder klicken zum Auswählen (CSV)'}
                                     </p>
                                 </div>
 
@@ -1047,7 +1047,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                         <Search size={18} />
                                     </div>
                                     <div className="text-xs md3-text-muted">
-                                        Lade deine <strong>Account.csv</strong> (Kontobewegungen, Dividenden, Salden) oder <strong>Transactions.csv</strong> (Kaeufe/Verkaeufe) hoch.
+                                        Lade deine <strong>Account.csv</strong> (Kontobewegungen, Dividenden, Salden) oder <strong>Transactions.csv</strong> (Käufe/Verkäufe) hoch.
                                     </div>
                                 </div>
                             </div>
@@ -1154,7 +1154,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Preis pro Stueck</label>
+                                        <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Preis pro Stück</label>
                                         <div className="relative">
                                             <DollarSign size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                             <input
@@ -1169,7 +1169,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Waehrung</label>
+                                        <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Währung</label>
                                         <select
                                             value={currency}
                                             onChange={(e) => setCurrency(e.target.value)}
@@ -1195,7 +1195,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                         <option value="Withdrawal">Auszahlung</option>
                                         <option value="Dividend">Zinsen / Dividende</option>
                                         <option value="Tax">Steuern</option>
-                                        <option value="Fee">Gebuehren</option>
+                                        <option value="Fee">Gebühren</option>
                                     </select>
                                 </div>
 
@@ -1228,7 +1228,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Waehrung</label>
+                                    <label className="text-xs uppercase font-semibold tracking-wider md3-text-muted">Währung</label>
                                     <select
                                         value={currency}
                                         onChange={(e) => setCurrency(e.target.value)}
@@ -1332,7 +1332,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 disabled={isResolving}
                                 className="md3-filled-btn px-6 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                                {isResolving ? 'Pruefe Ticker...' : 'Transaktion speichern'}
+                                {isResolving ? 'Prüfe Ticker...' : 'Transaktion speichern'}
                             </button>
                         )}
                     </>
@@ -1352,9 +1352,9 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                         <div className="flex items-center justify-between">
                             <div>
                                 <h3 className="text-base font-semibold md3-text-main">Ticker zuweisen</h3>
-                                <p className="text-xs md3-text-muted">Waehle den passenden Treffer aus.</p>
+                                <p className="text-xs md3-text-muted">Wähle den passenden Treffer aus.</p>
                             </div>
-                            <button type="button" onClick={() => setIsCompanySearchOpen(false)} className="md3-icon-btn" aria-label="Schliessen">
+                            <button type="button" onClick={() => setIsCompanySearchOpen(false)} className="md3-icon-btn" aria-label="Schließen">
                                 <X size={18} />
                             </button>
                         </div>
@@ -1410,8 +1410,8 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                 type="button"
                                                 onClick={() => handleSelectCompanyMatch(match)}
                                                 className="md3-icon-btn h-10 w-10 md3-positive-soft border border-emerald-300/40"
-                                                aria-label="Uebernehmen"
-                                                title="Uebernehmen"
+                                                aria-label="Übernehmen"
+                                                title="Übernehmen"
                                             >
                                                 <Check size={18} className="text-emerald-500" />
                                             </button>
@@ -1423,7 +1423,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
                         <div className="mt-4 flex justify-end">
                             <button type="button" onClick={() => setIsCompanySearchOpen(false)} className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80">
-                                Schliessen
+                                Schließen
                             </button>
                         </div>
                     </div>

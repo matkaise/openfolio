@@ -51,7 +51,7 @@ const DividendListModal = ({
         <div className="flex justify-between items-center mb-4">
           <div>
             <h3 className="text-xl font-bold text-white">{title}</h3>
-            <p className="text-xs text-slate-400 mt-1">{items.length} Eintraege</p>
+            <p className="text-xs text-slate-400 mt-1">{items.length} Einträge</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
             <X className="text-slate-400 hover:text-white" />
@@ -434,7 +434,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
         name: d.name || d.isin,
         date: new Date(d.date).toLocaleDateString('de-DE'),
         amount: convertDividendToBase(d.amount, d.currency, d.date),
-        type: 'Ausschuettung'
+        type: 'Ausschüttung'
       }));
 
     const recentTheoretical = theoreticalRecent

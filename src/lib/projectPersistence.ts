@@ -221,7 +221,7 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
     if (version === SQLITE_SCHEMA_VERSION) return;
     // No or an older schema version: written by an older test version of Openfolio
     if (!version || Number(version) < Number(SQLITE_SCHEMA_VERSION)) throw new Error(OUTDATED_PROJECT_MESSAGE);
-    throw new Error(`Nicht unterstuetztes SQLite-Projektformat v${version}. Erwartet: v${SQLITE_SCHEMA_VERSION}.`);
+    throw new Error(`Nicht unterstütztes SQLite-Projektformat v${version}. Erwartet: v${SQLITE_SCHEMA_VERSION}.`);
   }
 
 
@@ -463,7 +463,7 @@ export const serializeProjectForFile = async (
   }
 
   if (encryptionKey) {
-    throw new Error('Verschluesselte Projekte koennen nur als .openfolio gespeichert werden.');
+    throw new Error('Verschlüsselte Projekte können nur als .openfolio gespeichert werden.');
   }
 
   return {

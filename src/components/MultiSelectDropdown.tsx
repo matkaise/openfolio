@@ -46,7 +46,7 @@ export const MultiSelectDropdown = ({ options, selectedIds, onChange, label = 'D
     if (effectiveSelectedIds.length === 1) {
       return options.find((o) => o.id === effectiveSelectedIds[0])?.name || 'Unbekannt';
     }
-    return `${effectiveSelectedIds.length} ausgewaehlt`;
+    return `${effectiveSelectedIds.length} ausgewählt`;
   };
 
   return (

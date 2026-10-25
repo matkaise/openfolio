@@ -144,7 +144,7 @@ export const ProjectLauncher = () => {
               >
                 <FolderOpen size={24} />
               </span>
-              <span className="text-base font-bold md3-text-main">Portfolio oeffnen</span>
+              <span className="text-base font-bold md3-text-main">Portfolio öffnen</span>
             </button>
 
             <button
@@ -157,7 +157,7 @@ export const ProjectLauncher = () => {
           </div>
 
           <p className="text-xs leading-relaxed md3-text-muted">
-            Openfolio speichert alle Daten lokal auf deinem Geraet.
+            Openfolio speichert alle Daten lokal auf deinem Gerät.
             <br />
             Es werden keine Daten an Cloud-Server gesendet.
           </p>
@@ -171,7 +171,7 @@ export const ProjectLauncher = () => {
               <div>
                 <h3 className="text-lg font-semibold md3-text-main">Neues Portfolio</h3>
               </div>
-              <button type="button" onClick={closeCreateModal} className="md3-icon-btn" aria-label="Schliessen">
+              <button type="button" onClick={closeCreateModal} className="md3-icon-btn" aria-label="Schließen">
                 <X size={16} />
               </button>
             </div>
@@ -233,7 +233,7 @@ export const ProjectLauncher = () => {
                       }
                     }}
                     className="md3-field w-full px-3 py-2 text-sm outline-none"
-                    placeholder="Passwort bestaetigen (optional)"
+                    placeholder="Passwort bestätigen (optional)"
                   />
                 </div>
               </div>
@@ -263,7 +263,7 @@ export const ProjectLauncher = () => {
                 type="button"
                 onClick={() => resolvePasswordPrompt(null)}
                 className="md3-icon-btn"
-                aria-label="Schliessen"
+                aria-label="Schließen"
               >
                 <X size={16} />
               </button>
@@ -287,7 +287,7 @@ export const ProjectLauncher = () => {
 
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => resolvePasswordPrompt(null)} className="md3-text-muted px-3 py-2 text-sm font-semibold">Abbrechen</button>
-              <button type="button" onClick={() => resolvePasswordPrompt(openPasswordInput)} className="md3-filled-btn px-4 py-2 text-sm font-semibold">Oeffnen</button>
+              <button type="button" onClick={() => resolvePasswordPrompt(openPasswordInput)} className="md3-filled-btn px-4 py-2 text-sm font-semibold">Öffnen</button>
             </div>
           </div>
         </div>

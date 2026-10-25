@@ -38,7 +38,7 @@ export class InvalidPasswordError extends Error {
 const getSubtle = (): SubtleCrypto => {
     const subtle = globalThis.crypto?.subtle;
     if (!subtle) {
-        throw new Error('WebCrypto ist in diesem Browser nicht verfuegbar.');
+        throw new Error('WebCrypto ist in diesem Browser nicht verfügbar.');
     }
     return subtle;
 };
@@ -115,7 +115,7 @@ export interface EncryptedProjectHeader {
 
 export const readEncryptedHeader = (bytes: Uint8Array): EncryptedProjectHeader => {
     if (!isEncryptedProjectBytes(bytes) || bytes.length < HEADER_BYTES) {
-        throw new Error('Keine verschluesselte Openfolio-Datei.');
+        throw new Error('Keine verschlüsselte Openfolio-Datei.');
     }
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     let offset = MAGIC_BYTES.length;
@@ -128,10 +128,10 @@ export const readEncryptedHeader = (bytes: Uint8Array): EncryptedProjectHeader =
     const iv = bytes.slice(offset, offset + IV_BYTES);
 
     if (version !== ENCRYPTION_FORMAT_VERSION) {
-        throw new Error(`Nicht unterstuetzte Verschluesselungsversion ${version}.`);
+        throw new Error(`Nicht unterstützte Verschlüsselungsversion ${version}.`);
     }
     if (kdf !== KDF_PBKDF2_SHA256 || iterations <= 0) {
-        throw new Error('Unbekanntes Schluesselverfahren in der Projektdatei.');
+        throw new Error('Unbekanntes Schlüsselverfahren in der Projektdatei.');
     }
     return { version, kdf, iterations, salt, iv };
 };
