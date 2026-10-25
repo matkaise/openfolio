@@ -841,6 +841,7 @@ body {
   font: inherit; font-weight: 600; font-size: 14px; outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+.ui-input.pl-10 { padding-left: 40px; }
 .ui-input::placeholder { color: var(--text3); font-weight: 500; }
 .ui-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .ui-select { cursor: pointer; padding-right: 36px; appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text3) 50%), linear-gradient(135deg, var(--text3) 50%, transparent 50%); background-position: calc(100% - 18px) calc(50% + 1px), calc(100% - 13px) calc(50% + 1px); background-size: 5px 5px; background-repeat: no-repeat; }
@@ -1048,6 +1049,35 @@ body {
 .ui-stat.is-muted .ui-stat-value { color: var(--text3); }
 .ui-phototan { display: block; margin: 0 auto; width: 192px; height: 192px; border-radius: 16px; background: #fff; padding: 8px; box-sizing: border-box; }
 .ui-tan-input { text-align: center; font-size: 22px; letter-spacing: 0.4em; font-variant-numeric: tabular-nums; }
+.ui-price-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ui-price-value { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.ui-price-range { margin-left: auto; }
+.ui-legend { display: flex; justify-content: center; gap: 18px; margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--text3); }
+.ui-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ui-legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.ui-info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ui-info-card { padding: 16px; border-radius: 18px; background: var(--surface2); min-width: 0; }
+.ui-info-card.is-wide { grid-column: 1 / -1; }
+@media (max-width: 640px) { .ui-info-grid { grid-template-columns: minmax(0, 1fr); } }
+.ui-info-title { margin: 0 0 12px; font-size: 15px; font-weight: 800; }
+.ui-dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; margin: 0; font-size: 13px; }
+.ui-dl dt { color: var(--text3); font-weight: 600; }
+.ui-dl dd { margin: 0; text-align: right; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.ui-metric-grid.is-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ui-metric-grid > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ui-metric { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ui-metric.is-up { color: var(--gain); }
+.ui-chip-stat { display: inline-flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 12px; background: var(--surface); font-size: 13px; }
+.ui-chip-stat strong { color: var(--gain); }
+.ui-launcher { display: grid; place-items: center; padding: 48px 16px; }
+.ui-launcher-card { width: 100%; max-width: 520px; box-sizing: border-box; padding: 32px 28px; border-radius: 28px; display: flex; flex-direction: column; gap: 20px; }
+.ui-launcher-brand { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; margin-bottom: 4px; }
+.ui-launcher-mark { width: 64px; height: 64px; border-radius: 22px; display: grid; place-items: center; color: oklch(0.99 0 0); background: linear-gradient(135deg, var(--c1), var(--c3)); box-shadow: var(--accent-glow); margin-bottom: 6px; }
+.ui-launcher-title { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.03em; }
+.ui-launcher-sub { margin: 0; color: var(--text2); font-weight: 600; }
+.ui-launcher-card > .ui-btn { align-self: center; }
+.ui-launcher-note { margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text3); text-align: center; }
 .ui-stack { display: flex; flex-direction: column; gap: 18px; }
 .ui-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .ui-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
