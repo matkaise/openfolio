@@ -1,5 +1,4 @@
-import type { CashMovementImportEntry } from '@/lib/csvParser';
-import type { Transaction } from '@/types/domain';
+import { statementEntry, tradeEntry, type StatementType } from './entries';
 import { emptyImportBatch, type ImportBatch } from './importBatch';
 
 // Trading 212 Public API (Invest / Stocks ISA). Shapes follow the API's schemas
@@ -49,7 +48,7 @@ const finite = (value: unknown): number => (typeof value === 'number' && Number.
 /** Position key: the ISIN, or the T212 ticker for instruments without one. */
 const instrumentKey = (instrument?: T212Instrument, ticker?: string) => instrument?.isin || instrument?.ticker || ticker || '';
 
-const cashType = (type: string, amount: number): CashMovementImportEntry['type'] => {
+const cashType = (type: string, amount: number): StatementType => {
     switch (type) {
         case 'DEPOSIT': return 'Deposit';
         case 'WITHDRAW': return 'Withdrawal';
@@ -91,21 +90,21 @@ export const parseTrading212Data = (data: Trading212Data): Trading212ParseResult
         const feeCurrency = fill.walletImpact?.taxes?.find((tax) => tax.currency)?.currency || fill.walletImpact?.currency;
         const instrument = order.instrument;
 
-        const transaction: Transaction = {
-            id: `t212:fill:${fill.id ?? `${order.id}-${date}`}`,
+        batch.entries.push(tradeEntry({
+            source: 'Trading212',
+            externalId: `t212:fill:${fill.id ?? `${order.id}-${date}`}`,
+            orderId: order.id !== undefined ? String(order.id) : undefined,
             date,
-            type: isSell ? 'Sell' : 'Buy',
+            side: isSell ? 'sell' : 'buy',
             isin: instrumentKey(instrument, order.ticker),
             name: instrument?.name || order.ticker,
-            shares: quantity,
+            quantity,
             amount: Math.round((isSell ? value : -value) * 1e8) / 1e8,
             currency: instrument?.currency || order.currency || 'EUR',
-            ...(fees ? { fee: Math.round(fees * 1e8) / 1e8, feeCurrency } : {}),
-            externalId: `t212:fill:${fill.id ?? `${order.id}-${date}`}`,
-            broker: 'Trading212',
-            originalData: { source: 'trading212', ticker: order.ticker, pricePerShare: price || undefined }
-        };
-        batch.transactions.push(transaction);
+            fee: fees ? Math.round(fees * 1e8) / 1e8 : undefined,
+            feeCurrency,
+            raw: { source: 'trading212', ticker: order.ticker, pricePerShare: price || undefined }
+        }));
     });
 
     data.dividends.forEach((dividend) => {
@@ -113,17 +112,18 @@ export const parseTrading212Data = (data: Trading212Data): Trading212ParseResult
         const amount = finite(dividend.amount);
         if (!date || !amount || !dividend.currency) return;
         const isin = instrumentKey(dividend.instrument, dividend.ticker);
-        batch.cashMovements.push({
+        batch.entries.push(statementEntry({
+            source: 'Trading212',
+            externalId: `t212:dividend:${dividend.reference || `${date}|${dividend.ticker}|${amount}`}`,
             date,
             type: 'Dividend',
             amount, // net, in the account currency
             currency: dividend.currency,
             description: `${dividend.instrument?.name || dividend.ticker || 'Dividende'} (${dividend.type || 'Dividende'})`,
-            ...(isin ? { isin } : {}),
-            ...(dividend.instrument?.name ? { name: dividend.instrument.name } : {}),
-            sourceKey: `t212:dividend:${dividend.reference || `${date}|${dividend.ticker}|${amount}`}`,
-            originalData: { source: 'trading212', type: dividend.type }
-        });
+            isin,
+            name: dividend.instrument?.name,
+            raw: { source: 'trading212', type: dividend.type }
+        }));
     });
 
     data.transactions.forEach((transaction) => {
@@ -132,15 +132,16 @@ export const parseTrading212Data = (data: Trading212Data): Trading212ParseResult
         const type = transaction.type || '';
         if (!date || !raw || !transaction.currency) return;
         const amount = OUTFLOW_TYPES.has(type) ? -Math.abs(raw) : type === 'DEPOSIT' ? Math.abs(raw) : raw;
-        batch.cashMovements.push({
+        batch.entries.push(statementEntry({
+            source: 'Trading212',
+            externalId: `t212:transaction:${transaction.reference || `${date}|${type}|${raw}`}`,
             date,
             type: cashType(type, amount),
             amount,
             currency: transaction.currency,
             description: type,
-            sourceKey: `t212:transaction:${transaction.reference || `${date}|${type}|${raw}`}`,
-            originalData: { source: 'trading212', type }
-        });
+            raw: { source: 'trading212', type }
+        }));
     });
 
     const positions = data.positions

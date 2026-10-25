@@ -1,5 +1,4 @@
-import type { CashMovementImportEntry } from '@/lib/csvParser';
-import type { Transaction } from '@/types/domain';
+import { statementEntry, tradeEntry, type StatementType } from './entries';
 import { emptyImportBatch, type ImportBatch } from './importBatch';
 
 // Interactive Brokers Activity Flex Query (XML). Only the sections Openfolio uses are read:
@@ -76,7 +75,7 @@ const pickDetailLevel = (rows: Record<string, string>[], preferred: string[]): R
     return rows.filter((row) => (row.levelOfDetail || '').toUpperCase() !== 'SUMMARY');
 };
 
-const cashMovementType = (type: string, amount: number): CashMovementImportEntry['type'] => {
+const cashMovementType = (type: string, amount: number): StatementType => {
     const normalized = type.toLowerCase();
     if (normalized.includes('deposit') || normalized.includes('withdrawal')) return amount >= 0 ? 'Deposit' : 'Withdrawal';
     if (normalized.includes('withholding')) return 'Tax';
@@ -116,21 +115,22 @@ export const parseIbkrFlexXml = (xml: string): FlexParseResult => {
 
         const id = row.transactionID || row.tradeID || `${row.dateTime}|${row.conid}|${row.quantity}|${row.tradePrice}`;
         const fee = toNumber(row.ibCommission);
-        const transaction: Transaction = {
-            id: `ibkr:${row.accountId || ''}:trade:${id}`,
+        batch.entries.push(tradeEntry({
+            source: 'IBKR',
+            externalId: `ibkr:${row.accountId || ''}:trade:${id}`,
+            orderId: row.ibOrderID || undefined,
             date,
-            type: quantity < 0 || (row.buySell || '').toUpperCase().startsWith('SELL') ? 'Sell' : 'Buy',
+            side: quantity < 0 || (row.buySell || '').toUpperCase().startsWith('SELL') ? 'sell' : 'buy',
             isin: row.isin || row.symbol,
             name: row.description || row.symbol,
-            shares: Math.abs(quantity),
+            quantity,
             amount: toNumber(row.proceeds), // signed: negative for buys
             currency: row.currency,
-            ...(fee ? { fee, feeCurrency: row.ibCommissionCurrency || row.currency } : {}),
-            externalId: `ibkr:${row.accountId || ''}:trade:${id}`,
-            broker: 'IBKR',
-            originalData: { source: 'ibkr-flex', conid: row.conid, symbol: row.symbol, pricePerShare: toNumber(row.tradePrice) || undefined }
-        };
-        batch.transactions.push(transaction);
+            fee,
+            feeCurrency: row.ibCommissionCurrency || row.currency,
+            fxRate: toNumber(row.fxRateToBase) || undefined,
+            raw: { source: 'ibkr-flex', conid: row.conid, symbol: row.symbol, pricePerShare: toNumber(row.tradePrice) || undefined }
+        }));
     });
 
     pickDetailLevel(elements(xml, 'CashTransaction'), ['DETAIL']).forEach((row) => {
@@ -138,17 +138,18 @@ export const parseIbkrFlexXml = (xml: string): FlexParseResult => {
         const amount = toNumber(row.amount);
         if (!date || !amount || !row.currency) return;
         const id = row.transactionID || `${date}|${row.type}|${row.amount}|${row.description}`;
-        batch.cashMovements.push({
+        batch.entries.push(statementEntry({
+            source: 'IBKR',
+            externalId: `ibkr:${row.accountId || ''}:cash:${id}`,
             date,
             type: cashMovementType(row.type || '', amount),
             amount,
             currency: row.currency,
             description: row.description || row.type || '',
-            ...(row.isin ? { isin: row.isin } : {}),
-            ...(row.symbol ? { name: row.symbol } : {}),
-            sourceKey: `ibkr:${row.accountId || ''}:cash:${id}`,
-            originalData: { source: 'ibkr-flex', type: row.type }
-        });
+            isin: row.isin,
+            name: row.symbol,
+            raw: { source: 'ibkr-flex', type: row.type }
+        }));
     });
 
     const positions = elements(xml, 'OpenPosition')

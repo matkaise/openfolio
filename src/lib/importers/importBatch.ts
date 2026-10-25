@@ -1,21 +1,19 @@
 import {
+    parseDegiroAccountCsv,
+    parseDegiroTradesCsv,
     parseFlatexCashBalancesCsv,
-    parseFlatexCashMovementsCsv,
-    parseFlatexCsv,
-    type CashBalanceImportPoint,
-    type CashMovementImportEntry
+    type CashBalanceImportPoint
 } from '@/lib/csvParser';
 import { hash53 } from '@/lib/hash';
-import { mergeImportedTransactions } from '@/lib/importMerge';
-import { dropDuplicateTradeFees, entryFromCashMovement, entryFromTransaction, ledgerToTransactions, sortLedger } from '@/lib/domain/ledger/ledger';
+import { dropDuplicateTradeFees, sortLedger } from '@/lib/domain/ledger/ledger';
 import { getLedger } from '@/lib/domain/ledger/store';
-import type { CashAccount, LedgerEntry, ProjectData, Security, Transaction } from '@/types/domain';
+import type { CashAccount, LedgerEntry, ProjectData, Security } from '@/types/domain';
+import { isTradeEntry, type ImportEntry } from './entries';
 
 /** What an importer (CSV file, broker connection) hands to the app. */
 export interface ImportBatch {
-    broker: string;
-    transactions: Transaction[];
-    cashMovements: CashMovementImportEntry[];
+    source: string;
+    entries: ImportEntry[];
     cashBalances: CashBalanceImportPoint[];
 }
 
@@ -26,44 +24,60 @@ export interface ImportTarget {
 }
 
 export interface ImportSummary {
-    addedTransactions: number;
+    addedTransactions: number; // trades
     duplicateTransactions: number;
-    addedMovements: number;
+    addedMovements: number; // every other booking
     duplicateMovements: number;
     balancePoints: number;
 }
 
-export const emptyImportBatch = (broker: string): ImportBatch => ({
-    broker,
-    transactions: [],
-    cashMovements: [],
-    cashBalances: []
-});
+export const emptyImportBatch = (source: string): ImportBatch => ({ source, entries: [], cashBalances: [] });
 
 /** Parses DEGIRO exports (Transactions.csv and/or Account.csv); each file is recognised by its header. */
 export const parseDegiroFiles = (texts: string[]): ImportBatch => {
     const batch = emptyImportBatch('Flatex');
     texts.forEach((text) => {
-        batch.transactions.push(...parseFlatexCsv(text));
-        batch.cashMovements.push(...parseFlatexCashMovementsCsv(text));
+        batch.entries.push(...parseDegiroTradesCsv(text), ...parseDegiroAccountCsv(text));
         batch.cashBalances.push(...parseFlatexCashBalancesCsv(text));
     });
     return batch;
 };
 
 export const isEmptyImportBatch = (batch: ImportBatch): boolean => (
-    batch.transactions.length === 0 && batch.cashMovements.length === 0 && batch.cashBalances.length === 0
+    batch.entries.length === 0 && batch.cashBalances.length === 0
 );
 
-const movementKey = (movement: { date: string; currency: string; amount: number; description?: string; sourceKey?: string }) => (
-    movement.sourceKey || `${movement.date}|${movement.currency}|${movement.amount}|${movement.description || ''}`
+/** Appends batches of the same source (e.g. several files of one folder scan). */
+export const concatImportBatches = (source: string, batches: ImportBatch[]): ImportBatch => ({
+    source,
+    entries: batches.flatMap((batch) => batch.entries),
+    cashBalances: batches.flatMap((batch) => batch.cashBalances)
+});
+
+/** Key for sources without ids. Manual entries have none: two identical manual entries are intentional. */
+const contentKey = (entry: Pick<LedgerEntry, 'date' | 'isin' | 'kind' | 'quantity' | 'amount' | 'currency' | 'description'>) => (
+    `content:${entry.date}|${entry.isin || ''}|${entry.kind}|${entry.quantity ?? ''}|${entry.amount}|${entry.currency}|${entry.description || ''}`
 );
+
+/** Numbers repeated content keys (#2, #3, ...) in order, so identical rows inside one file stay distinct. */
+const createKeyer = () => {
+    const seen = new Map<string, number>();
+    return (scope: string, entry: ImportEntry | LedgerEntry): string | null => {
+        if (entry.externalId) return entry.externalId;
+        if (entry.source === 'Manual') return null;
+        const base = contentKey(entry);
+        const counterKey = `${scope}|${base}`;
+        const occurrence = (seen.get(counterKey) || 0) + 1;
+        seen.set(counterKey, occurrence);
+        return occurrence > 1 ? `${base}#${occurrence}` : base;
+    };
+};
 
 /**
- * Merges an import into the project's ledger. Pure and deterministic (ids are derived from
- * stable keys), so it can run inside a React state updater and be repeated for a preview.
- * Bookings already in the target portfolio are skipped and counted as duplicates, and so are
- * DEGIRO statement fee rows that the trade already carries.
+ * Merges an import into the project's ledger. Pure and deterministic (ids derive from the
+ * dedupe keys), so it can run inside a React state updater and be repeated for a preview.
+ * Bookings already in the target portfolio (same source and key) are skipped and counted as
+ * duplicates, and so are DEGIRO statement fee rows that their trade already carries.
  */
 export const applyImportBatch = (
     project: ProjectData,
@@ -76,26 +90,46 @@ export const applyImportBatch = (
         : portfolios;
     const ledger = getLedger(project);
 
-    // Trades: dedupe against the trades already in the ledger
-    const existingTrades = ledgerToTransactions(ledger.filter((entry) => entry.kind === 'buy' || entry.kind === 'sell' || entry.kind === 'split'));
-    const merged = mergeImportedTransactions(existingTrades, batch.transactions, target.id);
-    const tradeEntries: LedgerEntry[] = merged.added.map((tx) => entryFromTransaction({
-        ...tx,
-        id: `le-${hash53(`${target.id}|${tx.broker}|${tx.externalId ?? tx.id}`)}`
-    }));
+    const keyExisting = createKeyer();
+    const known = new Set<string>();
+    ledger.forEach((entry) => {
+        const scope = `${entry.portfolioId || ''}|${entry.source}`;
+        const key = keyExisting(scope, entry);
+        if (key) known.add(`${scope}|${key}`);
+    });
+
+    const keyIncoming = createKeyer();
+    const added: LedgerEntry[] = [];
+    let duplicateTrades = 0;
+    let duplicateOthers = 0;
+    batch.entries.forEach((entry, index) => {
+        const scope = `${target.id}|${entry.source}`;
+        const key = keyIncoming(scope, entry);
+        if (key && known.has(`${scope}|${key}`)) {
+            if (isTradeEntry(entry)) duplicateTrades += 1; else duplicateOthers += 1;
+            return;
+        }
+        if (key) known.add(`${scope}|${key}`);
+        added.push({
+            ...entry,
+            id: `le-${hash53(`${scope}|${key ?? `${batch.source}#${index}`}`)}`,
+            portfolioId: target.id,
+            ...(key ? { externalId: key } : {})
+        });
+    });
 
     let securities = project.securities;
-    merged.added.forEach((tx) => {
-        if (!tx.isin || securities[tx.isin]) return;
+    added.forEach((entry) => {
+        if (!isTradeEntry(entry) || !entry.isin || securities[entry.isin]) return;
         const security: Security = {
-            isin: tx.isin,
-            symbol: tx.isin, // resolved to a ticker by the next market sync
-            name: tx.name || tx.isin,
-            currency: tx.currency,
+            isin: entry.isin,
+            symbol: entry.isin, // resolved to a ticker by the next market sync
+            name: entry.name || entry.isin,
+            currency: entry.currency,
             quoteType: 'Stock',
             priceHistory: {}
         };
-        securities = { ...securities, [tx.isin]: security };
+        securities = { ...securities, [entry.isin]: security };
     });
 
     // Cash balances: one account per portfolio, currency and source
@@ -118,46 +152,14 @@ export const applyImportBatch = (
             });
     });
 
-    // Statement rows (dividends, taxes, deposits, FX legs, ...)
-    const knownMovements = new Set(
-        ledger
-            .filter((entry) => entry.kind !== 'buy' && entry.kind !== 'sell' && entry.kind !== 'split' && entry.externalId)
-            .map((entry) => `${entry.portfolioId || ''}|${entry.externalId}`)
-    );
-    const movementEntries: LedgerEntry[] = [];
-    let duplicateMovements = 0;
-    batch.cashMovements.forEach((movement) => {
-        const sourceKey = movementKey(movement);
-        const key = `${target.id}|${sourceKey}`;
-        if (knownMovements.has(key)) {
-            duplicateMovements += 1;
-            return;
-        }
-        knownMovements.add(key);
-        movementEntries.push(entryFromCashMovement({
-            id: `le-${hash53(key)}`,
-            date: movement.date,
-            type: movement.type,
-            amount: movement.amount,
-            currency: movement.currency,
-            description: movement.description,
-            ...(movement.isin ? { isin: movement.isin } : {}),
-            ...(movement.name ? { name: movement.name } : {}),
-            broker: batch.broker,
-            portfolioId: target.id,
-            isInternal: movement.isInternal,
-            sourceKey,
-            originalData: movement.originalData
-        }));
-    });
-
-    const added = [...tradeEntries, ...movementEntries];
-    const { entries: nextLedger, dropped } = dropDuplicateTradeFees(sortLedger([...ledger, ...added]));
+    const { entries: nextLedger } = dropDuplicateTradeFees(sortLedger([...ledger, ...added]));
     const surviving = new Set(nextLedger.map((entry) => entry.id));
-    const addedMovements = movementEntries.filter((entry) => surviving.has(entry.id)).length;
-    const droppedExisting = dropped - (movementEntries.length - addedMovements);
+    const addedTrades = added.filter((entry) => isTradeEntry(entry)).length;
+    const addedOthers = added.filter((entry) => !isTradeEntry(entry) && surviving.has(entry.id)).length;
+    const droppedNew = added.length - addedTrades - addedOthers;
+    const droppedExisting = ledger.length + added.length - nextLedger.length - droppedNew;
 
-    const ledgerChanged = tradeEntries.length + addedMovements > 0 || droppedExisting > 0;
+    const ledgerChanged = addedTrades + addedOthers > 0 || droppedExisting > 0;
     const changed = ledgerChanged || batch.cashBalances.length > 0 || updatedPortfolios !== portfolios;
 
     return {
@@ -172,10 +174,10 @@ export const applyImportBatch = (
             }
             : project,
         summary: {
-            addedTransactions: tradeEntries.length,
-            duplicateTransactions: merged.duplicates,
-            addedMovements,
-            duplicateMovements: duplicateMovements + (movementEntries.length - addedMovements),
+            addedTransactions: addedTrades,
+            duplicateTransactions: duplicateTrades,
+            addedMovements: addedOthers,
+            duplicateMovements: duplicateOthers + droppedNew,
             balancePoints: batch.cashBalances.length
         }
     };

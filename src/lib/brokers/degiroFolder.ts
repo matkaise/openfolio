@@ -1,4 +1,4 @@
-import { emptyImportBatch, isEmptyImportBatch, parseDegiroFiles, type ImportBatch } from '@/lib/importers/importBatch';
+import { concatImportBatches, isEmptyImportBatch, parseDegiroFiles, type ImportBatch } from '@/lib/importers/importBatch';
 
 /** The parts of FileSystemDirectoryHandle the scan needs (lets tests pass plain objects). */
 export interface DirectoryLike {
@@ -38,18 +38,16 @@ export const scanDegiroFolder = async (
     }
     candidates.sort((a, b) => a.lastModified - b.lastModified || a.name.localeCompare(b.name));
 
-    const batch = emptyImportBatch('Flatex');
+    const batches: ImportBatch[] = [];
     const files: string[] = [];
     let newestModified = 0;
     for (const file of candidates) {
         const fileBatch = parseDegiroFiles([await file.text()]);
         if (isEmptyImportBatch(fileBatch)) continue;
-        batch.transactions.push(...fileBatch.transactions);
-        batch.cashMovements.push(...fileBatch.cashMovements);
-        batch.cashBalances.push(...fileBatch.cashBalances);
+        batches.push(fileBatch);
         files.push(file.name);
         newestModified = Math.max(newestModified, file.lastModified);
     }
 
-    return { batch, files, newestModified };
+    return { batch: concatImportBatches('Flatex', batches), files, newestModified };
 };

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseFlatexCashBalancesCsv, parseFlatexCsv } from '@/lib/csvParser';
+import { parseDegiroTradesCsv, parseFlatexCashBalancesCsv } from '@/lib/csvParser';
 import { applyImportBatch, parseDegiroFiles } from '@/lib/importers/importBatch';
 import { entryFromTransaction, entryToTransaction, ledgerToTransactions } from '../ledger/ledger';
 import { getLedger } from '../ledger/store';
@@ -25,7 +25,7 @@ const sumBy = (entries: { kind: string; amount: number; currency: string }[], ki
 
 describe('ledger from a DEGIRO import', () => {
   it('no longer creates transactions from Account.csv rows (B1)', () => {
-    expect(parseFlatexCsv(accountCsv)).toEqual([]);
+    expect(parseDegiroTradesCsv(accountCsv)).toEqual([]);
   });
 
   it('classifies account rows with their sign (B1)', () => {
