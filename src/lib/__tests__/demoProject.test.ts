@@ -18,4 +18,11 @@ describe('createDemoProject', () => {
     expect(plan.at(-1)?.date).toBe('2023-01-02');
     expect(new Set(project.transactions.map((tx) => tx.id)).size).toBe(project.transactions.length);
   });
+
+  it('books dividends up to the given date, including the current year', () => {
+    const dates = (now: Date) => createDemoProject(now).transactions.filter((tx) => tx.type === 'Dividend').map((tx) => tx.date);
+    expect(dates(new Date(2026, 9, 25))).toContain('2026-06-12');
+    expect(dates(new Date(2026, 4, 25))).toContain('2026-05-20');
+    expect(dates(new Date(2026, 4, 25))).not.toContain('2026-06-12');
+  });
 });

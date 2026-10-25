@@ -48,10 +48,10 @@ export const createDemoProject = (now: Date = new Date()): ProjectData => {
         add({ date, type: 'Sparplan_Buy', isin: 'IE00B4L5Y983', shares, amount: -roundCents(shares * price), currency: 'EUR' });
     }
 
-    for (const year of [2022, 2023, 2024, 2025]) {
-        if (new Date(year, 4, 20) > now) break;
-        add({ date: `${year}-05-20`, type: 'Dividend', isin: 'DE0007164600', name: 'SAP SE', amount: 15 * 2.05, currency: 'EUR' });
-        add({ date: `${year}-06-12`, type: 'Dividend', isin: 'US5949181045', name: 'Microsoft Corp.', amount: 8 * 0.68, currency: 'USD' });
+    // Yearly dividends up to today
+    for (let year = 2022; year <= now.getFullYear(); year += 1) {
+        if (new Date(year, 4, 20) <= now) add({ date: `${year}-05-20`, type: 'Dividend', isin: 'DE0007164600', name: 'SAP SE', amount: 15 * 2.05, currency: 'EUR' });
+        if (new Date(year, 5, 12) <= now) add({ date: `${year}-06-12`, type: 'Dividend', isin: 'US5949181045', name: 'Microsoft Corp.', amount: 8 * 0.68, currency: 'USD' });
     }
 
     project.transactions = txs.sort((a, b) => a.date.localeCompare(b.date));
