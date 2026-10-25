@@ -70,7 +70,7 @@ interface ProjectContextType {
     lastSavedAt: string | null;
 
     // Actions
-    newProject: (options?: { name?: string; password?: string }) => Promise<void>;
+    newProject: (options?: { name?: string; password?: string; data?: ProjectData; fileName?: string }) => Promise<void>;
     openProject: (options?: {
         requestPassword?: (reason: 'required' | 'invalid') => Promise<string | null>;
     }) => Promise<void>;
@@ -238,12 +238,12 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [markChanged]);
 
-    const newProject = useCallback(async (options?: { name?: string; password?: string }) => {
-        const created = createEmptyProject(options?.name || 'Mein Portfolio');
+    const newProject = useCallback(async (options?: { name?: string; password?: string; data?: ProjectData; fileName?: string }) => {
+        const created = options?.data ?? createEmptyProject(options?.name || 'Mein Portfolio');
         setProject(created);
         setLastSavedAt(null);
         setFileHandle(null);
-        setFileName('Unbenannt.openfolio');
+        setFileName(options?.fileName || 'Unbenannt.openfolio');
         setIsModified(true);
         setIsHydratingProject(false);
         setSqliteSession(null);

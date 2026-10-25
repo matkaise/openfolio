@@ -3,6 +3,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { FolderOpen, Lock, Plus, TrendingUp, X } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
+import { createDemoProject } from '@/lib/demoProject';
 import { useNotifications } from '@/components/ui/notifications';
 
 type PasswordReason = 'required' | 'invalid';
@@ -144,6 +145,14 @@ export const ProjectLauncher = () => {
                 <FolderOpen size={24} />
               </span>
               <span className="text-base font-bold md3-text-main">Portfolio oeffnen</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void newProject({ data: createDemoProject(), fileName: 'Demo.openfolio' })}
+              className="mx-auto px-3 py-2 text-sm font-semibold md3-text-muted underline-offset-4 hover:underline"
+            >
+              Demo ansehen (Beispieldaten, ohne Konto)
             </button>
           </div>
 
