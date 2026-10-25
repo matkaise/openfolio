@@ -3,25 +3,23 @@
 import React, { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import {
   LayoutDashboard,
-  Activity,
   PieChart,
   Wallet,
   Calendar,
   FileText,
   Database,
-  Sparkles,
   FolderSync
 } from 'lucide-react';
 import { useProjectActions, useProjectData } from '@/contexts/ProjectContext';
 import { FileStatusCard, MissingFxNotice, MobileSaveButton, StartupMarketSync, SyncButton } from '@/components/shell/ShellStatus';
 import { ProjectLauncher } from '@/components/ProjectLauncher';
+import { SettingsContent } from '@/components/SettingsContent';
 import { DataSourcesContent } from '@/components/DataSourcesContent';
 import { ImportContent } from '@/components/ImportContent';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { TransactionModal } from '@/components/TransactionModal';
 import { SecurityDetailModal } from '@/components/SecurityDetailModal';
 import { applyThemePreference, resolveThemePreference, THEME_LABELS, type ThemePreference } from '@/lib/theme';
-import { DEFAULT_NUMBER_LOCALE, NUMBER_LOCALES, type NumberLocale } from '@/lib/format';
 import { normalizeWealthGoalSettings } from '@/lib/wealthGoalUtils';
 import { type AnalysisCache } from '@/types/portfolioView';
 import { AppSidebar, type ShellNavItem } from '@/components/shell/AppSidebar';
@@ -98,8 +96,6 @@ export default function PortfolioApp() {
   const [analysisCache, setAnalysisCache] = useState<AnalysisCache | null>(null);
   const [includeDividendsInPerformance, setIncludeDividendsInPerformance] = useState(false);
   const [, startTransition] = useTransition();
-  const performanceMethod = project?.settings?.performanceMethod || 'MWR';
-  const performanceSmoothing = project?.settings?.performanceSmoothing || '1d';
 
   const [importTargetPortfolio, setImportTargetPortfolio] = useState<{ id: string; name: string; isNew: boolean } | null>(null);
 
@@ -222,167 +218,7 @@ export default function PortfolioApp() {
       case 'Broker':
         return <BrokersContent />;
       case 'Einstellungen':
-        return (
-          <div className="space-y-6">
-            <div className="md3-card p-6">
-              <div className="flex items-start gap-4">
-                <div
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl"
-                  style={{
-                    background: 'var(--md3-secondary-container)',
-                    color: 'var(--md3-on-secondary-container)'
-                  }}
-                >
-                  <Sparkles size={22} />
-                </div>
-                <div className="space-y-1">
-                  <h2 className="text-xl font-semibold">Design</h2>
-                  <p className="text-sm" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                    Dunkel, hell oder wie im Betriebssystem eingestellt.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6 inline-flex gap-1 rounded-2xl p-1" style={{ background: 'var(--surface2)' }} role="radiogroup" aria-label="Darstellung">
-                {(['dark', 'light', 'system'] as ThemePreference[]).map((theme) => (
-                  <button
-                    type="button"
-                    key={theme}
-                    role="radio"
-                    aria-checked={themePreference === theme}
-                    onClick={() => setThemePreference(theme)}
-                    className="rounded-xl px-4 py-2 text-sm font-bold transition"
-                    style={themePreference === theme
-                      ? { background: 'var(--text)', color: 'var(--bg)' }
-                      : { color: 'var(--text2)' }}
-                  >
-                    {THEME_LABELS[theme]}
-                  </button>
-                ))}
-              </div>
-
-              <label className="mt-6 block max-w-sm text-sm font-semibold">
-                Zahlenformat
-                <select
-                  value={project?.settings?.numberLocale || DEFAULT_NUMBER_LOCALE}
-                  onChange={(e) => {
-                    const numberLocale = e.target.value as NumberLocale;
-                    updateProject((prev) => ({ ...prev, settings: { ...prev.settings, numberLocale } }));
-                  }}
-                  className="md3-field mt-2 w-full px-3 text-sm outline-none"
-                >
-                  {NUMBER_LOCALES.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="md3-card p-6">
-              <div className="flex items-start gap-4">
-                <div
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl"
-                  style={{
-                    background: 'var(--md3-primary-container)',
-                    color: 'var(--md3-on-primary-container)'
-                  }}
-                >
-                  <Activity size={22} />
-                </div>
-                <div className="space-y-1">
-                  <h2 className="text-xl font-semibold">Performance</h2>
-                  <p className="text-sm" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                    Wähle, wie Renditen berechnet werden sollen.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6 flex flex-col gap-3">
-                <div className="md3-segment flex w-fit p-1">
-                  <button
-                    type="button"
-                    onClick={() => updateProject((prev) => ({
-                      ...prev,
-                      settings: {
-                        ...prev.settings,
-                        performanceMethod: 'MWR'
-                      }
-                    }))}
-                    className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${performanceMethod === 'MWR' ? 'md3-chip-accent' : 'md3-text-muted'}`}
-                  >
-                    Geldgewichtet (MWR)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateProject((prev) => ({
-                      ...prev,
-                      settings: {
-                        ...prev.settings,
-                        performanceMethod: 'TWR'
-                      }
-                    }))}
-                    className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${performanceMethod === 'TWR' ? 'md3-chip-accent' : 'md3-text-muted'}`}
-                  >
-                    Zeitgewichtet (TWR)
-                  </button>
-                </div>
-                <p className="text-xs" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                  MWR berücksichtigt Ein- und Auszahlungen, TWR zeigt die reine Anlagestrategie ohne Cashflow-Effekte.
-                </p>
-
-                <div className="flex flex-col gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                    Glättung
-                  </span>
-                  <div className="md3-segment flex w-fit p-1">
-                    <button
-                      type="button"
-                      onClick={() => updateProject((prev) => ({
-                        ...prev,
-                        settings: {
-                          ...prev.settings,
-                          performanceSmoothing: '1d'
-                        }
-                      }))}
-                      className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${performanceSmoothing === '1d' ? 'md3-chip-accent' : 'md3-text-muted'}`}
-                    >
-                      1 Tag
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateProject((prev) => ({
-                        ...prev,
-                        settings: {
-                          ...prev.settings,
-                          performanceSmoothing: '7d'
-                        }
-                      }))}
-                      className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${performanceSmoothing === '7d' ? 'md3-chip-accent' : 'md3-text-muted'}`}
-                    >
-                      7 Tage
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateProject((prev) => ({
-                        ...prev,
-                        settings: {
-                          ...prev.settings,
-                          performanceSmoothing: '1m'
-                        }
-                      }))}
-                      className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${performanceSmoothing === '1m' ? 'md3-chip-accent' : 'md3-text-muted'}`}
-                    >
-                      1 Monat
-                    </button>
-                  </div>
-                  <p className="text-xs" style={{ color: 'var(--md3-on-surface-variant)' }}>
-                    Wir glätten nur die Darstellung der Performance-Charts. Kennzahlen bleiben unverändert.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
+        return <SettingsContent />;
       case 'Import':
         return (
           <ImportContent

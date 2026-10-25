@@ -1,13 +1,24 @@
-﻿import React, { useMemo, useState } from 'react';
-import { ChevronRight, Wallet } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { ChevronDown, Coins, Layers, TrendingUp, Wallet } from 'lucide-react';
 import { selectCalculationTransactions, calculateProjectHoldings } from '@/lib/portfolioSelectors';
-import { convertCurrency } from '@/lib/fxUtils';
+import { calculateClosedPositions } from '@/lib/closedPositions';
+import { quoteTypeLabel } from '@/lib/labels';
 import { useProjectData } from '@/contexts/ProjectContext';
-import { type TransactionLike } from '@/types/portfolioView';
-import { Card } from '@/components/ui/Card';
+import { useFormatters } from '@/components/ui/useFormatters';
+import { Avatar, CardHeader, EmptyState, GlassCard, Kpi, ListRow, Pill, Segmented, toneOf } from '@/components/ui/primitives';
+
+type SortKey = 'value' | 'performance' | 'name';
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'value', label: 'Wert' },
+  { value: 'performance', label: 'Rendite' },
+  { value: 'name', label: 'Name' }
+];
 
 export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPortfolioIds: string[], onSelectSecurity: (isin: string, currency?: string) => void }) => {
   const project = useProjectData();
+  const formatters = useFormatters();
+  const [sortKey, setSortKey] = useState<SortKey>('value');
   const [showClosedPositions, setShowClosedPositions] = useState(false);
 
   const filteredTransactions = useMemo(() => (
@@ -19,167 +30,128 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
     return calculateProjectHoldings(project, filteredTransactions);
   }, [project, filteredTransactions]);
 
-  const closedPositions = useMemo(() => {
-    if (!project) return [];
+  const closedPositions = useMemo(() => (
+    project ? calculateClosedPositions(project, filteredTransactions) : []
+  ), [project, filteredTransactions]);
 
-    const baseCurrency = project.settings.baseCurrency || 'EUR';
+  const totals = useMemo(() => {
+    const value = holdings.reduce((sum, h) => sum + h.value, 0);
+    const gain = holdings.reduce((sum, h) => sum + h.totalReturn, 0);
+    const invested = value - gain;
+    return { value, gain, gainPercent: invested > 0 ? (gain / invested) * 100 : 0 };
+  }, [holdings]);
 
-    const normalizeCurrency = (value: string | undefined) => {
-      const trimmed = value?.trim();
-      return trimmed ? trimmed : baseCurrency;
-    };
+  const sortedHoldings = useMemo(() => {
+    const list = [...holdings];
+    if (sortKey === 'value') list.sort((a, b) => b.value - a.value);
+    if (sortKey === 'performance') list.sort((a, b) => b.totalReturnPercent - a.totalReturnPercent);
+    if (sortKey === 'name') list.sort((a, b) => a.security.name.localeCompare(b.security.name, 'de'));
+    return list;
+  }, [holdings, sortKey]);
 
-    const txByKey: Record<string, { isin: string; currency: string; txs: TransactionLike[] }> = {};
-    filteredTransactions.forEach((t) => {
-      if (!t.isin) return;
-      if (!['Buy', 'Sell', 'Sparplan_Buy'].includes(t.type)) return;
-      const currency = normalizeCurrency(t.currency);
-      const key = `${t.isin}__${currency}`;
-      if (!txByKey[key]) txByKey[key] = { isin: t.isin, currency, txs: [] };
-      txByKey[key].txs.push(t);
-    });
-
-    const results = Object.values(txByKey).map(({ isin, currency, txs }) => {
-      const sortedTxs = txs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      let qty = 0;
-      let realized = 0;
-      let lastDate = '';
-
-      sortedTxs.forEach((t) => {
-        const shares = Math.abs(t.shares || t.quantity || 0);
-        if (t.type === 'Buy' || t.type === 'Sparplan_Buy') qty += shares;
-        if (t.type === 'Sell') qty -= shares;
-
-        const signedAmount = (t.amount < 0 ? -1 : 1) * Math.abs(t.amount || 0);
-        realized += convertCurrency(project.fxData, signedAmount, t.currency || baseCurrency, baseCurrency, t.date);
-        if (!lastDate || new Date(t.date) > new Date(lastDate)) lastDate = t.date;
-      });
-
-      return { isin, currency, qty, realized, lastDate };
-    });
-
-    return results
-      .filter((r) => Math.abs(r.qty) < 0.0001)
-      .map((r) => {
-        const sec = project.securities?.[r.isin];
-        return {
-          isin: r.isin,
-          currency: r.currency,
-          name: sec?.name || r.isin,
-          quoteType: sec?.quoteType || 'Aktie',
-          realized: r.realized,
-          lastDate: r.lastDate
-        };
-      })
-      .sort((a, b) => new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime());
-  }, [project, filteredTransactions]);
+  const realizedTotal = closedPositions.reduce((sum, p) => sum + p.realized, 0);
 
   return (
-    <Card className="w-full !p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="md3-text-main flex items-center gap-2 text-lg font-bold">
-          <Wallet size={20} className="md3-accent" />
-          Wertpapiere
-        </h2>
-        <div className="text-sm text-slate-400">
-          {holdings.length} Positionen
-        </div>
+    <>
+      <div className="ui-kpis is-3">
+        <Kpi label="Depotwert" value={formatters.money(totals.value)} sub={`${holdings.length} offene Positionen`} icon={<Wallet size={16} />} tone="accent" />
+        <Kpi
+          label="Gewinn"
+          value={formatters.money(totals.gain, { sign: true })}
+          valueTone={toneOf(totals.gain)}
+          sub={`${formatters.percent(totals.gainPercent, { sign: true, decimals: 1 })} auf den Einstand`}
+          icon={<TrendingUp size={16} />}
+          tone="gain"
+        />
+        <Kpi
+          label="Realisiert"
+          value={formatters.money(realizedTotal, { sign: true })}
+          valueTone={toneOf(realizedTotal)}
+          sub={`${closedPositions.length} geschlossene Positionen`}
+          icon={<Coins size={16} />}
+          tone="amber"
+        />
       </div>
 
-      <div className="space-y-3">
-        {holdings.length === 0 ? (
-          <div className="md3-list-item p-8 text-center text-sm text-slate-400">Keine Positionen vorhanden. Importiere deine Trades.</div>
+      <GlassCard>
+        <CardHeader title="Offene Positionen">
+          <Segmented options={SORT_OPTIONS} value={sortKey} onChange={setSortKey} ariaLabel="Sortierung" size="sm" />
+        </CardHeader>
+
+        {sortedHoldings.length === 0 ? (
+          <EmptyState icon={<Layers size={22} />} title="Noch keine Positionen" text="Importiere deine Trades oder erfasse eine Transaktion." />
         ) : (
-          holdings.map((stock) => (
-            (() => {
-              const meta = project?.securities?.[stock.security.isin];
-              let statusLabel = 'Ticker ok';
-              let statusClass = 'md3-positive-soft text-xs px-2 py-0.5 rounded-full';
-
-              if (meta?.ignoreMarketData || meta?.symbolStatus === 'ignored') {
-                statusLabel = 'Ignoriert';
-                statusClass = 'md3-chip-tonal text-xs px-2 py-0.5 rounded-full';
-              } else if (meta?.symbolStatus === 'unresolved') {
-                statusLabel = 'Ticker fehlt';
-                statusClass = 'md3-negative-soft text-xs px-2 py-0.5 rounded-full';
-              }
-
+          <div className="ui-rows">
+            {sortedHoldings.map((holding) => {
+              const meta = project?.securities?.[holding.security.isin];
+              const unresolved = meta?.symbolStatus === 'unresolved';
+              const ignored = meta?.ignoreMarketData || meta?.symbolStatus === 'ignored';
+              const weight = totals.value > 0 ? (holding.value / totals.value) * 100 : 0;
+              const decimals = holding.quantity % 1 === 0 ? 0 : 3;
               return (
-            <div key={`${stock.security.isin}-${stock.currency}`} onClick={() => onSelectSecurity(stock.security.isin, stock.currency)} className="md3-list-item flex cursor-pointer items-center justify-between gap-3 p-4">
-              <div className="flex min-w-0 flex-1 items-center gap-4">
-                <div className="md3-chip-tonal flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold">
-                  {stock.security.name.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <h4 className="md3-text-main truncate font-medium" title={stock.security.name}>{stock.security.name}</h4>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
-                      <span className="md3-chip-tonal rounded px-1.5">{stock.security.quoteType || 'Aktie'}</span>
-                      <span className="md3-chip-tonal rounded px-1.5">{stock.currency}</span>
-                      <span className={statusClass}>{statusLabel}</span>
-                      <span>{stock.quantity} Stk.</span>
-                    <span className="text-slate-500">|</span>
-                    <span>Avg {stock.averageBuyPriceInOriginalCurrency.toLocaleString('de-DE', { style: 'currency', currency: stock.currency })}</span>
-                    <span className="text-slate-500">|</span>
-                    <span>Aktuell: {stock.currentPriceInOriginalCurrency.toLocaleString('de-DE', { style: 'currency', currency: stock.currency })}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="shrink-0 text-right">
-                <p className="md3-text-main font-medium">{stock.value.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}</p>
-                <div className="flex flex-col items-end">
-                  <p className={`text-xs ${stock.totalReturn >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                    {stock.totalReturn > 0 ? '+' : ''}{stock.totalReturn.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
-                  </p>
-                  <p className={`text-xs ${stock.totalReturnPercent >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                    {stock.totalReturnPercent > 0 ? '+' : ''}{stock.totalReturnPercent.toLocaleString('de-DE', { maximumFractionDigits: 2 })}%
-                  </p>
-                </div>
-              </div>
-            </div>
+                <ListRow
+                  key={`${holding.security.isin}-${holding.currency}`}
+                  onClick={() => onSelectSecurity(holding.security.isin, holding.currency)}
+                  leading={<Avatar seed={holding.security.isin} label={holding.security.name} />}
+                  title={holding.security.name}
+                  meta={(
+                    <>
+                      <span>{quoteTypeLabel(holding.security.quoteType)} · {formatters.number(holding.quantity, decimals)} Stk.</span>
+                      <span>Ø {formatters.moneyIn(holding.averageBuyPriceInOriginalCurrency, holding.currency)} → {formatters.moneyIn(holding.currentPriceInOriginalCurrency, holding.currency)}</span>
+                      {unresolved && <Pill tone="down">Ticker fehlt</Pill>}
+                      {ignored && <Pill>Ohne Kurse</Pill>}
+                    </>
+                  )}
+                  trailing={(
+                    <>
+                      <span className="ui-row-value">{formatters.money(holding.value)}</span>
+                      <span className="ui-row-sub">
+                        <span className="app-hide-mobile">{formatters.percent(weight, { decimals: 1 })} · </span>
+                        <Pill tone={toneOf(holding.totalReturn)} title={formatters.money(holding.totalReturn, { sign: true })}>
+                          {formatters.percent(holding.totalReturnPercent, { sign: true, decimals: 1 })}
+                        </Pill>
+                      </span>
+                    </>
+                  )}
+                />
               );
-            })()
-          ))
-        )}
-      </div>
-
-      <div className="mt-6 border-t border-slate-700/50 pt-6">
-        <button
-          onClick={() => setShowClosedPositions((v) => !v)}
-          className="flex w-full items-center justify-between text-sm text-slate-300 transition-colors hover:text-white"
-        >
-          <span>Geschlossene Positionen ({closedPositions.length})</span>
-          <ChevronRight size={16} className={`transition-transform ${showClosedPositions ? 'rotate-90' : ''}`} />
-        </button>
-        {showClosedPositions && (
-          <div className="mt-4 space-y-3">
-            {closedPositions.length === 0 ? (
-              <div className="md3-list-item py-6 text-center text-sm text-slate-500">Keine geschlossenen Positionen.</div>
-            ) : (
-              closedPositions.map((pos) => (
-                <div
-                  key={`${pos.isin}-${pos.currency}`}
-                  onClick={() => onSelectSecurity(pos.isin, pos.currency)}
-                  className="md3-list-item flex cursor-pointer items-center justify-between gap-3 p-4"
-                >
-                  <div className="min-w-0">
-                    <div className="md3-text-main truncate text-sm font-medium" title={pos.name}>{pos.name}</div>
-                    <div className="mt-0.5 text-xs text-slate-400">
-                      <span className="md3-chip-tonal rounded px-1.5">{pos.quoteType}</span>
-                      <span className="md3-chip-tonal rounded px-1.5 ml-1">{pos.currency}</span>
-                      <span className="text-slate-500"> | </span>
-                      <span>Letzter Trade: {new Date(pos.lastDate).toLocaleDateString('de-DE')}</span>
-                    </div>
-                  </div>
-                  <div className={`shrink-0 text-sm font-medium ${pos.realized >= 0 ? 'md3-positive' : 'md3-negative'}`}>
-                    {pos.realized >= 0 ? '+' : ''}{pos.realized.toLocaleString('de-DE', { style: 'currency', currency: project?.settings.baseCurrency || 'EUR' })}
-                  </div>
-                </div>
-              ))
-            )}
+            })}
           </div>
         )}
-      </div>
-    </Card>
+      </GlassCard>
+
+      <GlassCard>
+        <button
+          type="button"
+          className="ui-collapse"
+          onClick={() => setShowClosedPositions((v) => !v)}
+          aria-expanded={showClosedPositions}
+        >
+          <span className="ui-card-title">Geschlossene Positionen</span>
+          <span className="ui-collapse-meta">
+            {closedPositions.length}
+            <ChevronDown size={18} className={showClosedPositions ? 'is-open' : ''} />
+          </span>
+        </button>
+        {showClosedPositions && (
+          closedPositions.length === 0 ? (
+            <EmptyState title="Keine geschlossenen Positionen" text="Sobald du eine Position vollständig verkaufst, erscheint sie hier mit ihrem Ergebnis." />
+          ) : (
+            <div className="ui-rows" style={{ marginTop: 10 }}>
+              {closedPositions.map((pos) => (
+                <ListRow
+                  key={`${pos.isin}-${pos.currency}`}
+                  onClick={() => onSelectSecurity(pos.isin, pos.currency)}
+                  leading={<Avatar seed={pos.isin} label={pos.name} size={40} />}
+                  title={pos.name}
+                  meta={<span>{quoteTypeLabel(pos.quoteType)} · {pos.currency} · letzter Trade {new Date(pos.lastDate).toLocaleDateString('de-DE')}</span>}
+                  trailing={<Pill tone={toneOf(pos.realized)}>{formatters.money(pos.realized, { sign: true })}</Pill>}
+                />
+              ))}
+            </div>
+          )
+        )}
+      </GlassCard>
+    </>
   );
 };

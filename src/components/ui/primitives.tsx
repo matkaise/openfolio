@@ -143,14 +143,23 @@ export const IconButton = ({ label, className = '', children, type = 'button', .
     <button type={type} className={`ui-icon-btn ${className}`} aria-label={label} title={label} {...rest}>{children}</button>
 );
 
-/** Label above a form control, with an optional hint below. */
-export const Field = ({ label, hint, className = '', children }: { label: React.ReactNode; hint?: React.ReactNode; className?: string; children: React.ReactNode }) => (
-    <label className={`ui-field ${className}`}>
-        <span className="ui-field-label">{label}</span>
-        {children}
-        {hint && <span className="ui-field-hint">{hint}</span>}
-    </label>
-);
+/**
+ * Label above a form control, with an optional hint below. `group` is for controls made of
+ * several buttons (segmented controls): a labelled group instead of a <label>.
+ */
+export const Field = ({ label, hint, group, className = '', children }: { label: React.ReactNode; hint?: React.ReactNode; group?: boolean; className?: string; children: React.ReactNode }) => {
+    const id = React.useId();
+    const body = (
+        <>
+            <span className="ui-field-label" id={`${id}-label`}>{label}</span>
+            {children}
+            {hint && <span className="ui-field-hint">{hint}</span>}
+        </>
+    );
+    return group
+        ? <div className={`ui-field ${className}`} role="group" aria-labelledby={`${id}-label`}>{body}</div>
+        : <label className={`ui-field ${className}`}>{body}</label>;
+};
 
 export const TextInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
     ({ className = '', ...rest }, ref) => <input ref={ref} className={`ui-input ${className}`} {...rest} />
