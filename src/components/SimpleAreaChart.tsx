@@ -68,29 +68,9 @@ export const SimpleAreaChart = ({
     };
 
     const formatYAxis = (val: number) => {
-        if (isPercentage) {
-            return `${val > 0 ? '+' : ''}${val.toFixed(2)}%`;
-        }
-
-        let formattedVal = val.toString();
-        let suffix = '';
-
-        if (Math.abs(val) >= 1_000_000) {
-            formattedVal = (val / 1_000_000).toFixed(1);
-            suffix = 'M';
-        } else if (Math.abs(val) >= 1_000) {
-            formattedVal = (val / 1_000).toFixed(1);
-            suffix = 'k';
-        } else {
-            formattedVal = val.toFixed(0);
-        }
-
-        // Add ' as thousand separator if needed (e.g., if > 1000 without k abbreviation, though handled above)
-        // Just in case we format normally, here's how to enforce ' separator:
-        // formattedVal = formattedVal.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
-
-        const currencySymbol = currency === 'EUR' ? '€' : currency === 'USD' ? '$' : currency;
-        return `${formattedVal}${suffix} ${currencySymbol}`;
+        if (isPercentage) return formatters.percent(val, { sign: true, decimals: 1 });
+        if (!currency) return formatters.number(val, Math.abs(val) >= 100 ? 0 : 2);
+        return formatters.moneyIn(val, currency, { decimals: Math.abs(val) >= 100 ? 0 : 2 });
     };
 
     // Calculate Zero Offset for split coloring

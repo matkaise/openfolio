@@ -9,8 +9,12 @@ import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { useFormatters } from '@/components/ui/useFormatters';
 import { Avatar, CardHeader, EmptyState, GlassCard, Kpi, ListRow, Segmented } from '@/components/ui/primitives';
 import { Modal } from '@/components/ui/Modal';
+import { useT } from '@/lib/i18n';
 import { type DividendHistoryEntry, type EventEntry, type TransactionLike, type UpcomingDividendEntry } from '@/types/portfolioView';
 import { type Security, type Transaction } from '@/types/domain';
+
+/** Kind of a listed payment; labelled with t.dividends.types. Dates in the lists are date keys (YYYY-MM-DD). */
+type DividendKind = 'payout' | 'theoretical' | 'forecast';
 
 const DividendListModal = ({
   isOpen,
@@ -24,15 +28,16 @@ const DividendListModal = ({
   items: { id: string; name: string; date: string; amount: number; type: string }[];
 }) => {
   const formatters = useFormatters();
+  const t = useT();
   return (
-    <Modal open={isOpen} onClose={onClose} size="lg" title={title} subtitle={`${items.length} Einträge`} icon={<Coins size={20} />}>
+    <Modal open={isOpen} onClose={onClose} size="lg" title={title} subtitle={t.dividends.entries(items.length)} icon={<Coins size={20} />}>
       <div className="ui-rows ui-scroll" style={{ maxHeight: '60vh' }}>
         {items.map((item) => (
           <ListRow
             key={item.id}
             leading={<Avatar seed={item.name} label={item.name} size={38} />}
             title={item.name}
-            meta={<span>{item.date} · {item.type}</span>}
+            meta={<span>{formatters.date(item.date)} · {t.dividends.types[item.type as DividendKind] ?? item.type}</span>}
             trailing={<span className="ui-row-value is-up">{formatters.money(item.amount, { sign: true })}</span>}
           />
         ))}
@@ -52,6 +57,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
   const [cumulativeRange, setCumulativeRange] = useState<'1M' | '6M' | 'YTD' | '1J' | '3J' | '5J' | 'MAX'>('1J');
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
   const formatters = useFormatters();
+  const t = useT();
 
   // 1. Filter Transactions (same logic as other tabs)
   const filteredTransactions = useMemo(() => (
@@ -339,9 +345,9 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
           theoreticalRecent.push({
             id: `${isin}-${dh.date}`,
             name: sec.name || isin,
-            date: dDate.toLocaleDateString('de-DE'),
+            date: toDateKeyLocal(dDate),
             amount,
-            type: 'Theoretisch',
+            type: 'theoretical' as DividendKind,
             sortKey: dDate.getTime()
           });
         }
@@ -380,11 +386,11 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     const upcomingList = forecastEvents
       .sort((a, b) => a.date.getTime() - b.date.getTime())
       .map(e => ({
-        date: e.date.toLocaleDateString(),
+        date: toDateKeyLocal(e.date),
         name: e.name,
         amount: e.amount,
         ticker: e.ticker,
-        type: 'Prognose',
+        type: 'forecast' as DividendKind,
         debug: e.debug
       }));
 
@@ -394,9 +400,9 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       .map(d => ({
         id: d.id,
         name: d.name || d.isin,
-        date: new Date(d.date).toLocaleDateString('de-DE'),
+        date: toDateKeyLocal(new Date(d.date)),
         amount: convertDividendToBase(d.amount, d.currency, d.date),
-        type: 'Ausschüttung'
+        type: 'payout' as DividendKind
       }));
 
     const recentTheoretical = theoreticalRecent
@@ -586,7 +592,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
 
   const currentYear = new Date().getFullYear();
   const changeVsLastYear = receivedLastYear > 0 ? ((receivedCurrentYear - receivedLastYear) / receivedLastYear) * 100 : 0;
-  const RANGE_OPTIONS = (['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map((value) => ({ value, label: value }));
+  const RANGE_OPTIONS = (['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map((value) => ({ value, label: t.ranges.short[value] }));
   const showAll = (title: string, items: { id: string; name: string; date: string; amount: number; type: string }[]) => setDividendListModal({ title, items });
 
   const yearlyMax = Math.max(...yearlyDisplayData.map((d) => d.amount), 0) * 1.1 || 1;
@@ -599,7 +605,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
           key={item.key}
           leading={<Avatar seed={item.name} label={item.name} size={38} />}
           title={item.name}
-          meta={<span>{item.date} · {item.type}</span>}
+          meta={<span>{formatters.date(item.date)} · {t.dividends.types[item.type as DividendKind] ?? item.type}</span>}
           trailing={<span className="ui-row-value is-up">{formatters.money(item.amount, { sign: true })}</span>}
         />
       ))}
@@ -610,41 +616,41 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     <>
       <div className="ui-kpis is-3">
         <Kpi
-          label={`Erhalten ${currentYear}`}
+          label={t.dividends.received(currentYear)}
           value={formatters.money(receivedCurrentYear)}
-          sub={receivedLastYear > 0 ? `${formatters.percent(changeVsLastYear, { sign: true, decimals: 1 })} gegenüber Vorjahr` : 'Kein Vorjahreswert'}
+          sub={receivedLastYear > 0 ? t.dividends.vsLastYear(formatters.percent(changeVsLastYear, { sign: true, decimals: 1 })) : t.dividends.noLastYear}
           icon={<PiggyBank size={16} />}
           tone="gain"
         />
-        <Kpi label="Erwartet (Restjahr)" value={formatters.money(projectedRestYear)} sub="Prognose aus den aktuellen Positionen" icon={<Timer size={16} />} tone="teal" />
+        <Kpi label={t.dividends.expected} value={formatters.money(projectedRestYear)} sub={t.dividends.expectedSub} icon={<Timer size={16} />} tone="teal" />
         <Kpi
-          label="Dividendenrendite"
+          label={t.dividends.yield}
           value={formatters.percent(personalYield)}
-          sub={`Auf den Einstand: ${formatters.percent(yieldOnCost)}`}
+          sub={t.dividends.yieldOnCost(formatters.percent(yieldOnCost))}
           icon={<Activity size={16} />}
           tone="accent"
         />
       </div>
 
       <GlassCard>
-        <CardHeader title="Dividendenentwicklung">
+        <CardHeader title={t.dividends.development}>
           <div className="ui-head-actions">
             <Segmented
-              options={[{ value: 'yearly', label: 'Jährlich' }, { value: 'monthly', label: 'Monatlich' }]}
+              options={[{ value: 'yearly', label: t.dividends.yearly }, { value: 'monthly', label: t.dividends.monthly }]}
               value={chartView}
               onChange={setChartView}
-              ariaLabel="Ansicht"
+              ariaLabel={t.dividends.view}
               size="sm"
             />
             {chartView === 'yearly' && (
-              <Segmented options={[{ value: '5Y', label: '5 Jahre' }, { value: 'MAX', label: 'Alle' }]} value={historyRange} onChange={setHistoryRange} ariaLabel="Zeitraum" size="sm" />
+              <Segmented options={[{ value: '5Y', label: t.dividends.fiveYears }, { value: 'MAX', label: t.dividends.all }]} value={historyRange} onChange={setHistoryRange} ariaLabel={t.ranges.label} size="sm" />
             )}
           </div>
         </CardHeader>
 
-        <div className="ui-bars" role="img" aria-label="Dividenden je Zeitraum">
+        <div className="ui-bars" role="img" aria-label={t.dividends.chartLabel}>
           {chartView === 'monthly' ? (
-            monthlyData.map((m) => (
+            monthlyData.map((m, monthIndex) => (
               <div key={m.month} className="ui-bar-col">
                 <div className="ui-bar-group">
                   {m.years.map((yData) => (
@@ -655,9 +661,9 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
                     />
                   ))}
                 </div>
-                <span className="ui-bar-label">{m.month}</span>
+                <span className="ui-bar-label">{t.months.short[monthIndex]}</span>
                 <div className="ui-bar-tip glass">
-                  <div className="ui-bar-tip-title">{m.month}</div>
+                  <div className="ui-bar-tip-title">{t.months.short[monthIndex]}</div>
                   {m.years.slice().reverse().map((yData) => (
                     <div key={yData.year} className={`ui-bar-tip-row${yData.year === currentYear ? ' is-current' : ''}`}>
                       <span>{yData.year}</span>
@@ -676,7 +682,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
                 <span className="ui-bar-label">{d.year}</span>
                 <div className="ui-bar-tip glass">
                   <div className="ui-bar-tip-title">{d.year}</div>
-                  <div className="ui-bar-tip-row is-current"><span>Summe</span><span>{formatters.money(d.amount)}</span></div>
+                  <div className="ui-bar-tip-row is-current"><span>{t.dividends.sum}</span><span>{formatters.money(d.amount)}</span></div>
                 </div>
               </div>
             ))
@@ -685,8 +691,8 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       </GlassCard>
 
       <GlassCard>
-        <CardHeader title="Kumulierte Dividenden">
-          <Segmented options={RANGE_OPTIONS} value={cumulativeRange} onChange={setCumulativeRange} ariaLabel="Zeitraum" size="sm" />
+        <CardHeader title={t.dividends.cumulative}>
+          <Segmented options={RANGE_OPTIONS} value={cumulativeRange} onChange={setCumulativeRange} ariaLabel={t.ranges.label} size="sm" />
         </CardHeader>
         <SimpleAreaChart
           data={cumulativeDividendData}
@@ -695,36 +701,36 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
           showAxes={true}
           timeRange={cumulativeRange}
           currency={baseCurrency}
-          tooltipLabel="Kumuliert"
+          tooltipLabel={t.dividends.cumulativeTooltip}
         />
       </GlassCard>
 
       <div className="ui-grid-2" style={{ alignItems: 'start' }}>
         <GlassCard>
-          <CardHeader title="Nächste Auszahlungen">
+          <CardHeader title={t.dividends.upcoming}>
             {upcomingDividends.length > 5 && (
-              <button type="button" className="ui-link" onClick={() => showAll('Nächste Auszahlungen', upcomingDividends.map((div, i) => ({ id: `${div.ticker}-${div.date}-${i}`, name: div.name, date: div.date, amount: div.amount, type: div.type })))}>
-                Alle {upcomingDividends.length} →
+              <button type="button" className="ui-link" onClick={() => showAll(t.dividends.upcoming, upcomingDividends.map((div, i) => ({ id: `${div.ticker}-${div.date}-${i}`, name: div.name, date: div.date, amount: div.amount, type: div.type })))}>
+                {t.dividends.showAll(upcomingDividends.length)}
               </button>
             )}
           </CardHeader>
           {upcomingDividends.length === 0 ? (
-            <EmptyState icon={<CalendarCheck size={22} />} title="Keine bestätigten Termine" text="Die Prognose basiert auf deinen aktuellen Positionen und den Zahlungen des Vorjahres." />
+            <EmptyState icon={<CalendarCheck size={22} />} title={t.dividends.noUpcomingTitle} text={t.dividends.noUpcomingText} />
           ) : (
             paymentRows(upcomingDividends.slice(0, 5).map((div, i) => ({ key: `${div.ticker}-${div.date}-${i}`, name: div.name, date: div.date, type: div.type, amount: div.amount })))
           )}
         </GlassCard>
 
         <GlassCard>
-          <CardHeader title="Zahlungshistorie">
+          <CardHeader title={t.dividends.history}>
             {recentDividends.length > 5 && (
-              <button type="button" className="ui-link" onClick={() => showAll('Zahlungshistorie', recentDividends.map((div) => ({ id: div.id, name: div.name || '', date: div.date, amount: div.amount, type: div.type })))}>
-                Alle {recentDividends.length} →
+              <button type="button" className="ui-link" onClick={() => showAll(t.dividends.history, recentDividends.map((div) => ({ id: div.id, name: div.name || '', date: div.date, amount: div.amount, type: div.type })))}>
+                {t.dividends.showAll(recentDividends.length)}
               </button>
             )}
           </CardHeader>
           {recentDividends.length === 0 ? (
-            <EmptyState icon={<Coins size={22} />} title="Noch keine Auszahlungen" text="Dividenden aus Importen oder manuellen Buchungen erscheinen hier." />
+            <EmptyState icon={<Coins size={22} />} title={t.dividends.noHistoryTitle} text={t.dividends.noHistoryText} />
           ) : (
             paymentRows(recentDividends.slice(0, 5).map((div) => ({ key: div.id, name: div.name || '', date: div.date, type: div.type, amount: div.amount })))
           )}

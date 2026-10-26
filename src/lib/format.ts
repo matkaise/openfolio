@@ -21,6 +21,13 @@ const getDateFormat = (locale: string, options: Intl.DateTimeFormatOptions) => {
     return format;
 };
 
+/** "2026-03-07" is a calendar day: parsed as local midnight, not UTC (no shift west of UTC). */
+const toDate = (value: string | number | Date): Date => {
+    if (value instanceof Date) return value;
+    const dateOnly = typeof value === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null;
+    return dateOnly ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3])) : new Date(value);
+};
+
 const NUMERIC_DATE: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' };
 
 const getFormat = (locale: string, options: Intl.NumberFormatOptions) => {
@@ -70,11 +77,11 @@ export const createFormatters = (locale: NumberLocale = DEFAULT_NUMBER_LOCALE, c
         moneyIn,
         /** Date (ISO string, timestamp or Date); numeric "07.03.2026" / "07/03/2026" by default. */
         date(value: string | number | Date, options: Intl.DateTimeFormatOptions = NUMERIC_DATE) {
-            const date = value instanceof Date ? value : new Date(value);
+            const date = toDate(value);
             return Number.isNaN(date.getTime()) ? String(value) : getDateFormat(dateLocale, options).format(date);
         },
         time(value: string | number | Date) {
-            const date = value instanceof Date ? value : new Date(value);
+            const date = toDate(value);
             return getDateFormat(dateLocale, { hour: '2-digit', minute: '2-digit' }).format(date);
         },
         /** Integer part and the rest (decimals + currency), so the cents can be shown lighter. */
