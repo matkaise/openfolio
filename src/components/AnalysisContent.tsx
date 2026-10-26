@@ -15,6 +15,7 @@ import { useFormatters } from '@/components/ui/useFormatters';
 import { Avatar, Button, CardHeader, Chip, EmptyState, GlassCard, IconButton, IconTile, Kpi, ListRow, Pill, Segmented, TextInput, toneOf } from '@/components/ui/primitives';
 import { Modal } from '@/components/ui/Modal';
 import { quoteTypeLabel } from '@/lib/labels';
+import { useT } from '@/lib/i18n';
 import { summarizeTwrSeries } from '@/lib/analysisService';
 import { type AnalysisCache, type HistoryPoint, type PerformanceRow } from '@/types/portfolioView';
 import { isCacheFor } from '@/lib/state/inputCache';
@@ -43,6 +44,7 @@ const HoldingsGroupModal = ({
   groupValue: number;
   portfolioValue: number;
 }) => {
+  const t = useT();
   const formatters = useFormatters();
   const sortedHoldings = [...holdings].sort((a, b) => b.value - a.value);
   const safeGroupValue = groupValue || sortedHoldings.reduce((sum, h) => sum + h.value, 0);
@@ -65,7 +67,7 @@ const HoldingsGroupModal = ({
               key={`${h.security.isin}-${h.currency}`}
               leading={<Avatar seed={h.security.isin} label={h.security.name} size={38} />}
               title={h.security.name}
-              meta={<span>{quoteTypeLabel(h.security.quoteType)} · {h.security.isin}</span>}
+              meta={<span>{quoteTypeLabel(t, h.security.quoteType)} · {h.security.isin}</span>}
               trailing={(
                 <>
                   <span className="ui-row-value">{formatters.money(h.value)}</span>

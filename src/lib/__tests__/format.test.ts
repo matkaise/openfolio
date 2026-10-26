@@ -26,3 +26,16 @@ describe('createFormatters', () => {
     expect(f.percent(-0.5, { sign: true })).toBe('−0,50 %');
   });
 });
+
+describe('date formatting', () => {
+  it('follows the date locale of the interface language', () => {
+    expect(createFormatters('de-DE', 'EUR', 'de-DE').date('2026-03-07T12:00:00')).toBe('07.03.2026');
+    expect(createFormatters('en-US', 'EUR', 'en-GB').date('2026-03-07T12:00:00')).toBe('07/03/2026');
+  });
+
+  it('keeps the number format independent of the date locale', () => {
+    const f = createFormatters('de-DE', 'EUR', 'en-GB');
+    expect(f.money(1234.5)).toMatch(/^1\.234,50\s€$/);
+    expect(f.date('2026-03-07T12:00:00', { day: 'numeric', month: 'short' })).toBe('7 Mar');
+  });
+});

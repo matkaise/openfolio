@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
+import { useT } from '@/lib/i18n';
 
 interface MultiSelectProps {
   options: { id: string; name: string }[];
@@ -8,7 +9,8 @@ interface MultiSelectProps {
   label?: string;
 }
 
-export const MultiSelectDropdown = ({ options, selectedIds, onChange, label = 'Depot' }: MultiSelectProps) => {
+export const MultiSelectDropdown = ({ options, selectedIds, onChange, label }: MultiSelectProps) => {
+  const t = useT();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const optionIdSet = new Set(options.map((option) => option.id));
@@ -42,11 +44,11 @@ export const MultiSelectDropdown = ({ options, selectedIds, onChange, label = 'D
   const isAllSelected = effectiveSelectedIds.length === 0;
 
   const getDisplayLabel = () => {
-    if (isAllSelected) return 'Alle';
+    if (isAllSelected) return t.common.all;
     if (effectiveSelectedIds.length === 1) {
-      return options.find((o) => o.id === effectiveSelectedIds[0])?.name || 'Unbekannt';
+      return options.find((o) => o.id === effectiveSelectedIds[0])?.name || t.common.unknown;
     }
-    return `${effectiveSelectedIds.length} ausgewählt`;
+    return t.portfolioFilter.selected(effectiveSelectedIds.length);
   };
 
   return (
@@ -57,7 +59,7 @@ export const MultiSelectDropdown = ({ options, selectedIds, onChange, label = 'D
         onClick={() => setIsOpen((v) => !v)}
       >
         <span className="text-xs font-semibold" style={{ color: 'var(--md3-on-surface-variant)' }}>
-          {label}
+          {label ?? t.portfolioFilter.label}
         </span>
         <span className="ml-1 text-sm font-semibold" style={{ color: 'var(--md3-on-surface)' }}>
           {getDisplayLabel()}

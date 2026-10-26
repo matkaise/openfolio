@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { useT } from '@/lib/i18n';
 import { Button, EmptyState } from '@/components/ui/primitives';
 
 const log = createLogger('App');
@@ -14,6 +15,7 @@ export default function Error({
     error: Error & { digest?: string };
     reset: () => void;
 }) {
+    const t = useT();
     useEffect(() => {
         log.error(error);
     }, [error]);
@@ -24,9 +26,9 @@ export default function Error({
             <main className="ui-launcher-card glass">
                 <EmptyState
                     icon={<AlertTriangle size={22} />}
-                    title="Etwas ist schiefgelaufen"
-                    text={error.message || 'Ein unbekannter Fehler ist aufgetreten. Deine Projektdatei wurde nicht verändert.'}
-                    action={<Button variant="primary" onClick={() => reset()}>Erneut versuchen</Button>}
+                    title={t.errors.title}
+                    text={error.message || t.errors.unknown}
+                    action={<Button variant="primary" onClick={() => reset()}>{t.errors.retry}</Button>}
                 />
             </main>
         </div>

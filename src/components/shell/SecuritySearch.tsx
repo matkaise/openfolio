@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { Security } from '@/types/domain';
+import { useT } from '@/lib/i18n';
 
 type Props = {
     securities: Record<string, Security>;
@@ -11,6 +12,7 @@ type Props = {
 
 /** Finds securities by name, ISIN or ticker; ⌘K / Ctrl+K focuses it. */
 export const SecuritySearch = ({ securities, onSelect }: Props) => {
+    const t = useT();
     const [query, setQuery] = useState('');
     const [open, setOpen] = useState(false);
     const [highlight, setHighlight] = useState(0);
@@ -50,8 +52,8 @@ export const SecuritySearch = ({ securities, onSelect }: Props) => {
                 ref={inputRef}
                 type="search"
                 value={query}
-                placeholder="Wertpapier suchen"
-                aria-label="Wertpapier suchen"
+                placeholder={t.shell.searchPlaceholder}
+                aria-label={t.shell.searchPlaceholder}
                 aria-expanded={open && results.length > 0}
                 aria-controls="app-search-results"
                 role="combobox"

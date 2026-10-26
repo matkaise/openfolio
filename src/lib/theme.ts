@@ -30,4 +30,3 @@ export const applyThemePreference = (preference: ThemePreference) => {
 export const THEME_BOOT_SCRIPT = `(function(){try{var t=localStorage.getItem('${THEME_STORAGE_KEY}');if(t==='dark'||t==='light'){document.documentElement.dataset.theme=t;}}catch(e){}})();`;
 
 export const NEXT_THEME: Record<ThemePreference, ThemePreference> = { dark: 'light', light: 'system', system: 'dark' };
-export const THEME_LABELS: Record<ThemePreference, string> = { dark: 'Dunkel', light: 'Hell', system: 'System' };

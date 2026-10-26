@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import { Modal } from './Modal';
 import { Button } from './primitives';
+import { useT } from '@/lib/i18n';
 
 // In-app replacements for window.alert / window.confirm: toasts and a confirm dialog.
 
@@ -45,6 +46,7 @@ const ConfirmDialog = ({ request, onClose }: { request: ConfirmRequest; onClose:
         confirmRef.current?.focus();
     }, []);
     const danger = request.tone === 'danger';
+    const t = useT();
 
     return (
         <Modal
@@ -55,9 +57,9 @@ const ConfirmDialog = ({ request, onClose }: { request: ConfirmRequest; onClose:
             icon={danger ? <AlertTriangle size={20} /> : <Info size={20} />}
             footer={(
                 <>
-                    <Button variant="ghost" onClick={() => onClose(false)}>{request.cancelLabel || 'Abbrechen'}</Button>
+                    <Button variant="ghost" onClick={() => onClose(false)}>{request.cancelLabel || t.common.cancel}</Button>
                     <Button ref={confirmRef} variant={danger ? 'danger' : 'primary'} onClick={() => onClose(true)}>
-                        {request.confirmLabel || 'OK'}
+                        {request.confirmLabel || t.common.ok}
                     </Button>
                 </>
             )}

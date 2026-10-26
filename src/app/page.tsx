@@ -19,7 +19,9 @@ import { ImportContent } from '@/components/ImportContent';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { TransactionModal } from '@/components/TransactionModal';
 import { SecurityDetailModal } from '@/components/SecurityDetailModal';
-import { applyThemePreference, resolveThemePreference, THEME_LABELS, type ThemePreference } from '@/lib/theme';
+import { applyThemePreference, resolveThemePreference, type ThemePreference } from '@/lib/theme';
+import { useT } from '@/lib/i18n';
+import { useFormatters } from '@/components/ui/useFormatters';
 import { normalizeWealthGoalSettings } from '@/lib/wealthGoalUtils';
 import { type AnalysisCache } from '@/types/portfolioView';
 import { AppSidebar, type ShellNavItem } from '@/components/shell/AppSidebar';
@@ -37,13 +39,13 @@ import { TanDialog } from '@/components/brokers/TanDialog';
 import { getTransactions } from '@/lib/domain/ledger/store';
 
 const NAV_ITEMS = [
-  { key: 'Dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'Portfolio', label: 'Wertpapiere', icon: Wallet },
-  { key: 'Analyse', label: 'Analyse', icon: PieChart },
-  { key: 'Dividenden', label: 'Dividenden', icon: Calendar },
-  { key: 'Transaktionen', label: 'Transaktionen', icon: FileText },
-  { key: 'Datenquellen', label: 'Datenquellen', icon: Database },
-  { key: 'Broker', label: 'Broker', icon: FolderSync }
+  { key: 'Dashboard', icon: LayoutDashboard },
+  { key: 'Portfolio', icon: Wallet },
+  { key: 'Analyse', icon: PieChart },
+  { key: 'Dividenden', icon: Calendar },
+  { key: 'Transaktionen', icon: FileText },
+  { key: 'Datenquellen', icon: Database },
+  { key: 'Broker', icon: FolderSync }
 ] as const;
 
 type NavKey = (typeof NAV_ITEMS)[number]['key'];
@@ -60,26 +62,15 @@ const TAB_PRELOAD_SEQUENCE: TabKey[] = [
   'Import'
 ];
 
-/** Header of every page except the dashboard, which greets with the date. */
-const PAGE_HEADINGS: Partial<Record<TabKey, { title: string; sub: string }>> = {
-  Portfolio: { title: 'Wertpapiere', sub: 'Offene und geschlossene Positionen' },
-  Analyse: { title: 'Analyse', sub: 'Risiko, Rendite und Aufteilung' },
-  Dividenden: { title: 'Dividenden', sub: 'Erhaltene und erwartete Ausschüttungen' },
-  Transaktionen: { title: 'Transaktionen', sub: 'Alle Buchungen deiner Depots' },
-  Datenquellen: { title: 'Datenquellen', sub: 'Kurse, Wechselkurse und Depots' },
-  Broker: { title: 'Broker', sub: 'Automatischer Import deiner Buchungen' },
-  Einstellungen: { title: 'Einstellungen', sub: 'Darstellung und Berechnung' },
-  Import: { title: 'Import', sub: 'Depot wählen und Buchungen hinzufügen' }
-};
+/** Pages with their own header; the dashboard greets with the date instead. */
+const HEADING_KEYS = ['Portfolio', 'Analyse', 'Dividenden', 'Transaktionen', 'Datenquellen', 'Broker', 'Einstellungen', 'Import'] as const;
+const hasHeading = (tab: TabKey): tab is (typeof HEADING_KEYS)[number] => (HEADING_KEYS as readonly string[]).includes(tab);
 
-const MOBILE_LABELS: Partial<Record<TabKey, string>> = {
-  Dashboard: 'Übersicht',
-  Portfolio: 'Positionen',
-  Dividenden: 'Dividenden',
-  Transaktionen: 'Umsätze'
-};
+const MOBILE_MAIN_KEYS = ['Dashboard', 'Portfolio', 'Dividenden', 'Transaktionen'] as const;
 
 export default function PortfolioApp() {
+  const t = useT();
+  const formatters = useFormatters();
   // Only the project: file status and sync progress are read by the small status components
   const project = useProjectData();
   const isLoaded = project !== null;
@@ -226,7 +217,7 @@ export default function PortfolioApp() {
             onContinue={(portfolioId, isNew, newName) => {
               setImportTargetPortfolio({
                 id: portfolioId,
-                name: isNew ? (newName || 'Neues Depot') : (project?.portfolios.find((p) => p.id === portfolioId)?.name || 'Unbekannt'),
+                name: isNew ? (newName || t.shell.newPortfolio) : (project?.portfolios.find((p) => p.id === portfolioId)?.name || t.common.unknown),
                 isNew
               });
               setIsTransactionModalOpen(true);
@@ -234,20 +225,21 @@ export default function PortfolioApp() {
           />
         );
       default:
-        return <div className="p-8 text-center" style={{ color: 'var(--md3-on-surface-variant)' }}>In Entwicklung...</div>;
+        return <div className="p-8 text-center" style={{ color: 'var(--md3-on-surface-variant)' }}>{t.shell.inDevelopment}</div>;
     }
   };
 
   const brokerConnections = getBrokerConnections(project);
   const navItems: ShellNavItem[] = NAV_ITEMS.map((item) => ({
     key: item.key,
-    label: item.label,
+    label: t.shell.nav[item.key],
     badge: item.key === 'Portfolio' ? holdingsCount : item.key === 'Broker' ? brokerConnections.length : undefined
   }));
-  navItems.push({ key: 'Einstellungen', label: 'Einstellungen' });
+  navItems.push({ key: 'Einstellungen', label: t.shell.nav.Einstellungen });
   const hour = shellNow.getHours();
-  const greeting = hour < 11 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
-  const mobileMainKeys: TabKey[] = ['Dashboard', 'Portfolio', 'Dividenden', 'Transaktionen'];
+  const greeting = hour < 11 ? t.shell.greeting.morning : hour < 18 ? t.shell.greeting.day : t.shell.greeting.evening;
+  const mobileMainKeys: readonly TabKey[] = MOBILE_MAIN_KEYS;
+  const heading = hasHeading(activeTab) ? t.shell.headings[activeTab] : null;
 
   return (
     <div className="theme-md3 md3-app app-shell font-sans">
@@ -260,14 +252,14 @@ export default function PortfolioApp() {
         onNavigate={(key) => handleTabChange(key as TabKey)}
         sync={brokerConnections.length > 0
           ? {
-            title: 'Auto-Sync aktiv',
-            text: `${brokerConnections.length} ${brokerConnections.length === 1 ? 'Broker' : 'Broker'} verbunden. Abgleich beim Öffnen des Projekts.`,
+            title: t.shell.syncActiveTitle,
+            text: t.shell.syncActiveText(brokerConnections.length),
             ok: true,
             onClick: () => handleTabChange('Broker')
           }
           : {
-            title: 'Broker verbinden',
-            text: 'Neue Buchungen automatisch übernehmen: DEGIRO-Ordner, IBKR, Trading 212, comdirect.',
+            title: t.shell.connectTitle,
+            text: t.shell.connectText,
             ok: false,
             onClick: () => handleTabChange('Broker')
           }}
@@ -277,8 +269,8 @@ export default function PortfolioApp() {
       <main className="app-main">
         <header className="app-bar anim-in">
           <div className="app-hello">
-            <span className="app-hello-sub">{PAGE_HEADINGS[activeTab]?.sub ?? shellNow.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-            <h1 className="app-hello-title">{PAGE_HEADINGS[activeTab]?.title ?? greeting}</h1>
+            <span className="app-hello-sub">{heading?.sub ?? formatters.date(shellNow, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+            <h1 className="app-hello-title">{heading?.title ?? greeting}</h1>
           </div>
           <div className="app-bar-actions">
             <SecuritySearch
@@ -293,8 +285,8 @@ export default function PortfolioApp() {
               />
             )}
             <select
-              aria-label="Anzeigewährung"
-              title="Anzeigewährung"
+              aria-label={t.shell.displayCurrency}
+              title={t.shell.displayCurrency}
               value={project?.settings?.baseCurrency || 'EUR'}
               onChange={(e) => {
                 const nextCurrency = e.target.value;
@@ -310,7 +302,7 @@ export default function PortfolioApp() {
               <option value="CHF">CHF</option>
               <option value="GBP">GBP</option>
             </select>
-            <div className="app-tgl glass app-hide-mobile" role="radiogroup" aria-label="Darstellung">
+            <div className="app-tgl glass app-hide-mobile" role="radiogroup" aria-label={t.shell.appearance}>
               {(['dark', 'light', 'system'] as ThemePreference[]).map((theme) => (
                 <button
                   type="button"
@@ -319,16 +311,16 @@ export default function PortfolioApp() {
                   aria-checked={themePreference === theme}
                   onClick={() => setThemePreference(theme)}
                 >
-                  {THEME_LABELS[theme]}
+                  {t.theme[theme]}
                 </button>
               ))}
             </div>
             <SyncButton />
             <button type="button" onClick={() => handleTabChange('Import')} className="md3-tonal-btn app-hide-mobile px-4 text-sm">
-              Import
+              {t.shell.importButton}
             </button>
             <button type="button" onClick={() => handleTabChange('Import')} className="md3-filled-btn px-4 text-sm">
-              + Transaktion
+              {t.shell.addTransaction}
             </button>
           </div>
         </header>
@@ -358,7 +350,7 @@ export default function PortfolioApp() {
         )}
       </main>
 
-      <nav className="app-bottom-nav glass" aria-label="Navigation">
+      <nav className="app-bottom-nav glass" aria-label={t.shell.navigation}>
         {mobileMainKeys.map((key) => (
           <button
             type="button"
@@ -370,7 +362,7 @@ export default function PortfolioApp() {
             className={activeTab === key ? 'is-active' : ''}
             aria-current={activeTab === key ? 'page' : undefined}
           >
-            {MOBILE_LABELS[key] || key}
+            {t.shell.mobile[key as (typeof MOBILE_MAIN_KEYS)[number]]}
           </button>
         ))}
         <button
@@ -379,7 +371,7 @@ export default function PortfolioApp() {
           className={isMobileMoreOpen || !mobileMainKeys.includes(activeTab) ? 'is-active' : ''}
           aria-expanded={isMobileMoreOpen}
         >
-          Mehr
+          {t.shell.mobile.more}
         </button>
       </nav>
 
@@ -406,7 +398,7 @@ export default function PortfolioApp() {
             <MobileSaveButton onDone={() => setIsMobileMoreOpen(false)} />
             <button type="button" className="app-nav-item" onClick={() => { setIsMobileMoreOpen(false); handleCloseProject(); }}>
               <span className="app-nav-dot" aria-hidden="true" />
-              Projekt schließen
+              {t.shell.closeProject}
             </button>
           </div>
         </div>

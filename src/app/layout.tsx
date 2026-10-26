@@ -5,6 +5,8 @@ import { ProjectProvider } from '@/contexts/ProjectContext';
 import { BrokerSyncProvider } from '@/components/brokers/BrokerSyncContext';
 import { THEME_BOOT_SCRIPT } from '@/lib/theme';
 import { NotificationsProvider } from '@/components/ui/notifications';
+import { LanguageSync } from '@/components/ui/LanguageSync';
+import { LANGUAGE_BOOT_SCRIPT } from '@/lib/i18n/language';
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -30,12 +32,14 @@ export default function RootLayout({
   return (
     <html lang="de" suppressHydrationWarning>
       <head>
-        {/* Applies the last chosen theme before the first paint */}
+        {/* Applies the last chosen theme and language before the first paint */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: LANGUAGE_BOOT_SCRIPT }} />
       </head>
       <body
         className={`${manrope.variable} ${geistMono.variable} antialiased`}
       >
+        <LanguageSync />
         <NotificationsProvider>
           <ProjectProvider>
             <BrokerSyncProvider>
