@@ -8,25 +8,29 @@ import type { BrokerConnection, ProjectData } from '@/types/domain';
 import { useBrokerSync, type ConnectionStatus } from './BrokerSyncContext';
 import { Button, CardHeader, EmptyState, Field, GlassCard, IconButton, Pill, SelectInput, TextInput } from '@/components/ui/primitives';
 import { Modal } from '@/components/ui/Modal';
+import { useFormatters } from '@/components/ui/useFormatters';
+import { useT, type Messages } from '@/lib/i18n';
+import type { Formatters } from '@/lib/format';
 
-const formatDateTime = (value?: string) => (
-    value ? new Date(value).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' }) : 'noch nie'
+const formatDateTime = (t: Messages, formatters: Formatters, value?: string) => (
+    value ? formatters.date(value, { dateStyle: 'medium', timeStyle: 'short' }) : t.brokers.never
 );
 
 const StatusLine = ({ status, connection }: { status?: ConnectionStatus; connection: BrokerConnection }) => {
+    const t = useT();
     switch (status?.state) {
         case 'checking':
-            return <span className="ui-status is-muted"><Loader2 size={14} className="animate-spin" /> Wird geprüft …</span>;
+            return <span className="ui-status is-muted"><Loader2 size={14} className="animate-spin" /> {t.brokers.status.checking}</span>;
         case 'needs-permission':
-            return <span className="ui-status is-warn"><AlertTriangle size={14} /> Ordnerzugriff muss bestätigt werden</span>;
+            return <span className="ui-status is-warn"><AlertTriangle size={14} /> {t.brokers.status.needsPermission}</span>;
         case 'needs-token':
-            return <span className="ui-status is-warn"><KeyRound size={14} /> Zugangsdaten für diese Sitzung eingeben</span>;
+            return <span className="ui-status is-warn"><KeyRound size={14} /> {t.brokers.status.needsToken}</span>;
         case 'needs-login':
-            return <span className="ui-status is-muted"><KeyRound size={14} /> Zum Abrufen mit PIN und TAN anmelden</span>;
+            return <span className="ui-status is-muted"><KeyRound size={14} /> {t.brokers.status.needsLogin}</span>;
         case 'awaiting-tan':
-            return <span className="ui-status is-warn"><Loader2 size={14} className="animate-spin" /> Warte auf TAN</span>;
+            return <span className="ui-status is-warn"><Loader2 size={14} className="animate-spin" /> {t.brokers.status.awaitingTan}</span>;
         case 'missing-folder':
-            return <span className="ui-status is-down"><AlertTriangle size={14} /> Ordner in diesem Browser nicht gespeichert – bitte neu verbinden</span>;
+            return <span className="ui-status is-down"><AlertTriangle size={14} /> {t.brokers.status.missingFolder}</span>;
         case 'error':
             return <span className="ui-status is-down"><AlertTriangle size={14} /> {status.message}</span>;
         case 'ok':
@@ -34,7 +38,7 @@ const StatusLine = ({ status, connection }: { status?: ConnectionStatus; connect
                 <span className="ui-status-stack">
                     <span className="ui-status is-up"><CheckCircle2 size={14} /> {status.message}</span>
                     {status.warnings && status.warnings.length > 0 && (
-                        <span className="ui-status is-warn">Bestand weicht ab: {status.warnings.join(' · ')}</span>
+                        <span className="ui-status is-warn">{t.brokers.status.holdingsDiffer(status.warnings.join(' · '))}</span>
                     )}
                 </span>
             );
@@ -42,8 +46,8 @@ const StatusLine = ({ status, connection }: { status?: ConnectionStatus; connect
             return (
                 <span className="ui-status is-muted">
                     {connection.lastResult
-                        ? `Letzter Import: ${connection.lastResult.added} neu, ${connection.lastResult.duplicates} bereits vorhanden`
-                        : 'Noch nicht geprüft'}
+                        ? t.brokers.status.lastImport(connection.lastResult.added, connection.lastResult.duplicates)
+                        : t.brokers.status.notChecked}
                 </span>
             );
     }
@@ -57,21 +61,24 @@ const TargetPicker = ({
     setTargetId: (id: string) => void;
     newName: string;
     setNewName: (name: string) => void;
-}) => (
+}) => {
+    const t = useT();
+    return (
     <>
-        <Field label="Ziel-Depot">
+        <Field label={t.brokers.targetPortfolio}>
             <SelectInput value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-                <option value="new">Neues Depot</option>
+                <option value="new">{t.brokers.newPortfolio}</option>
                 {project.portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </SelectInput>
         </Field>
         {targetId === 'new' ? (
-            <Field label="Name des Depots">
+            <Field label={t.brokers.portfolioName}>
                 <TextInput value={newName} onChange={(e) => setNewName(e.target.value)} />
             </Field>
         ) : <div />}
     </>
-);
+    );
+};
 
 /** Checkbox to keep credentials in the encrypted project file, or the session-only hint. */
 const RememberToggle = ({ canStore, checked, onChange, label, sessionHint }: { canStore: boolean; checked: boolean; onChange: (v: boolean) => void; label: string; sessionHint: string }) => (
@@ -92,6 +99,7 @@ const resolveTarget = (project: ProjectData, targetId: string, newName: string, 
 
 const CredentialsPrompt = ({ connection }: { connection: BrokerConnection }) => {
     const { provideSecrets, canStoreTokens } = useBrokerSync();
+    const t = useT();
     const [token, setToken] = useState('');
     const [apiKey, setApiKey] = useState('');
     const [apiSecret, setApiSecret] = useState('');
@@ -126,22 +134,22 @@ const CredentialsPrompt = ({ connection }: { connection: BrokerConnection }) => 
                 <>
                     {field('client_id', clientId, setClientId)}
                     {field('client_secret', clientSecret, setClientSecret)}
-                    {field('Zugangsnummer', username, setUsername)}
+                    {field(t.brokers.accessNumber, username, setUsername)}
                 </>
             ) : isT212 ? (
                 <>
-                    {field('API-Schlüssel', apiKey, setApiKey)}
-                    {field('API-Secret', apiSecret, setApiSecret)}
+                    {field(t.brokers.apiKey, apiKey, setApiKey)}
+                    {field(t.brokers.apiSecret, apiSecret, setApiSecret)}
                 </>
-            ) : field('Flex-Token', token, setToken)}
+            ) : field(t.brokers.flexToken, token, setToken)}
             <div className="ui-inline-panel-foot">
                 {canStoreTokens ? (
                     <label className="ui-check">
                         <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-                        <span>In der verschlüsselten Projektdatei speichern</span>
+                        <span>{t.brokers.storeInFile}</span>
                     </label>
                 ) : <span />}
-                <Button type="submit" variant="primary" size="sm">{isComdirect ? 'Weiter' : 'Abrufen'}</Button>
+                <Button type="submit" variant="primary" size="sm">{isComdirect ? t.brokers.continue : t.brokers.fetch}</Button>
             </div>
         </form>
     );
@@ -150,6 +158,7 @@ const CredentialsPrompt = ({ connection }: { connection: BrokerConnection }) => 
 /** comdirect: the PIN is asked for every login and only sent to the local server once. */
 const ComdirectLoginPrompt = ({ connection }: { connection: BrokerConnection }) => {
     const { startComdirectLogin } = useBrokerSync();
+    const t = useT();
     const [pin, setPin] = useState('');
     return (
         <form
@@ -161,7 +170,7 @@ const ComdirectLoginPrompt = ({ connection }: { connection: BrokerConnection }) 
                 void startComdirectLogin(connection, value);
             }}
         >
-            <Field label="PIN" hint="Die PIN wird nicht gespeichert. Nach fünf angeforderten TANs ohne gültige Eingabe sperrt comdirect den Zugang.">
+            <Field label="PIN" hint={t.brokers.pinHint}>
                 <TextInput
                     type="password"
                     inputMode="numeric"
@@ -172,17 +181,18 @@ const ComdirectLoginPrompt = ({ connection }: { connection: BrokerConnection }) 
             </Field>
             <div className="ui-inline-panel-foot">
                 <span />
-                <Button type="submit" variant="primary" size="sm" disabled={pin.length < 4}>TAN anfordern</Button>
+                <Button type="submit" variant="primary" size="sm" disabled={pin.length < 4}>{t.brokers.requestTan}</Button>
             </div>
         </form>
     );
 };
 
-const CONNECTION_INFO: Record<BrokerConnection['kind'], { name: string; method: string; short: string; description: string }> = {
-    'degiro-folder': { name: 'DEGIRO', method: 'Datei-Ordner', short: 'DG', description: 'Liest neue Exporte aus einem Ordner, ohne Login.' },
-    'ibkr-flex': { name: 'Interactive Brokers', method: 'Flex Web Service', short: 'IB', description: 'Ruft eine Flex-Abfrage mit Token ab.' },
-    trading212: { name: 'Trading 212', method: 'Public API', short: 'T2', description: 'API-Schlüssel mit Leserechten.' },
-    comdirect: { name: 'comdirect', method: 'REST API mit TAN', short: 'CD', description: 'Abruf mit PIN und TAN.' }
+/** Method and description are in the messages (brokers.info). */
+const CONNECTION_INFO: Record<BrokerConnection['kind'], { name: string; short: string }> = {
+    'degiro-folder': { name: 'DEGIRO', short: 'DG' },
+    'ibkr-flex': { name: 'Interactive Brokers', short: 'IB' },
+    trading212: { name: 'Trading 212', short: 'T2' },
+    comdirect: { name: 'comdirect', short: 'CD' }
 };
 
 const PROVIDERS: BrokerConnection['kind'][] = ['degiro-folder', 'ibkr-flex', 'trading212', 'comdirect'];
@@ -197,6 +207,8 @@ const hasStoredSecrets = (connection: BrokerConnection) => {
 
 export const BrokersContent = () => {
     const project = useProjectData();
+    const t = useT();
+    const formatters = useFormatters();
     const { supported, statuses, connectDegiroFolder, connectIbkrFlex, connectTrading212, connectComdirect, canStoreTokens, checkConnection, removeConnection } = useBrokerSync();
     const [degiroTarget, setDegiroTarget] = useState<string>('new');
     const [degiroName, setDegiroName] = useState('DEGIRO');
@@ -222,7 +234,7 @@ export const BrokersContent = () => {
 
     if (!project) return null;
     const connections = getBrokerConnections(project);
-    const portfolioName = (id: string) => project.portfolios.find((p) => p.id === id)?.name || 'Gelöschtes Depot';
+    const portfolioName = (id: string) => project.portfolios.find((p) => p.id === id)?.name || t.brokers.deletedPortfolio;
 
     const handleConnectDegiro = async () => {
         setError(null);
@@ -231,7 +243,7 @@ export const BrokersContent = () => {
             setConnectKind(null);
         } catch (err) {
             if (err && typeof err === 'object' && 'name' in err && (err as { name?: string }).name === 'AbortError') return;
-            setError(err instanceof Error ? err.message : 'Ordner konnte nicht verbunden werden.');
+            setError(err instanceof Error ? err.message : t.brokers.folderFailed);
         }
     };
 
@@ -280,10 +292,10 @@ export const BrokersContent = () => {
     return (
         <>
             <GlassCard>
-                <CardHeader title="Verbundene Broker">{connections.length > 0 && <Pill>{connections.length}</Pill>}</CardHeader>
-                <p className="ui-text">Neue Buchungen kommen automatisch dazu. Vor jedem Import siehst du, was neu ist; bereits importierte Buchungen werden übersprungen. Zugangsdaten bleiben auf deinem Rechner.</p>
+                <CardHeader title={t.brokers.connected}>{connections.length > 0 && <Pill>{connections.length}</Pill>}</CardHeader>
+                <p className="ui-text">{t.brokers.connectedText}</p>
                 {connections.length === 0 ? (
-                    <EmptyState icon={<Landmark size={22} />} title="Noch kein Broker verbunden" text="Wähle unten deinen Broker. DEGIRO funktioniert über den Download-Ordner, die anderen über ihre offiziellen Schnittstellen." />
+                    <EmptyState icon={<Landmark size={22} />} title={t.brokers.noneTitle} text={t.brokers.noneText} />
                 ) : (
                     <div className="ui-connections">
                         {connections.map((connection) => {
@@ -297,11 +309,11 @@ export const BrokersContent = () => {
                                         <div className="ui-connection-main">
                                             <div className="ui-connection-title">
                                                 <span>{info.name}</span>
-                                                <Pill>{info.method}</Pill>
+                                                <Pill>{t.brokers.info[connection.kind].method}</Pill>
                                             </div>
                                             <div className="ui-row-meta">
-                                                <span>{isApi ? connection.label : `Ordner „${connection.label}“`} → {portfolioName(connection.portfolioId)}</span>
-                                                {isApi && <span>{hasStoredSecrets(connection) ? 'Zugangsdaten gespeichert' : 'Zugangsdaten nur für diese Sitzung'}</span>}
+                                                <span>{isApi ? connection.label : t.brokers.folder(connection.label)} → {portfolioName(connection.portfolioId)}</span>
+                                                {isApi && <span>{hasStoredSecrets(connection) ? t.brokers.secretsStored : t.brokers.secretsSession}</span>}
                                             </div>
                                         </div>
                                         <div className="ui-row-actions">
@@ -312,16 +324,16 @@ export const BrokersContent = () => {
                                                 onClick={() => void checkConnection(connection)}
                                                 disabled={(!isApi && !supported) || status?.state === 'checking' || status?.state === 'awaiting-tan'}
                                             >
-                                                {status?.state === 'needs-permission' ? 'Zugriff erlauben' : connection.kind === 'comdirect' ? 'Anmelden' : 'Jetzt prüfen'}
+                                                {status?.state === 'needs-permission' ? t.brokers.allowAccess : connection.kind === 'comdirect' ? t.brokers.signIn : t.brokers.checkNow}
                                             </Button>
-                                            <IconButton label={`Verbindung ${connection.label} entfernen`} className="is-danger" onClick={() => void removeConnection(connection)}>
+                                            <IconButton label={t.brokers.removeConnection(connection.label)} className="is-danger" onClick={() => void removeConnection(connection)}>
                                                 <Trash2 size={15} />
                                             </IconButton>
                                         </div>
                                     </div>
                                     <div className="ui-connection-status">
                                         <StatusLine status={status} connection={connection} />
-                                        <span className="ui-sub">Geprüft: {formatDateTime(connection.lastCheckedAt)} · Importiert: {formatDateTime(connection.lastImportAt)}</span>
+                                        <span className="ui-sub">{t.brokers.checkedImported(formatDateTime(t, formatters, connection.lastCheckedAt), formatDateTime(t, formatters, connection.lastImportAt))}</span>
                                     </div>
                                     {isApi && status?.state === 'needs-token' && <CredentialsPrompt connection={connection} />}
                                     {connection.kind === 'comdirect' && status?.state === 'needs-login' && <ComdirectLoginPrompt connection={connection} />}
@@ -333,7 +345,7 @@ export const BrokersContent = () => {
             </GlassCard>
 
             <GlassCard>
-                <CardHeader title="Broker verbinden" />
+                <CardHeader title={t.brokers.connect} />
                 <div className="ui-providers">
                     {PROVIDERS.map((kind) => {
                         const info = CONNECTION_INFO[kind];
@@ -341,8 +353,8 @@ export const BrokersContent = () => {
                             <button key={kind} type="button" className="ui-provider" onClick={() => setConnectKind(kind)}>
                                 <span className="ui-broker-logo" aria-hidden="true">{info.short}</span>
                                 <span className="ui-provider-name">{info.name}</span>
-                                <Pill>{info.method}</Pill>
-                                <span className="ui-provider-text">{info.description}</span>
+                                <Pill>{t.brokers.info[kind].method}</Pill>
+                                <span className="ui-provider-text">{t.brokers.info[kind].description}</span>
                             </button>
                         );
                     })}
@@ -352,51 +364,47 @@ export const BrokersContent = () => {
             <Modal
                 open={connectKind === 'degiro-folder'}
                 onClose={closeConnect}
-                title="DEGIRO-Ordner verbinden"
-                subtitle="Datei-Ordner · nur Lesezugriff"
+                title={t.brokers.degiroTitle}
+                subtitle={t.brokers.degiroSubtitle}
                 icon={<FolderOpen size={20} />}
                 footer={(
                     <>
-                        <Button variant="ghost" onClick={closeConnect}>Abbrechen</Button>
-                        <Button variant="primary" icon={<FolderOpen size={15} />} disabled={!supported} onClick={() => void handleConnectDegiro()}>Ordner wählen</Button>
+                        <Button variant="ghost" onClick={closeConnect}>{t.common.cancel}</Button>
+                        <Button variant="primary" icon={<FolderOpen size={15} />} disabled={!supported} onClick={() => void handleConnectDegiro()}>{t.brokers.chooseFolder}</Button>
                     </>
                 )}
             >
-                <p className="ui-modal-text">Wähle den Ordner, in den du Account.csv und Transactions.csv herunterlädst (z. B. „Downloads“). Openfolio liest ihn nur.</p>
-                {!supported && <p className="ui-notice is-warn">Dieser Browser kann keine Ordner verbinden. Das geht in Chrome, Edge oder Brave. Exporte lassen sich weiterhin über „Import“ hochladen.</p>}
+                <p className="ui-modal-text">{t.brokers.degiroText}</p>
+                {!supported && <p className="ui-notice is-warn">{t.brokers.folderUnsupported}</p>}
                 <div className="ui-grid-2">
                     <TargetPicker project={project} targetId={degiroTarget} setTargetId={setDegiroTarget} newName={degiroName} setNewName={setDegiroName} />
                 </div>
                 {error && <p className="ui-notice is-down">{error}</p>}
-                <p className="ui-field-hint">DEGIRO bietet keine offizielle API; der Ordner-Import vermeidet inoffizielle Logins und das Risiko einer Kontosperre.</p>
+                <p className="ui-field-hint">{t.brokers.degiroHint}</p>
             </Modal>
 
             <Modal
                 open={connectKind === 'ibkr-flex'}
                 onClose={closeConnect}
                 size="lg"
-                title="Interactive Brokers verbinden"
-                subtitle="Flex Web Service"
+                title={t.brokers.ibkrTitle}
+                subtitle={t.brokers.info['ibkr-flex'].method}
                 icon={<Landmark size={20} />}
                 footer={(
                     <>
-                        <Button variant="ghost" onClick={closeConnect}>Abbrechen</Button>
-                        <Button type="submit" form="connect-ibkr" variant="primary" disabled={!ibkrToken.trim() || !ibkrQueryId.trim()}>Verbinden und abrufen</Button>
+                        <Button variant="ghost" onClick={closeConnect}>{t.common.cancel}</Button>
+                        <Button type="submit" form="connect-ibkr" variant="primary" disabled={!ibkrToken.trim() || !ibkrQueryId.trim()}>{t.brokers.connectAndFetch}</Button>
                     </>
                 )}
             >
                 <form id="connect-ibkr" className="ui-stack" onSubmit={(e) => { handleConnectIbkr(e); closeConnect(); }}>
-                    <p className="ui-modal-text">
-                        Im Client Portal unter <em>Performance &amp; Berichte → Flex-Abfragen</em> eine Aktivitäts-Flex-Abfrage (Format XML) mit
-                        <em> Trades</em>, <em>Cash Transactions</em> und <em>Open Positions</em> anlegen, die Query-ID ablesen und unter
-                        <em> Flex Web Service</em> ein Token erzeugen. Openfolio ruft den Bericht über den lokalen Server direkt bei IBKR ab.
-                    </p>
+                    <p className="ui-modal-text">{t.brokers.ibkrText}</p>
                     <div className="ui-grid-2">
                         <TargetPicker project={project} targetId={ibkrTarget} setTargetId={setIbkrTarget} newName={ibkrName} setNewName={setIbkrName} />
-                        <Field label="Flex-Token">
+                        <Field label={t.brokers.flexToken}>
                             <TextInput type="password" autoComplete="off" value={ibkrToken} onChange={(e) => setIbkrToken(e.target.value)} />
                         </Field>
-                        <Field label="Query-ID">
+                        <Field label={t.brokers.queryId}>
                             <TextInput inputMode="numeric" value={ibkrQueryId} onChange={(e) => setIbkrQueryId(e.target.value.replace(/\D/g, ''))} />
                         </Field>
                     </div>
@@ -404,8 +412,8 @@ export const BrokersContent = () => {
                         canStore={canStoreTokens}
                         checked={ibkrRemember}
                         onChange={setIbkrRemember}
-                        label="Token in der verschlüsselten Projektdatei speichern (Abruf beim Öffnen)"
-                        sessionHint="Das Projekt ist nicht verschlüsselt: das Token gilt nur für diese Sitzung und wird nicht gespeichert."
+                        label={t.brokers.ibkrRemember}
+                        sessionHint={t.brokers.ibkrSession}
                     />
                 </form>
             </Modal>
@@ -414,33 +422,30 @@ export const BrokersContent = () => {
                 open={connectKind === 'trading212'}
                 onClose={closeConnect}
                 size="lg"
-                title="Trading 212 verbinden"
-                subtitle="Public API · Leserechte"
+                title={t.brokers.t212Title}
+                subtitle={t.brokers.t212Subtitle}
                 icon={<Landmark size={20} />}
                 footer={(
                     <>
-                        <Button variant="ghost" onClick={closeConnect}>Abbrechen</Button>
-                        <Button type="submit" form="connect-t212" variant="primary" disabled={!t212Key.trim() || !t212Secret.trim()}>Verbinden und abrufen</Button>
+                        <Button variant="ghost" onClick={closeConnect}>{t.common.cancel}</Button>
+                        <Button type="submit" form="connect-t212" variant="primary" disabled={!t212Key.trim() || !t212Secret.trim()}>{t.brokers.connectAndFetch}</Button>
                     </>
                 )}
             >
                 <form id="connect-t212" className="ui-stack" onSubmit={(e) => { handleConnectT212(e); closeConnect(); }}>
-                    <p className="ui-modal-text">
-                        In der Trading-212-App unter <em>Einstellungen → API (Beta)</em> einen Schlüssel mit Leserechten für Konto, Historie und Portfolio erzeugen.
-                        Die API gibt es nur für Invest- und Aktien-ISA-Konten; Beträge kommen in der Kontowährung.
-                    </p>
+                    <p className="ui-modal-text">{t.brokers.t212Text}</p>
                     <div className="ui-grid-2">
                         <TargetPicker project={project} targetId={t212Target} setTargetId={setT212Target} newName={t212Name} setNewName={setT212Name} />
-                        <Field label="API-Schlüssel">
+                        <Field label={t.brokers.apiKey}>
                             <TextInput type="password" autoComplete="off" value={t212Key} onChange={(e) => setT212Key(e.target.value)} />
                         </Field>
-                        <Field label="API-Secret">
+                        <Field label={t.brokers.apiSecret}>
                             <TextInput type="password" autoComplete="off" value={t212Secret} onChange={(e) => setT212Secret(e.target.value)} />
                         </Field>
-                        <Field label="Konto">
+                        <Field label={t.brokers.account}>
                             <SelectInput value={t212Environment} onChange={(e) => setT212Environment(e.target.value === 'demo' ? 'demo' : 'live')}>
-                                <option value="live">Echtgeld</option>
-                                <option value="demo">Demo (Paper Trading)</option>
+                                <option value="live">{t.brokers.live}</option>
+                                <option value="demo">{t.brokers.demo}</option>
                             </SelectInput>
                         </Field>
                     </div>
@@ -448,8 +453,8 @@ export const BrokersContent = () => {
                         canStore={canStoreTokens}
                         checked={t212Remember}
                         onChange={setT212Remember}
-                        label="Zugangsdaten in der verschlüsselten Projektdatei speichern (Abruf beim Öffnen)"
-                        sessionHint="Das Projekt ist nicht verschlüsselt: die Zugangsdaten gelten nur für diese Sitzung und werden nicht gespeichert."
+                        label={t.brokers.t212Remember}
+                        sessionHint={t.brokers.t212Session}
                     />
                 </form>
             </Modal>
@@ -458,22 +463,18 @@ export const BrokersContent = () => {
                 open={connectKind === 'comdirect'}
                 onClose={closeConnect}
                 size="lg"
-                title="comdirect verbinden"
-                subtitle="REST API mit TAN"
+                title={t.brokers.comdirectTitle}
+                subtitle={t.brokers.info.comdirect.method}
                 icon={<Landmark size={20} />}
                 footer={(
                     <>
-                        <Button variant="ghost" onClick={closeConnect}>Abbrechen</Button>
-                        <Button type="submit" form="connect-comdirect" variant="primary" disabled={!cdClientId.trim() || !cdClientSecret.trim() || cdUsername.length !== 8}>Verbinden</Button>
+                        <Button variant="ghost" onClick={closeConnect}>{t.common.cancel}</Button>
+                        <Button type="submit" form="connect-comdirect" variant="primary" disabled={!cdClientId.trim() || !cdClientSecret.trim() || cdUsername.length !== 8}>{t.brokers.connectOnly}</Button>
                     </>
                 )}
             >
                 <form id="connect-comdirect" className="ui-stack" onSubmit={(e) => { handleConnectComdirect(e); closeConnect(); }}>
-                    <p className="ui-modal-text">
-                        Im persönlichen Bereich unter <em>Verwaltung → REST API</em> freischalten und client_id sowie client_secret herunterladen.
-                        Jeder Abruf braucht deine PIN und eine TAN (photoTAN, photoTAN-Push oder mobileTAN); danach liest Openfolio Depotbestand,
-                        Depotumsätze und die Umsätze des Verrechnungskontos und beendet die Sitzung bei comdirect.
-                    </p>
+                    <p className="ui-modal-text">{t.brokers.comdirectText}</p>
                     <div className="ui-grid-2">
                         <TargetPicker project={project} targetId={cdTarget} setTargetId={setCdTarget} newName={cdName} setNewName={setCdName} />
                         <Field label="client_id">
@@ -482,7 +483,7 @@ export const BrokersContent = () => {
                         <Field label="client_secret">
                             <TextInput type="password" autoComplete="off" value={cdClientSecret} onChange={(e) => setCdClientSecret(e.target.value)} />
                         </Field>
-                        <Field label="Zugangsnummer (8 Ziffern)">
+                        <Field label={t.brokers.accessNumber8}>
                             <TextInput inputMode="numeric" autoComplete="off" value={cdUsername} onChange={(e) => setCdUsername(e.target.value.replace(/\D/g, '').slice(0, 8))} />
                         </Field>
                     </div>
@@ -490,8 +491,8 @@ export const BrokersContent = () => {
                         canStore={canStoreTokens}
                         checked={cdRemember}
                         onChange={setCdRemember}
-                        label="client_id, client_secret und Zugangsnummer verschlüsselt speichern (die PIN nie)"
-                        sessionHint="Das Projekt ist nicht verschlüsselt: die Zugangsdaten gelten nur für diese Sitzung."
+                        label={t.brokers.comdirectRemember}
+                        sessionHint={t.brokers.comdirectSession}
                     />
                 </form>
             </Modal>

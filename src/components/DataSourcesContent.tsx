@@ -16,6 +16,8 @@ import { getRangeStartDate, toDateKeyLocal } from '@/lib/dateUtils';
 import { BarChart3 } from 'lucide-react';
 import { Avatar, Button, CardHeader, EmptyState, Field, GlassCard, IconButton, IconTile, ListRow, Pill, Segmented, SelectInput, TextInput } from '@/components/ui/primitives';
 import { Modal } from '@/components/ui/Modal';
+import { useFormatters } from '@/components/ui/useFormatters';
+import { useT } from '@/lib/i18n';
 import { SimpleAreaChart } from './SimpleAreaChart';
 import { Security, type ProjectData } from '@/types/domain';
 import { resolveTicker, searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
@@ -25,6 +27,8 @@ const isSecurityPending = (sec: Security, nowMs: number) => securityNeedsSync(se
 
 export const DataSourcesContent = () => {
     const project = useProjectData();
+    const t = useT();
+    const formatters = useFormatters();
     const { syncFx, syncMarket, updateProject } = useProjectActions();
     const { isSyncing, isMarketSyncing, marketSyncProgress } = useProjectStoreShallow((state) => ({
         isSyncing: state.isSyncing,
@@ -55,12 +59,9 @@ export const DataSourcesContent = () => {
     }, [project?.fxData, selectedCurrency, timeRange]);
 
     const formatXAxis = (tickItem: string) => {
-        const d = new Date(tickItem);
         // If range is large (3J, 5J, MAX), show Year only
-        if (['3J', '5J', 'MAX'].includes(timeRange)) {
-            return `${d.getFullYear()}`;
-        }
-        return `${d.getDate()}.${d.getMonth() + 1}.`;
+        if (['3J', '5J', 'MAX'].includes(timeRange)) return tickItem.slice(0, 4);
+        return formatters.date(tickItem, { day: 'numeric', month: 'numeric' });
     };
 
     const availableCurrencies = useMemo(() => {
@@ -94,14 +95,14 @@ export const DataSourcesContent = () => {
     // Derived Stats
     const projectSecurities = project?.securities;
     const marketStats = useMemo(() => {
-        if (!projectSecurities) return { count: 0, lastSync: null, securities: [] };
+        if (!projectSecurities) return { count: 0, lastSync: null as Date | null, securities: [] };
         const secs = Object.values(projectSecurities);
         const count = secs.length;
         const lastSyncTimes = secs.map(s => s.lastSync ? new Date(s.lastSync).getTime() : 0);
         const maxTime = Math.max(...lastSyncTimes);
         return {
             count,
-            lastSync: maxTime > 0 ? new Date(maxTime).toISOString().split('T')[0] : 'Nie',
+            lastSync: maxTime > 0 ? new Date(maxTime) : null,
             securities: secs.sort((a, b) => a.name.localeCompare(b.name))
         };
     }, [projectSecurities]);
@@ -267,7 +268,7 @@ export const DataSourcesContent = () => {
             : matches;
 
         if (!combinedMatches.length) {
-            setCompanySearchMessage('Kein Treffer gefunden.');
+            setCompanySearchMessage(t.dataSources.noMatchFound);
             return;
         }
 
@@ -309,41 +310,41 @@ export const DataSourcesContent = () => {
         setPortfolioToDelete(null);
     };
 
-    const RANGE_OPTIONS = ['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'].map((value) => ({ value, label: value }));
+    const RANGE_OPTIONS = ['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'].map((value) => ({ value, label: t.ranges.short[value] }));
     const marketStatus = isMarketSyncing
-        ? <Pill tone="accent"><Loader2 size={12} className="animate-spin" />Aktualisiere …</Pill>
+        ? <Pill tone="accent"><Loader2 size={12} className="animate-spin" />{t.dataSources.updating}</Pill>
         : pendingSecurities.length > 0
-            ? <Pill>Teilweise</Pill>
-            : marketStats.lastSync && marketStats.lastSync !== 'Nie'
-                ? <Pill tone="up"><CheckCircle size={12} />Aktuell</Pill>
-                : <Pill>Ausstehend</Pill>;
+            ? <Pill>{t.dataSources.partial}</Pill>
+            : marketStats.lastSync
+                ? <Pill tone="up"><CheckCircle size={12} />{t.dataSources.upToDate}</Pill>
+                : <Pill>{t.dataSources.pending}</Pill>;
     const securityBadge = (sec: Security) => {
-        if (isSecurityPending(sec, nowMs)) return <Pill>Ausstehend</Pill>;
-        if (sec.lastSync) return <Pill tone="up">{new Date(sec.lastSync).toLocaleDateString('de-DE')}</Pill>;
-        return sec.symbolStatus === 'unresolved' ? <Pill tone="down">Nicht gefunden</Pill> : <Pill>Ausstehend</Pill>;
+        if (isSecurityPending(sec, nowMs)) return <Pill>{t.dataSources.pending}</Pill>;
+        if (sec.lastSync) return <Pill tone="up">{formatters.date(sec.lastSync)}</Pill>;
+        return sec.symbolStatus === 'unresolved' ? <Pill tone="down">{t.dataSources.notFound}</Pill> : <Pill>{t.dataSources.pending}</Pill>;
     };
 
     return (
         <>
             <div className="ui-grid-2" style={{ alignItems: 'start' }}>
                 <GlassCard>
-                    <CardHeader title="EZB-Wechselkurse">
-                        {isSyncing ? <Pill tone="accent"><Loader2 size={12} className="animate-spin" />Aktualisiere …</Pill> : <Pill tone="up"><CheckCircle size={12} />Aktuell</Pill>}
+                    <CardHeader title={t.dataSources.ecbTitle}>
+                        {isSyncing ? <Pill tone="accent"><Loader2 size={12} className="animate-spin" />{t.dataSources.updating}</Pill> : <Pill tone="up"><CheckCircle size={12} />{t.dataSources.upToDate}</Pill>}
                     </CardHeader>
-                    <p className="ui-text">Offizielle Referenzkurse der Europäischen Zentralbank.</p>
+                    <p className="ui-text">{t.dataSources.ecbText}</p>
                     <div className="ui-status-row">
                         <div>
-                            <span className="ui-label">Letztes Update</span>
-                            <span className="ui-status-value">{project?.fxData.lastUpdated || 'Nie'}</span>
+                            <span className="ui-label">{t.dataSources.lastUpdate}</span>
+                            <span className="ui-status-value">{project?.fxData.lastUpdated ? formatters.date(project.fxData.lastUpdated) : t.dataSources.never}</span>
                         </div>
-                        <IconButton label="EZB-Kurse aktualisieren" onClick={() => syncFx()} disabled={isSyncing}>
+                        <IconButton label={t.dataSources.refreshEcb} onClick={() => syncFx()} disabled={isSyncing}>
                             <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
                         </IconButton>
                     </div>
 
                     <div className="ui-toolbar">
-                        <Segmented options={RANGE_OPTIONS} value={timeRange} onChange={setTimeRange} ariaLabel="Zeitraum" size="sm" />
-                        <SelectInput aria-label="Währung" value={selectedCurrency} onChange={(e) => setSelectedCurrency(e.target.value)} className="ui-input-compact">
+                        <Segmented options={RANGE_OPTIONS} value={timeRange} onChange={setTimeRange} ariaLabel={t.ranges.label} size="sm" />
+                        <SelectInput aria-label={t.dataSources.currency} value={selectedCurrency} onChange={(e) => setSelectedCurrency(e.target.value)} className="ui-input-compact">
                             {availableCurrencies.map((c) => <option key={c} value={c}>{c}</option>)}
                         </SelectInput>
                     </div>
@@ -364,38 +365,38 @@ export const DataSourcesContent = () => {
                                         labelStyle={{ color: 'var(--text3)' }}
                                         itemStyle={{ color: 'var(--text)' }}
                                     />
-                                    <Area type="monotone" dataKey="rate" name={`${selectedCurrency} je EUR`} stroke="var(--accent)" strokeWidth={2} fill="url(#fxRateFill)" />
+                                    <Area type="monotone" dataKey="rate" name={t.dataSources.perEur(selectedCurrency)} stroke="var(--accent)" strokeWidth={2} fill="url(#fxRateFill)" />
                                 </AreaChart>
                             </ResponsiveContainer>
                         ) : (
-                            <EmptyState title="Keine Kurse" text="Noch keine Wechselkurse geladen. Bitte aktualisieren." />
+                            <EmptyState title={t.dataSources.noRatesTitle} text={t.dataSources.noRatesText} />
                         )}
                     </div>
                 </GlassCard>
 
                 <GlassCard>
-                    <CardHeader title="Kursdaten (Yahoo)">{marketStatus}</CardHeader>
-                    <p className="ui-text">Automatische Schlusskurse für Aktien und ETFs.</p>
+                    <CardHeader title={t.dataSources.pricesTitle}>{marketStatus}</CardHeader>
+                    <p className="ui-text">{t.dataSources.pricesText}</p>
                     <div className="ui-status-row">
                         <div>
-                            <span className="ui-label">Letztes Update</span>
-                            <span className="ui-status-value">{marketStats.lastSync}</span>
+                            <span className="ui-label">{t.dataSources.lastUpdate}</span>
+                            <span className="ui-status-value">{marketStats.lastSync ? formatters.date(marketStats.lastSync) : t.dataSources.never}</span>
                         </div>
-                        <IconButton label="Kursdaten aktualisieren" onClick={handleQuoteSync} disabled={isMarketSyncing}>
+                        <IconButton label={t.dataSources.refreshPrices} onClick={handleQuoteSync} disabled={isMarketSyncing}>
                             {isMarketSyncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                         </IconButton>
                     </div>
                     {isMarketSyncing && marketSyncProgress && marketSyncProgress.total > 0 && (
                         <div className="ui-progress-block">
                             <div className="ui-progress-meta">
-                                <span>{marketSyncProgress.symbol ? `Aktuell: ${marketSyncProgress.symbol}` : 'Fortschritt'}</span>
+                                <span>{marketSyncProgress.symbol ? t.dataSources.current(marketSyncProgress.symbol) : t.dataSources.progress}</span>
                                 <span>{marketSyncProgress.current}/{marketSyncProgress.total}</span>
                             </div>
                             <div className="ui-progress"><span style={{ width: `${Math.min(100, Math.round((marketSyncProgress.current / marketSyncProgress.total) * 100))}%` }} /></div>
                         </div>
                     )}
                     {marketStats.securities.length === 0 ? (
-                        <EmptyState title="Keine Wertpapiere" text="Sobald Positionen importiert sind, werden ihre Kurse hier geladen." />
+                        <EmptyState title={t.dataSources.noSecuritiesTitle} text={t.dataSources.noSecuritiesText} />
                     ) : (
                         <div className="ui-rows ui-scroll" style={{ maxHeight: 340 }}>
                             {marketStats.securities.map((sec) => (
@@ -415,8 +416,8 @@ export const DataSourcesContent = () => {
 
             {unresolvedSecurities.length > 0 && (
                 <GlassCard>
-                    <CardHeader title={`Fehlende Ticker (${unresolvedSecurities.length})`} />
-                    <p className="ui-text">Für diese Titel wurde kein Yahoo-Ticker gefunden. Weise ihn manuell zu oder verzichte auf Marktdaten.</p>
+                    <CardHeader title={t.dataSources.missingTickers(unresolvedSecurities.length)} />
+                    <p className="ui-text">{t.dataSources.missingTickersText}</p>
                     <div className="ui-rows" style={{ marginTop: 8 }}>
                         {unresolvedSecurities.map((sec) => (
                             <ListRow
@@ -425,7 +426,7 @@ export const DataSourcesContent = () => {
                                 leading={<Avatar seed={sec.isin} label={sec.name} size={38} />}
                                 title={sec.name}
                                 meta={<span>{sec.isin}</span>}
-                                trailing={<span className="ui-row-sub"><Pill tone="down">Kein Treffer</Pill><span className="ui-link">Zuweisen</span></span>}
+                                trailing={<span className="ui-row-sub"><Pill tone="down">{t.dataSources.noMatch}</Pill><span className="ui-link">{t.dataSources.assign}</span></span>}
                             />
                         ))}
                     </div>
@@ -433,10 +434,10 @@ export const DataSourcesContent = () => {
             )}
 
             <GlassCard>
-                <CardHeader title="Depots verwalten" />
-                <p className="ui-text">Löscht ein Depot mit allen zugehörigen Buchungen und Konten.</p>
+                <CardHeader title={t.dataSources.portfoliosTitle} />
+                <p className="ui-text">{t.dataSources.portfoliosText}</p>
                 {portfolioStats.length === 0 ? (
-                    <EmptyState title="Keine Depots" />
+                    <EmptyState title={t.dataSources.noPortfolios} />
                 ) : (
                     <div className="ui-rows" style={{ marginTop: 8 }}>
                         {portfolioStats.map((portfolio) => (
@@ -444,9 +445,9 @@ export const DataSourcesContent = () => {
                                 key={portfolio.id}
                                 leading={<IconTile tone="accent"><Wallet size={18} /></IconTile>}
                                 title={portfolio.name}
-                                meta={<span>{portfolio.txCount} Buchungen · {portfolio.cashCount} Konten</span>}
+                                meta={<span>{t.dataSources.portfolioMeta(portfolio.txCount, portfolio.cashCount)}</span>}
                                 trailing={(
-                                    <IconButton label={`Depot ${portfolio.name} löschen`} className="is-danger" onClick={() => setPortfolioToDelete(portfolio)}>
+                                    <IconButton label={t.dataSources.deletePortfolioLabel(portfolio.name)} className="is-danger" onClick={() => setPortfolioToDelete(portfolio)}>
                                         <Trash2 size={16} />
                                     </IconButton>
                                 )}
@@ -475,15 +476,15 @@ export const DataSourcesContent = () => {
                                 openCompanySearch(sec);
                             }}
                         >
-                            Ticker ändern
+                            {t.dataSources.changeTicker}
                         </Button>
-                        <Button onClick={() => setSelectedSecurity(null)}>Schließen</Button>
+                        <Button onClick={() => setSelectedSecurity(null)}>{t.common.close}</Button>
                     </>
                 )}
             >
                 {selectedSecurity && (
                     <>
-                        <Segmented options={RANGE_OPTIONS} value={modalTimeRange} onChange={setModalTimeRange} ariaLabel="Zeitraum" size="sm" />
+                        <Segmented options={RANGE_OPTIONS} value={modalTimeRange} onChange={setModalTimeRange} ariaLabel={t.ranges.label} size="sm" />
                         <div className="ui-chart" style={{ height: 320 }}>
                             {selectedSecurity.priceHistory && Object.keys(selectedSecurity.priceHistory).length > 0 ? (
                                 <SimpleAreaChart
@@ -495,7 +496,7 @@ export const DataSourcesContent = () => {
                                     currency={selectedSecurity.currency}
                                 />
                             ) : (
-                                <EmptyState icon={<BarChart3 size={22} />} title="Keine Kursdaten" text="Aktualisiere die Kursdaten, um den Verlauf zu laden." />
+                                <EmptyState icon={<BarChart3 size={22} />} title={t.dataSources.noPricesTitle} text={t.dataSources.noPricesText} />
                             )}
                         </div>
                     </>
@@ -505,8 +506,8 @@ export const DataSourcesContent = () => {
             <Modal
                 open={Boolean(activeSearchSecurity)}
                 onClose={closeCompanySearch}
-                title="Ticker zuweisen"
-                subtitle={activeSearchSecurity ? `Für ${activeSearchSecurity.name || activeSearchSecurity.isin}` : undefined}
+                title={t.dataSources.assignTicker}
+                subtitle={activeSearchSecurity ? t.dataSources.assignFor(activeSearchSecurity.name || activeSearchSecurity.isin) : undefined}
                 icon={<Search size={20} />}
                 footer={(
                     <>
@@ -518,9 +519,9 @@ export const DataSourcesContent = () => {
                                 closeCompanySearch();
                             }}
                         >
-                            Ohne Marktdaten fortfahren
+                            {t.dataSources.withoutMarketData}
                         </Button>
-                        <Button onClick={closeCompanySearch}>Schließen</Button>
+                        <Button onClick={closeCompanySearch}>{t.common.close}</Button>
                     </>
                 )}
             >
@@ -528,7 +529,7 @@ export const DataSourcesContent = () => {
                     className="ui-inline-form"
                     onSubmit={(e) => { e.preventDefault(); void handleCompanySearch(); }}
                 >
-                    <Field label="Ticker, ISIN oder Firmenname">
+                    <Field label={t.dataSources.searchLabel}>
                         <TextInput
                             value={companyQuery}
                             onChange={(e) => {
@@ -536,12 +537,12 @@ export const DataSourcesContent = () => {
                                 setCompanySearchMessage(null);
                                 setCompanyMatches([]);
                             }}
-                            placeholder="z. B. AAPL oder Apple"
+                            placeholder={t.dataSources.searchPlaceholder}
                             autoFocus
                         />
                     </Field>
                     <Button type="submit" variant="primary" icon={isCompanySearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} disabled={isCompanySearching || !companyQuery.trim()}>
-                        Suchen
+                        {t.dataSources.search}
                     </Button>
                 </form>
                 {companySearchMessage && <p className="ui-field-hint">{companySearchMessage}</p>}
@@ -558,7 +559,7 @@ export const DataSourcesContent = () => {
                                         {match.currency && <Pill>{match.currency}</Pill>}
                                     </>
                                 )}
-                                trailing={<Button size="sm" variant="primary" icon={<Check size={14} />} onClick={() => handleSelectCompanyMatch(match)}>Übernehmen</Button>}
+                                trailing={<Button size="sm" variant="primary" icon={<Check size={14} />} onClick={() => handleSelectCompanyMatch(match)}>{t.dataSources.apply}</Button>}
                             />
                         ))}
                     </div>
@@ -569,18 +570,18 @@ export const DataSourcesContent = () => {
                 open={Boolean(portfolioToDelete)}
                 onClose={() => setPortfolioToDelete(null)}
                 size="sm"
-                title="Depot löschen?"
+                title={t.dataSources.deleteTitle}
                 icon={<Trash2 size={20} />}
                 footer={(
                     <>
-                        <Button variant="ghost" onClick={() => setPortfolioToDelete(null)}>Abbrechen</Button>
-                        <Button variant="danger" onClick={() => portfolioToDelete && handleDeletePortfolio(portfolioToDelete.id)}>Endgültig löschen</Button>
+                        <Button variant="ghost" onClick={() => setPortfolioToDelete(null)}>{t.common.cancel}</Button>
+                        <Button variant="danger" onClick={() => portfolioToDelete && handleDeletePortfolio(portfolioToDelete.id)}>{t.dataSources.deleteForever}</Button>
                     </>
                 )}
             >
                 {portfolioToDelete && (
                     <p className="ui-modal-text">
-                        <strong>{portfolioToDelete.name}</strong> wird mit {portfolioToDelete.txCount} Buchungen und {portfolioToDelete.cashCount} Konten gelöscht. Das lässt sich nicht rückgängig machen, solange du das Projekt nicht ohne Speichern schließt.
+                        <strong>{portfolioToDelete.name}</strong>{t.dataSources.deleteText(portfolioToDelete.txCount, portfolioToDelete.cashCount)}
                     </p>
                 )}
             </Modal>

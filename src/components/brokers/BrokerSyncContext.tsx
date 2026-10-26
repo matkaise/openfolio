@@ -27,6 +27,7 @@ import { parseComdirectData, type ComdirectData } from '@/lib/importers/comdirec
 import type { ComdirectChallenge } from '@/lib/brokers/comdirectClient';
 import { applyImportBatch, type ImportBatch, type ImportSummary } from '@/lib/importers/importBatch';
 import type { BrokerConnection, ProjectData } from '@/types/domain';
+import { getT } from '@/lib/i18n';
 
 export type ConnectionStatus =
     | { state: 'idle' }
@@ -119,7 +120,7 @@ export const useBrokerSync = () => {
 const describeSummary = (summary: ImportSummary) => {
     const added = summary.addedTransactions + summary.addedMovements;
     const duplicates = summary.duplicateTransactions + summary.duplicateMovements;
-    return `${added} neu, ${duplicates} bereits vorhanden`;
+    return getT().brokers.sync.summary(added, duplicates);
 };
 
 const addPortfolioIfNew = (project: ProjectData, target: PortfolioTarget): ProjectData => (
@@ -135,7 +136,7 @@ const fetchTrading212 = async (secrets: ConnectionSecrets, environment: 'live' |
         body: JSON.stringify({ apiKey: secrets.apiKey, apiSecret: secrets.apiSecret, environment, since })
     });
     const data = await res.json().catch(() => ({})) as { data?: Trading212Data; error?: string };
-    if (!res.ok || !data.data) throw new Error(data.error || `Abruf fehlgeschlagen (HTTP ${res.status}).`);
+    if (!res.ok || !data.data) throw new Error(data.error || getT().brokers.sync.fetchFailed(res.status));
     return data.data;
 };
 
@@ -146,7 +147,7 @@ const comdirectRequest = async <T,>(body: Record<string, unknown>): Promise<T> =
         body: JSON.stringify(body)
     });
     const data = await res.json().catch(() => ({})) as T & { error?: string };
-    if (!res.ok) throw new Error(data.error || `Abruf fehlgeschlagen (HTTP ${res.status}).`);
+    if (!res.ok) throw new Error(data.error || getT().brokers.sync.fetchFailed(res.status));
     return data;
 };
 
@@ -164,7 +165,7 @@ const fetchIbkrStatement = async (token: string, queryId: string): Promise<strin
         body: JSON.stringify({ token, queryId })
     });
     const data = await res.json().catch(() => ({})) as { xml?: string; error?: string };
-    if (!res.ok || !data.xml) throw new Error(data.error || `Abruf fehlgeschlagen (HTTP ${res.status}).`);
+    if (!res.ok || !data.xml) throw new Error(data.error || getT().brokers.sync.fetchFailed(res.status));
     return data.xml;
 };
 
@@ -222,13 +223,13 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             }));
             setStatus(connection.id, {
                 state: 'ok',
-                message: source.files.length > 0 ? `Keine neuen Buchungen (${describeSummary(applied.summary)})` : 'Keine neuen Exporte',
+                message: source.files.length > 0 ? getT().brokers.sync.nothingNew(describeSummary(applied.summary)) : getT().brokers.sync.noNewExports,
                 ...(warnings.length + notes.length > 0 ? { warnings: [...notes, ...warnings] } : {})
             });
             return;
         }
 
-        setStatus(connection.id, { state: 'ok', message: `Neue Buchungen gefunden: ${describeSummary(applied.summary)}` });
+        setStatus(connection.id, { state: 'ok', message: getT().brokers.sync.found(describeSummary(applied.summary)) });
         setPending({ connection, batch, summary: applied.summary, source, warnings, notes });
     }, [setStatus, updateProject]);
 
@@ -265,7 +266,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
                     return;
                 }
                 const parsed = parseIbkrFlexXml(await fetchIbkrStatement(token, connection.queryId));
-                const label = parsed.period ? `Flex ${parsed.period.from} – ${parsed.period.to}` : 'Flex-Abfrage';
+                const label = parsed.period ? getT().brokers.sync.flexPeriod(parsed.period.from, parsed.period.to) : getT().brokers.sync.flexQueryShort;
                 handleBatch(projectRef.current || current, connection, parsed.batch, { files: [label], newestModified: 0 }, parsed.positions);
                 return;
             }
@@ -283,7 +284,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             const scan = await scanDegiroFolder(handle, { modifiedAfter: connection.lastFileModified });
             handleBatch(projectRef.current || current, connection, scan.batch, { files: scan.files, newestModified: scan.newestModified });
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
+            const message = error instanceof Error ? error.message : getT().brokers.sync.unknownError;
             setStatus(connection.id, { state: 'error', message });
         }
     }, [handleBatch, secretsOf, setStatus]);
@@ -319,7 +320,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         void syncMarket(true, { full: true, projectOverride: next });
         setStatus(pending.connection.id, {
             state: 'ok',
-            message: `Importiert: ${describeSummary(pending.summary)}`,
+            message: getT().brokers.sync.imported(describeSummary(pending.summary)),
             ...(pending.warnings.length + pending.notes.length > 0 ? { warnings: [...pending.notes, ...pending.warnings] } : {})
         });
         setPending(null);
@@ -348,7 +349,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         const connection: BrokerConnection = {
             id: crypto.randomUUID(),
             kind: 'ibkr-flex',
-            label: `Flex-Abfrage ${credentials.queryId}`,
+            label: getT().brokers.sync.flexQuery(credentials.queryId),
             portfolioId: target.portfolioId,
             createdAt: new Date().toISOString(),
             queryId: credentials.queryId.trim(),
@@ -392,7 +393,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         const connection: BrokerConnection = {
             id: crypto.randomUUID(),
             kind: 'comdirect',
-            label: `Zugang ${secrets.username.slice(0, 2)}••••${secrets.username.slice(-2)}`,
+            label: getT().brokers.sync.access(`${secrets.username.slice(0, 2)}••••${secrets.username.slice(-2)}`),
             portfolioId: target.portfolioId,
             createdAt: new Date().toISOString(),
             ...(store ? secrets : {})
@@ -420,7 +421,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             setTanRequest({ connection, flowId, challenge });
             setStatus(connection.id, { state: 'awaiting-tan' });
         } catch (error) {
-            setStatus(connection.id, { state: 'error', message: error instanceof Error ? error.message : 'Anmeldung fehlgeschlagen' });
+            setStatus(connection.id, { state: 'error', message: error instanceof Error ? error.message : getT().brokers.sync.loginFailed });
         }
     }, [secretsOf, setStatus]);
 
@@ -434,9 +435,9 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             const parsed = parseComdirectData(data);
             const current = projectRef.current;
             if (!current) return;
-            handleBatch(current, request.connection, parsed.batch, { files: [`Depot ${data.depot.depotDisplayId || ''}`.trim()], newestModified: 0 }, parsed.positions, parsed.warnings);
+            handleBatch(current, request.connection, parsed.batch, { files: [getT().brokers.sync.depot(data.depot.depotDisplayId || '')], newestModified: 0 }, parsed.positions, parsed.warnings);
         } catch (error) {
-            setStatus(request.connection.id, { state: 'error', message: error instanceof Error ? error.message : 'Abruf fehlgeschlagen' });
+            setStatus(request.connection.id, { state: 'error', message: error instanceof Error ? error.message : getT().brokers.sync.fetchFailedShort });
         }
     }, [handleBatch, setStatus, tanRequest]);
 
