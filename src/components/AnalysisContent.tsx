@@ -23,11 +23,14 @@ import { isCacheFor } from '@/lib/state/inputCache';
 const EMPTY_HISTORY: HistoryPoint[] = [];
 const EMPTY_METRICS: AnalysisMetrics = { volatility: 0, sharpeRatio: 0, maxDrawdown: 0, maxDrawdownDate: '', availableYears: [], monthlyReturns: [], twrSeries: [] };
 
-const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: { date: string; value: number }[] }) => (
-  <Modal open={isOpen} onClose={onClose} size="xl" title="Drawdown-Verlauf" subtitle="Rückgang vom jeweils letzten Höchststand des Depots" icon={<TrendingDown size={20} />}>
-    <SimpleAreaChart data={data} color="var(--loss)" height={320} showAxes={true} timeRange="MAX" isPercentage={true} tooltipLabel="Abstand zum Hoch" />
-  </Modal>
-);
+const DrawdownModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: { date: string; value: number }[] }) => {
+  const t = useT();
+  return (
+    <Modal open={isOpen} onClose={onClose} size="xl" title={t.analysis.drawdownTitle} subtitle={t.analysis.drawdownSubtitle} icon={<TrendingDown size={20} />}>
+      <SimpleAreaChart data={data} color="var(--loss)" height={320} showAxes={true} timeRange="MAX" isPercentage={true} tooltipLabel={t.analysis.drawdownTooltip} />
+    </Modal>
+  );
+};
 
 const HoldingsGroupModal = ({
   isOpen,
@@ -56,7 +59,7 @@ const HoldingsGroupModal = ({
       onClose={onClose}
       size="lg"
       title={title}
-      subtitle={`${sortedHoldings.length} Positionen · ${formatters.percent(groupShare, { decimals: 1 })} vom Depot`}
+      subtitle={t.analysis.groupSubtitle(sortedHoldings.length, formatters.percent(groupShare, { decimals: 1 }))}
       icon={<PieChart size={20} />}
     >
       <div className="ui-rows ui-scroll" style={{ maxHeight: '60vh' }}>
@@ -71,7 +74,7 @@ const HoldingsGroupModal = ({
               trailing={(
                 <>
                   <span className="ui-row-value">{formatters.money(h.value)}</span>
-                  <span className="ui-row-sub">{formatters.percent(percentOfGroup, { decimals: 1 })} der Gruppe</span>
+                  <span className="ui-row-sub">{t.analysis.ofGroup(formatters.percent(percentOfGroup, { decimals: 1 }))}</span>
                 </>
               )}
             />
@@ -98,30 +101,36 @@ const RiskMetricModal = ({
   color: string;
   isPercentage: boolean;
   tooltipLabel: string;
-}) => (
-  <Modal open={isOpen} onClose={onClose} size="xl" title={title} subtitle="Rollierend über 12 Monate" icon={<Activity size={20} />}>
+}) => {
+  const t = useT();
+  return (
+  <Modal open={isOpen} onClose={onClose} size="xl" title={title} subtitle={t.analysis.rolling12m} icon={<Activity size={20} />}>
     {series.length > 0 ? (
       <SimpleAreaChart data={series} color={color} height={320} showAxes={true} timeRange="MAX" currency={isPercentage ? 'EUR' : ''} isPercentage={isPercentage} tooltipLabel={tooltipLabel} />
     ) : (
-      <EmptyState title="Keine Daten" text="Für diesen Zeitraum liegen noch keine Werte vor." />
+      <EmptyState title={t.charts.emptyTitle} text={t.analysis.noValuesYet} />
     )}
   </Modal>
-);
+  );
+};
 
 /** Clickable allocation rows with a share bar (regions, sectors, industries). */
-const AllocationList = ({ items, onSelect }: { items: { name: string; value: number }[]; onSelect: (item: { name: string; value: number }) => void }) => (
+const AllocationList = ({ items, onSelect }: { items: { name: string; value: number }[]; onSelect: (item: { name: string; value: number }) => void }) => {
+  const formatters = useFormatters();
+  return (
   <div className="ui-alloc">
     {items.map((item) => (
       <button key={item.name} type="button" className="ui-alloc-row" onClick={() => onSelect(item)}>
         <span className="ui-alloc-head">
           <span className="ui-alloc-name">{item.name}</span>
-          <span className="ui-alloc-value">{item.value} %<ChevronRight size={14} /></span>
+          <span className="ui-alloc-value">{formatters.percent(item.value, { decimals: 0 })}<ChevronRight size={14} /></span>
         </span>
         <span className="ui-alloc-track"><span style={{ width: `${Math.min(100, item.value)}%` }} /></span>
       </button>
     ))}
   </div>
-);
+  );
+};
 
 const sliceHistoryByRange = (
   history: HistoryPoint[],
@@ -177,6 +186,7 @@ export const AnalysisContent = ({
 }) => {
   const project = useProjectData();
   const formatters = useFormatters();
+  const t = useT();
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
   const performanceMethod = project?.settings?.performanceMethod || 'MWR';
   const performanceSmoothing = project?.settings?.performanceSmoothing || '1d';
@@ -232,7 +242,7 @@ export const AnalysisContent = ({
     let totalValue = 0;
 
     holdings.forEach(h => {
-      const sector = h.security.sector || 'Unbekannt';
+      const sector = h.security.sector || t.common.unknown;
       if (!groups[sector]) groups[sector] = { value: 0, holdings: [] };
       groups[sector].value += h.value;
       groups[sector].holdings.push(h);
@@ -248,7 +258,7 @@ export const AnalysisContent = ({
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
-  }, [holdings]);
+  }, [holdings, t]);
 
   // Calculate Region Data
   const regionData = useMemo(() => {
@@ -256,7 +266,7 @@ export const AnalysisContent = ({
     let totalValue = 0;
 
     holdings.forEach(h => {
-      const region = h.security.region || h.security.country || 'Unbekannt';
+      const region = h.security.region || h.security.country || t.common.unknown;
       if (!groups[region]) groups[region] = { value: 0, holdings: [] };
       groups[region].value += h.value;
       groups[region].holdings.push(h);
@@ -272,7 +282,7 @@ export const AnalysisContent = ({
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
-  }, [holdings]);
+  }, [holdings, t]);
 
   // Calculate Industry Data (Branche)
   const industryData = useMemo(() => {
@@ -280,7 +290,7 @@ export const AnalysisContent = ({
     let totalValue = 0;
 
     holdings.forEach(h => {
-      const industry = h.security.industry || 'Unbekannt';
+      const industry = h.security.industry || t.common.unknown;
       if (!groups[industry]) groups[industry] = { value: 0, holdings: [] };
       groups[industry].value += h.value;
       groups[industry].holdings.push(h);
@@ -296,7 +306,7 @@ export const AnalysisContent = ({
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
-  }, [holdings]);
+  }, [holdings, t]);
 
   const portfolioTotalValue = useMemo(() => {
     return holdings.reduce((sum, h) => sum + h.value, 0);
@@ -484,17 +494,18 @@ export const AnalysisContent = ({
   // Get monthly returns for selected year
   const displayedMonthlyReturns = useMemo(() => {
     if (!Object.keys(monthlyReturnsMap).length) {
-      return (analysisMetrics.monthlyReturns || []).map((entry) => {
+      // Always January to December (see analysisService)
+      return (analysisMetrics.monthlyReturns || []).map((entry, index) => {
         const hasData = Number.isFinite(entry.return);
         return {
-          month: entry.month,
+          month: t.months.short[index] ?? entry.month,
           return: hasData ? entry.return : null,
           hasData
         };
       });
     }
 
-    const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+    const monthNames = t.months.short;
     const result: { month: string; return: number | null; hasData: boolean }[] = [];
 
     for (let month = 0; month < 12; month++) {
@@ -508,7 +519,7 @@ export const AnalysisContent = ({
       });
     }
     return result;
-  }, [analysisMetrics, monthlyReturnsMap, selectedYear]);
+  }, [analysisMetrics, monthlyReturnsMap, selectedYear, t]);
 
   // Calculate Aggregated Returns (Quarterly / Yearly)
   const aggregatedReturns = useMemo(() => {
@@ -880,7 +891,7 @@ export const AnalysisContent = ({
 
       const data = await res.json();
       if (!res.ok || data.error || !data.history) {
-        throw new Error(data.error || 'Benchmark konnte nicht geladen werden.');
+        throw new Error(data.error || t.analysis.benchmarkFailed);
       }
 
       const localSecurity = project?.securities?.[symbol]
@@ -901,7 +912,7 @@ export const AnalysisContent = ({
       ]);
       setBenchmarkInput('');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Benchmark konnte nicht geladen werden.';
+      const message = err instanceof Error ? err.message : t.analysis.benchmarkFailed;
       setBenchmarkError(message);
     } finally {
       setIsBenchmarkLoading(false);
@@ -929,17 +940,17 @@ export const AnalysisContent = ({
 
   // Helper to get volatility label
   const getVolatilityLabel = (vol: number) => {
-    if (vol < 10) return { text: 'Niedrig', color: 'md3-positive' };
-    if (vol < 20) return { text: 'Mittel', color: 'md3-warning' };
-    return { text: 'Hoch', color: 'md3-negative' };
+    if (vol < 10) return { text: t.analysis.volatilityLevels.low, color: 'md3-positive' };
+    if (vol < 20) return { text: t.analysis.volatilityLevels.medium, color: 'md3-warning' };
+    return { text: t.analysis.volatilityLevels.high, color: 'md3-negative' };
   };
 
   // Helper to get Sharpe Ratio label
   const getSharpeLabel = (sharpe: number) => {
-    if (sharpe > 1.5) return { text: 'Sehr gut', color: 'md3-positive' };
-    if (sharpe > 1.0) return { text: 'Gut', color: 'md3-positive' };
-    if (sharpe > 0.5) return { text: 'OK', color: 'md3-warning' };
-    return { text: 'Schwach', color: 'md3-negative' };
+    if (sharpe > 1.5) return { text: t.analysis.sharpeLevels.veryGood, color: 'md3-positive' };
+    if (sharpe > 1.0) return { text: t.analysis.sharpeLevels.good, color: 'md3-positive' };
+    if (sharpe > 0.5) return { text: t.analysis.sharpeLevels.ok, color: 'md3-warning' };
+    return { text: t.analysis.sharpeLevels.weak, color: 'md3-negative' };
   };
 
   const currentVolatility = riskSeries.volatility.length > 0
@@ -968,7 +979,7 @@ export const AnalysisContent = ({
     }
   };
 
-  const RANGE_OPTIONS = (['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map((value) => ({ value, label: value }));
+  const RANGE_OPTIONS = (['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map((value) => ({ value, label: t.ranges.short[value] }));
   const twrSummary = summarizeTwrSeries(analysisMetrics.twrSeries || []);
   const chartTooltipStyle = { background: 'color-mix(in oklch, var(--surface) 94%, transparent)', border: '1px solid var(--stroke)', borderRadius: 12, fontSize: 12 };
   const returnTile = (key: string, label: string, value: number | null | undefined, onClick?: () => void) => {
@@ -987,9 +998,9 @@ export const AnalysisContent = ({
     );
   };
   const risks = [
-    { type: 'Sektor', data: sectorData[0] },
-    { type: 'Region', data: regionData[0] },
-    { type: 'Branche', data: industryData[0] }
+    { type: t.analysis.riskTypes.sector, data: sectorData[0] },
+    { type: t.analysis.riskTypes.region, data: regionData[0] },
+    { type: t.analysis.riskTypes.industry, data: industryData[0] }
   ]
     .filter((item) => item.data && item.data.value > 30)
     .sort((a, b) => b.data.value - a.data.value);
@@ -1001,7 +1012,7 @@ export const AnalysisContent = ({
           {[1, 2, 3, 4].map((i) => <div key={i} className="ui-kpi glass ui-skeleton" />)}
         </div>
         <GlassCard>
-          <EmptyState icon={<Loader2 size={22} className="animate-spin" />} title="Analyse wird berechnet" text="Die Kennzahlen werden aus der gesamten Historie berechnet." />
+          <EmptyState icon={<Loader2 size={22} className="animate-spin" />} title={t.analysis.calculatingTitle} text={t.analysis.calculatingText} />
         </GlassCard>
       </>
     );
@@ -1024,62 +1035,65 @@ export const AnalysisContent = ({
         <button
           type="button"
           className="ui-kpi-button"
-          onClick={() => setRiskModal({ title: 'Volatilität (1 Jahr)', series: riskSeries.volatility, color: 'var(--c4)', isPercentage: true, tooltipLabel: 'Volatilität (annualisiert)' })}
+          onClick={() => setRiskModal({ title: t.analysis.volatilityTitle, series: riskSeries.volatility, color: 'var(--c4)', isPercentage: true, tooltipLabel: t.analysis.volatilityTooltip })}
         >
-          <Kpi label="Volatilität (1 J.)" value={formatters.percent(currentVolatility, { decimals: 1 })} sub={volLabel.text} icon={<Activity size={16} />} tone="amber" />
+          <Kpi label={t.analysis.volatilityKpi} value={formatters.percent(currentVolatility, { decimals: 1 })} sub={volLabel.text} icon={<Activity size={16} />} tone="amber" />
         </button>
         <button
           type="button"
           className="ui-kpi-button"
-          onClick={() => setRiskModal({ title: 'Sharpe Ratio (1 Jahr)', series: riskSeries.sharpe, color: 'var(--gain)', isPercentage: false, tooltipLabel: 'Sharpe Ratio' })}
+          onClick={() => setRiskModal({ title: t.analysis.sharpeTitle, series: riskSeries.sharpe, color: 'var(--gain)', isPercentage: false, tooltipLabel: t.analysis.sharpeTooltip })}
         >
-          <Kpi label="Sharpe Ratio (1 J.)" value={formatters.number(currentSharpe, 2)} sub={sharpeLabel.text} icon={<Gauge size={16} />} tone="teal" />
+          <Kpi label={t.analysis.sharpeKpi} value={formatters.number(currentSharpe, 2)} sub={sharpeLabel.text} icon={<Gauge size={16} />} tone="teal" />
         </button>
         <button type="button" className="ui-kpi-button" onClick={() => setShowDrawdown(true)}>
           <Kpi
-            label="Max. Drawdown"
+            label={t.analysis.maxDrawdown}
             value={formatters.percent(analysisMetrics.maxDrawdown, { decimals: 1 })}
             valueTone={analysisMetrics.maxDrawdown < 0 ? 'down' : undefined}
-            sub={analysisMetrics.maxDrawdownDate ? parseDateOnlyUTC(analysisMetrics.maxDrawdownDate).toLocaleDateString('de-DE', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'Kein Rückgang'}
+            sub={analysisMetrics.maxDrawdownDate ? formatters.date(parseDateOnlyUTC(analysisMetrics.maxDrawdownDate), { month: 'long', year: 'numeric', timeZone: 'UTC' }) : t.analysis.noDecline}
             icon={<TrendingDown size={16} />}
             tone="accent"
           />
         </button>
         <Kpi
-          label="Rendite gesamt (TWR)"
+          label={t.analysis.totalTwr}
           value={twrSummary ? formatters.percent(twrSummary.total, { sign: true, decimals: 1 }) : '–'}
           valueTone={twrSummary ? toneOf(twrSummary.total) : undefined}
           sub={twrSummary
-            ? `${twrSummary.annualized !== null ? `${formatters.percent(twrSummary.annualized, { sign: true, decimals: 1 })} p. a. · ` : ''}seit ${parseDateOnlyUTC(twrSummary.since).toLocaleDateString('de-DE', { month: 'short', year: 'numeric', timeZone: 'UTC' })}`
-            : 'Noch keine Historie'}
+            ? t.analysis.twrSub(
+              twrSummary.annualized !== null ? formatters.percent(twrSummary.annualized, { sign: true, decimals: 1 }) : null,
+              formatters.date(parseDateOnlyUTC(twrSummary.since), { month: 'short', year: 'numeric', timeZone: 'UTC' })
+            )
+            : t.analysis.noHistory}
           icon={<TrendingUp size={16} />}
           tone="gain"
         />
       </div>
 
       <GlassCard>
-        <CardHeader title="Performancevergleich">
+        <CardHeader title={t.analysis.comparison}>
           <div className="ui-head-actions">
-            <Segmented options={RANGE_OPTIONS} value={performanceRange} onChange={setPerformanceRange} ariaLabel="Zeitraum" size="sm" />
-            <Chip active={includeDividends} onClick={onToggleDividends}>{includeDividends && <Check size={12} />} Dividenden</Chip>
+            <Segmented options={RANGE_OPTIONS} value={performanceRange} onChange={setPerformanceRange} ariaLabel={t.ranges.label} size="sm" />
+            <Chip active={includeDividends} onClick={onToggleDividends}>{includeDividends && <Check size={12} />} {t.analysis.dividends}</Chip>
           </div>
         </CardHeader>
 
         <form className="ui-inline-form" onSubmit={(e) => { e.preventDefault(); handleAddBenchmark(); }}>
-          <TextInput value={benchmarkInput} onChange={(e) => setBenchmarkInput(e.target.value)} placeholder="Benchmark hinzufügen, z. B. SPY oder ^GDAXI" aria-label="Benchmark-Symbol" />
+          <TextInput value={benchmarkInput} onChange={(e) => setBenchmarkInput(e.target.value)} placeholder={t.analysis.benchmarkPlaceholder} aria-label={t.analysis.benchmarkSymbol} />
           <Button type="submit" disabled={isBenchmarkLoading || !benchmarkInput.trim()} icon={isBenchmarkLoading ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}>
-            Hinzufügen
+            {t.analysis.add}
           </Button>
         </form>
         {benchmarkError && <p className="ui-field-hint ui-error" style={{ marginTop: 8 }}>{benchmarkError}</p>}
-        {isBenchmarkCurrencyLoading && <p className="ui-field-hint" style={{ marginTop: 8 }}>Wechselkurse der Benchmarks werden geladen …</p>}
+        {isBenchmarkCurrencyLoading && <p className="ui-field-hint" style={{ marginTop: 8 }}>{t.analysis.benchmarkFx}</p>}
 
         <div className="ui-chips">
-          <Pill tone="accent">Depot</Pill>
+          <Pill tone="accent">{t.analysis.portfolio}</Pill>
           {benchmarkList.map((b) => (
             <span key={b.symbol} className="ui-pill is-neutral">
               {b.name || b.symbol}
-              <button type="button" className="ui-pill-remove" onClick={() => removeBenchmark(b.symbol)} aria-label={`Benchmark ${b.symbol} entfernen`}>
+              <button type="button" className="ui-pill-remove" onClick={() => removeBenchmark(b.symbol)} aria-label={t.analysis.removeBenchmark(b.symbol)}>
                 <X size={12} />
               </button>
             </span>
@@ -1105,7 +1119,7 @@ export const AnalysisContent = ({
                   tickFormatter={(dateStr: string) => {
                     const d = parseDateOnlyUTC(dateStr);
                     if (['3J', '5J', 'MAX'].includes(performanceRange)) return d.getUTCFullYear().toString();
-                    return `${d.getUTCDate()}.${d.getUTCMonth() + 1}.`;
+                    return formatters.date(d, { day: 'numeric', month: 'numeric', timeZone: 'UTC' });
                   }}
                   tick={{ fontSize: 11, fill: 'var(--text3)' }}
                   minTickGap={80}
@@ -1123,42 +1137,42 @@ export const AnalysisContent = ({
                   contentStyle={chartTooltipStyle}
                   labelStyle={{ color: 'var(--text3)' }}
                   itemStyle={{ color: 'var(--text)' }}
-                  formatter={(value: number | string | undefined, name: string | undefined) => [formatters.percent(Number(value ?? 0), { sign: true }), name ?? 'Wert']}
+                  formatter={(value: number | string | undefined, name: string | undefined) => [formatters.percent(Number(value ?? 0), { sign: true }), name ?? t.analysis.value]}
                   labelFormatter={(label: React.ReactNode) => {
                     if (typeof label !== 'string' && typeof label !== 'number') return '';
-                    return parseDateOnlyUTC(String(label)).toLocaleDateString('de-DE', { timeZone: 'UTC' });
+                    return formatters.date(parseDateOnlyUTC(String(label)), { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
                   }}
                 />
                 {benchmarkSeries.length > 0 && (
                   <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ color: 'var(--text2)', paddingTop: 8, fontSize: 12 }} />
                 )}
-                <Area type="monotone" dataKey="portfolio" name="Depot" stroke="url(#portfolioSplitStroke)" strokeWidth={2.2} fill="url(#portfolioSplitFill)" dot={false} />
+                <Area type="monotone" dataKey="portfolio" name={t.analysis.portfolio} stroke="url(#portfolioSplitStroke)" strokeWidth={2.2} fill="url(#portfolioSplitFill)" dot={false} />
                 {benchmarkSeries.map((b) => (
                   <Line key={b.key} type="monotone" dataKey={b.key} name={b.name} stroke={b.color} strokeWidth={1.8} dot={false} />
                 ))}
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <EmptyState title="Keine Daten" text="Für den gewählten Zeitraum gibt es keine Performance-Daten." />
+            <EmptyState title={t.charts.emptyTitle} text={t.analysis.noPerformance} />
           )}
         </div>
       </GlassCard>
 
       <div className="ui-analysis-grid">
         <GlassCard>
-          <CardHeader title={returnViewMode === 'yearly' ? 'Rendite je Jahr' : `Rendite ${selectedYear}`}>
+          <CardHeader title={returnViewMode === 'yearly' ? t.analysis.returnPerYear : t.analysis.returnIn(selectedYear)}>
             <div className="ui-head-actions">
               <Segmented
-                options={[{ value: 'monthly', label: 'Monat' }, { value: 'quarterly', label: 'Quartal' }, { value: 'yearly', label: 'Jahr' }]}
+                options={(['monthly', 'quarterly', 'yearly'] as const).map((value) => ({ value, label: t.analysis.grid[value] }))}
                 value={returnViewMode}
                 onChange={setReturnViewMode}
-                ariaLabel="Zeitraster"
+                ariaLabel={t.analysis.gridLabel}
                 size="sm"
               />
               {returnViewMode !== 'yearly' && (
                 <span className="ui-row-actions">
-                  <IconButton label="Vorheriges Jahr" onClick={() => navigateYear('prev')} disabled={!hasPrevYear}><ChevronLeft size={18} /></IconButton>
-                  <IconButton label="Nächstes Jahr" onClick={() => navigateYear('next')} disabled={!hasNextYear}><ChevronRight size={18} /></IconButton>
+                  <IconButton label={t.analysis.prevYear} onClick={() => navigateYear('prev')} disabled={!hasPrevYear}><ChevronLeft size={18} /></IconButton>
+                  <IconButton label={t.analysis.nextYear} onClick={() => navigateYear('next')} disabled={!hasNextYear}><ChevronRight size={18} /></IconButton>
                 </span>
               )}
             </div>
@@ -1175,14 +1189,14 @@ export const AnalysisContent = ({
               returnTile(q.label, q.label, q.return, () => handleTileClick(q.startDate, q.endDate, `${q.label} ${selectedYear}`))
             ))}
             {returnViewMode === 'yearly' && aggregatedReturns.yearly.map((y) => (
-              returnTile(String(y.year), String(y.year), y.return, () => handleTileClick(y.startDate, y.endDate, `Jahr ${y.year}`))
+              returnTile(String(y.year), String(y.year), y.return, () => handleTileClick(y.startDate, y.endDate, t.analysis.yearTitle(y.year)))
             ))}
           </div>
         </GlassCard>
 
         <GlassCard>
-          <CardHeader title="Regionen" />
-          <AllocationList items={regionData} onSelect={(region) => openGroupOverlay(`Region: ${region.name}`, region as typeof regionData[number])} />
+          <CardHeader title={t.analysis.regions} />
+          <AllocationList items={regionData} onSelect={(region) => openGroupOverlay(t.analysis.groupTitle(t.analysis.riskTypes.region, region.name), region as typeof regionData[number])} />
         </GlassCard>
       </div>
 
@@ -1205,28 +1219,28 @@ export const AnalysisContent = ({
 
       <div className="ui-analysis-grid is-thirds">
         <GlassCard>
-          <CardHeader title="Branchen" />
-          <AllocationList items={industryData} onSelect={(industry) => openGroupOverlay(`Branche: ${industry.name}`, industry as typeof industryData[number])} />
+          <CardHeader title={t.analysis.industries} />
+          <AllocationList items={industryData} onSelect={(industry) => openGroupOverlay(t.analysis.groupTitle(t.analysis.riskTypes.industry, industry.name), industry as typeof industryData[number])} />
         </GlassCard>
         <GlassCard>
-          <CardHeader title="Sektoren" />
-          <AllocationList items={sectorData} onSelect={(sector) => openGroupOverlay(`Sektor: ${sector.name}`, sector as typeof sectorData[number])} />
+          <CardHeader title={t.analysis.sectors} />
+          <AllocationList items={sectorData} onSelect={(sector) => openGroupOverlay(t.analysis.groupTitle(t.analysis.riskTypes.sector, sector.name), sector as typeof sectorData[number])} />
         </GlassCard>
         <GlassCard>
           {risks.length > 0 ? (
             <>
-              <CardHeader title="Klumpenrisiken"><IconTile tone="amber" size={36}><AlertCircle size={18} /></IconTile></CardHeader>
+              <CardHeader title={t.analysis.concentration}><IconTile tone="amber" size={36}><AlertCircle size={18} /></IconTile></CardHeader>
               <div className="ui-rows">
                 {risks.map((risk) => (
-                  <ListRow key={risk.type} title={risk.data.name} meta={<span>{risk.type}</span>} trailing={<Pill tone="down">{risk.data.value} %</Pill>} />
+                  <ListRow key={risk.type} title={risk.data.name} meta={<span>{risk.type}</span>} trailing={<Pill tone="down">{formatters.percent(risk.data.value, { decimals: 0 })}</Pill>} />
                 ))}
               </div>
-              <p className="ui-text" style={{ marginTop: 10, marginBottom: 0 }}>Mehr Streuung in diesen Bereichen könnte die Schwankungen senken.</p>
+              <p className="ui-text" style={{ marginTop: 10, marginBottom: 0 }}>{t.analysis.concentrationText}</p>
             </>
           ) : (
             <>
-              <CardHeader title="Gut gestreut"><IconTile tone="gain" size={36}><Check size={18} /></IconTile></CardHeader>
-              <p className="ui-text" style={{ marginBottom: 0 }}>Kein Sektor, keine Region und keine Branche macht mehr als 30 % des Depots aus.</p>
+              <CardHeader title={t.analysis.diversified}><IconTile tone="gain" size={36}><Check size={18} /></IconTile></CardHeader>
+              <p className="ui-text" style={{ marginBottom: 0 }}>{t.analysis.diversifiedText}</p>
             </>
           )}
         </GlassCard>

@@ -38,4 +38,8 @@ describe('date formatting', () => {
     expect(f.money(1234.5)).toMatch(/^1\.234,50\s€$/);
     expect(f.date('2026-03-07T12:00:00', { day: 'numeric', month: 'short' })).toBe('7 Mar');
   });
+
+  it('treats a date-only string as a calendar day in every time zone', () => {
+    expect(createFormatters('de-DE', 'EUR', 'de-DE').date('2026-03-07')).toBe('07.03.2026');
+  });
 });
