@@ -3,6 +3,7 @@ import { ChevronDown, Coins, Layers, TrendingUp, Wallet } from 'lucide-react';
 import { selectCalculationTransactions, calculateProjectHoldings } from '@/lib/portfolioSelectors';
 import { calculateClosedPositions } from '@/lib/closedPositions';
 import { quoteTypeLabel } from '@/lib/labels';
+import { useT } from '@/lib/i18n';
 import { useProjectData } from '@/contexts/ProjectContext';
 import { useFormatters } from '@/components/ui/useFormatters';
 import { Avatar, CardHeader, EmptyState, GlassCard, Kpi, ListRow, Pill, Segmented, toneOf } from '@/components/ui/primitives';
@@ -16,6 +17,7 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 ];
 
 export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPortfolioIds: string[], onSelectSecurity: (isin: string, currency?: string) => void }) => {
+  const t = useT();
   const project = useProjectData();
   const formatters = useFormatters();
   const [sortKey, setSortKey] = useState<SortKey>('value');
@@ -96,7 +98,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
                   title={holding.security.name}
                   meta={(
                     <>
-                      <span>{quoteTypeLabel(holding.security.quoteType)} · {formatters.number(holding.quantity, decimals)} Stk.</span>
+                      <span>{quoteTypeLabel(t, holding.security.quoteType)} · {formatters.number(holding.quantity, decimals)} Stk.</span>
                       <span>Ø {formatters.moneyIn(holding.averageBuyPriceInOriginalCurrency, holding.currency)} → {formatters.moneyIn(holding.currentPriceInOriginalCurrency, holding.currency)}</span>
                       {unresolved && <Pill tone="down">Ticker fehlt</Pill>}
                       {ignored && <Pill>Ohne Kurse</Pill>}
@@ -144,7 +146,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
                   onClick={() => onSelectSecurity(pos.isin, pos.currency)}
                   leading={<Avatar seed={pos.isin} label={pos.name} size={40} />}
                   title={pos.name}
-                  meta={<span>{quoteTypeLabel(pos.quoteType)} · {pos.currency} · letzter Trade {new Date(pos.lastDate).toLocaleDateString('de-DE')}</span>}
+                  meta={<span>{quoteTypeLabel(t, pos.quoteType)} · {pos.currency} · letzter Trade {new Date(pos.lastDate).toLocaleDateString('de-DE')}</span>}
                   trailing={<Pill tone={toneOf(pos.realized)}>{formatters.money(pos.realized, { sign: true })}</Pill>}
                 />
               ))}

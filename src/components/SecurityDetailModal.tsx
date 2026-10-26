@@ -4,6 +4,7 @@ import { Modal } from './ui/Modal';
 import { Avatar, Pill, Segmented, toneOf } from './ui/primitives';
 import { useFormatters } from './ui/useFormatters';
 import { quoteTypeLabel } from '@/lib/labels';
+import { useT } from '@/lib/i18n';
 import { SimpleAreaChart } from './SimpleAreaChart';
 import { Security, Transaction } from '@/types/domain';
 import { getRangeStartDate, toDateKeyLocal } from '@/lib/dateUtils';
@@ -19,6 +20,7 @@ interface SecurityDetailModalProps {
 }
 
 export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, currencyFilter }: SecurityDetailModalProps) => {
+  const t = useT();
     const [timeRange, setTimeRange] = useState('1J');
     const normalizedCurrencyFilter = currencyFilter?.trim().toUpperCase();
 
@@ -69,7 +71,7 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
             onClose={onClose}
             size="xl"
             title={security.name}
-            subtitle={[quoteTypeLabel(security.quoteType), security.symbol, security.isin, normalizedCurrencyFilter ? `Trades in ${normalizedCurrencyFilter}` : null].filter(Boolean).join(' · ')}
+            subtitle={[quoteTypeLabel(t, security.quoteType), security.symbol, security.isin, normalizedCurrencyFilter ? `Trades in ${normalizedCurrencyFilter}` : null].filter(Boolean).join(' · ')}
             icon={<Avatar seed={security.isin} label={security.name} size={44} />}
         >
             <div className="ui-price-head">

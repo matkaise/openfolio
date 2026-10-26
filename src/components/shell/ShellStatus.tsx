@@ -7,6 +7,8 @@ import { findMissingFxCurrencies } from '@/lib/domain/fx/rates';
 import { repairProjectSecurities, securityNeedsSync } from '@/lib/marketDataService';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/primitives';
+import { useFormatters } from '@/components/ui/useFormatters';
+import { useT } from '@/lib/i18n';
 
 // Parts of the app shell that show fast-changing status (file state, sync progress).
 // Each subscribes to its own slice of the project store, so a progress tick or a save
@@ -20,26 +22,29 @@ const useFileStatus = () => {
         encryptionStatus: state.encryptionStatus,
         lastSavedAt: state.lastSavedAt
     }));
-    const savedTime = lastSavedAt ? new Date(lastSavedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : null;
+    const t = useT();
+    const formatters = useFormatters();
+    const savedTime = lastSavedAt ? formatters.time(lastSavedAt) : null;
     const detail = isModified
-        ? 'Ungespeicherte Änderungen'
-        : `${encryptionStatus === 'encrypted' ? 'Verschlüsselt' : 'Unverschlüsselt'} · ${savedTime ? `${savedTime} gespeichert` : 'noch nicht gespeichert'}`;
-    return { name: fileName || 'Unbenannt.openfolio', detail, isModified };
+        ? t.shell.file.unsaved
+        : `${encryptionStatus === 'encrypted' ? t.shell.file.encrypted : t.shell.file.unencrypted} · ${savedTime ? t.shell.file.savedAt(savedTime) : t.shell.file.notSaved}`;
+    return { name: fileName || t.shell.file.untitled, detail, isModified, t };
 };
 
 export const FileStatusCard = ({ onClose }: { onClose: () => void }) => {
     const { saveProject } = useProjectActions();
     const file = useFileStatus();
+    const { t } = file;
     return (
         <div className="app-file">
-            <button type="button" className="app-file-main" onClick={() => void saveProject()} title={file.isModified ? 'Jetzt speichern' : 'Gespeichert'}>
+            <button type="button" className="app-file-main" onClick={() => void saveProject()} title={file.isModified ? t.shell.file.saveNow : t.shell.file.saved}>
                 <span className={file.isModified ? 'app-live is-warn' : 'app-live'} aria-hidden="true" />
                 <span className="app-file-text">
                     <span className="app-file-name">{file.name}</span>
                     <span className="app-file-meta">{file.detail}</span>
                 </span>
             </button>
-            <button type="button" className="app-file-close" onClick={onClose} aria-label="Projekt schließen" title="Projekt schließen">
+            <button type="button" className="app-file-close" onClick={onClose} aria-label={t.shell.closeProject} title={t.shell.closeProject}>
                 <LogOut size={15} />
             </button>
         </div>
@@ -49,10 +54,11 @@ export const FileStatusCard = ({ onClose }: { onClose: () => void }) => {
 export const MobileSaveButton = ({ onDone }: { onDone: () => void }) => {
     const { saveProject } = useProjectActions();
     const isModified = useProjectStore((state) => state.isModified);
+    const t = useT();
     return (
         <button type="button" className="app-nav-item" onClick={() => { onDone(); void saveProject(); }}>
             <span className="app-nav-dot" aria-hidden="true" />
-            {isModified ? 'Speichern (ungespeicherte Änderungen)' : 'Gespeichert'}
+            {isModified ? t.shell.file.saveUnsaved : t.shell.file.saved}
         </button>
     );
 };
@@ -60,14 +66,15 @@ export const MobileSaveButton = ({ onDone }: { onDone: () => void }) => {
 export const SyncButton = () => {
     const { syncAll } = useProjectActions();
     const busy = useProjectStore((state) => state.isSyncing || state.isMarketSyncing);
+    const t = useT();
     return (
         <button
             type="button"
             onClick={() => syncAll(true)}
             className="ui-icon-btn"
-            aria-label="Kurse und Wechselkurse aktualisieren"
+            aria-label={t.shell.refreshMarket}
             disabled={busy}
-            title="Kurse und Wechselkurse aktualisieren"
+            title={t.shell.refreshMarket}
         >
             {busy ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
         </button>
@@ -77,6 +84,7 @@ export const SyncButton = () => {
 export const MissingFxNotice = () => {
     const project = useProjectData();
     const isHydratingProject = useProjectStore((state) => state.isHydratingProject);
+    const t = useT();
     // Only meaningful once FX data is loaded (lazy hydration or the first sync may still be running).
     const missing = useMemo(() => {
         if (!project || isHydratingProject || Object.keys(project.fxData?.rates || {}).length === 0) return [];
@@ -88,10 +96,7 @@ export const MissingFxNotice = () => {
         <div className="app-notices">
             <div className="md3-warning-soft flex items-start gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
                 <ShieldAlert size={18} className="mt-0.5 shrink-0" />
-                <span>
-                    Kurs fehlt: Für {missing.join(', ')} gibt es keinen Wechselkurs.
-                    Beträge in {missing.length === 1 ? 'dieser Währung' : 'diesen Währungen'} sind in den Summen nicht enthalten.
-                </span>
+                <span>{t.shell.missingFx(missing.join(', '), missing.length)}</span>
             </div>
         </div>
     );
@@ -112,6 +117,7 @@ export const StartupMarketSync = () => {
         marketSyncProgress: state.marketSyncProgress
     }));
     const [showDialog, setShowDialog] = useState(false);
+    const t = useT();
     const lastSyncRef = useRef(0);
 
     useEffect(() => {
@@ -151,14 +157,14 @@ export const StartupMarketSync = () => {
             open
             size="sm"
             onClose={() => setShowDialog(false)}
-            title="Kurse werden aktualisiert"
-            subtitle="Beim Öffnen des Projekts · läuft im Hintergrund weiter, wenn du schließt"
+            title={t.shell.startupSync.title}
+            subtitle={t.shell.startupSync.subtitle}
             icon={<Loader2 size={20} className="animate-spin" />}
-            footer={<Button variant="ghost" onClick={() => setShowDialog(false)}>Im Hintergrund fortsetzen</Button>}
+            footer={<Button variant="ghost" onClick={() => setShowDialog(false)}>{t.shell.startupSync.background}</Button>}
         >
             <div className="ui-progress-block" style={{ marginBottom: 0 }}>
                 <div className="ui-progress-meta">
-                    <span>{marketSyncProgress && marketSyncProgress.total > 0 ? `${marketSyncProgress.current} von ${marketSyncProgress.total} Wertpapieren` : 'Vorbereitung …'}</span>
+                    <span>{marketSyncProgress && marketSyncProgress.total > 0 ? t.shell.startupSync.progress(marketSyncProgress.current, marketSyncProgress.total) : t.shell.startupSync.preparing}</span>
                     <span>{marketSyncProgress?.symbol || ''}</span>
                 </div>
                 <div className="ui-progress"><span style={{ width: `${percent}%` }} /></div>

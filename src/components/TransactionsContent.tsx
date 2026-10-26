@@ -12,6 +12,7 @@ import { filterTransactionsByPortfolio } from '@/lib/portfolioSelectors';
 import { getCurrencyOptions } from '@/lib/fxUtils';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
 import { movementTypeLabel, transactionTypeLabel } from '@/lib/labels';
+import { useT } from '@/lib/i18n';
 import { summarizeCashMovements, summarizeTransactions } from '@/lib/transactionSummary';
 import { type DeletedTxEntry, type TransactionLike } from '@/types/portfolioView';
 import { type CashMovement, type Transaction } from '@/types/domain';
@@ -68,6 +69,7 @@ const TransactionEditModal = ({
   onSave: (updated: TransactionLike) => void;
   onDelete: (target: TransactionLike) => void;
 }) => {
+  const t = useT();
   const { confirm } = useNotifications();
   const formatters = useFormatters();
   const [type, setType] = useState(() => transaction?.type || 'Buy');
@@ -124,7 +126,7 @@ const TransactionEditModal = ({
       open
       onClose={onClose}
       title="Buchung bearbeiten"
-      subtitle={transaction.name || transaction.isin || transactionTypeLabel(transaction.type)}
+      subtitle={transaction.name || transaction.isin || transactionTypeLabel(t, transaction.type)}
       icon={TYPE_ICONS[type]?.icon}
       footer={(
         <>
@@ -137,7 +139,7 @@ const TransactionEditModal = ({
       <div className="ui-grid-2">
         <Field label="Art">
           <SelectInput value={type} onChange={(e) => setType(e.target.value as Transaction['type'])}>
-            {EDITABLE_TYPES.map((t) => <option key={t} value={t}>{transactionTypeLabel(t)}</option>)}
+            {EDITABLE_TYPES.map((type) => <option key={type} value={type}>{transactionTypeLabel(t, type)}</option>)}
           </SelectInput>
         </Field>
         <Field label="Datum">
@@ -178,7 +180,9 @@ const DeletedTransactionsModal = ({
   items: DeletedTxEntry[];
   onRestore: (entry: DeletedTxEntry) => void;
   onPurge: (entry: DeletedTxEntry) => void;
-}) => (
+}) => {
+  const t = useT();
+  return (
   <Modal open={isOpen} onClose={onClose} size="lg" title="Papierkorb" subtitle={`${items.length} ${items.length === 1 ? 'Buchung' : 'Buchungen'}, bis zum Schließen des Projekts wiederherstellbar`} icon={<Trash2 size={20} />}>
     {items.length === 0 ? (
       <EmptyState icon={<Trash2 size={22} />} title="Der Papierkorb ist leer" text="Gelöschte Buchungen erscheinen hier und lassen sich wiederherstellen." />
@@ -188,8 +192,8 @@ const DeletedTransactionsModal = ({
           <ListRow
             key={entry.tx.id}
             leading={typeIcon(entry.tx.type)}
-            title={entry.tx.name || entry.tx.isin || transactionTypeLabel(entry.tx.type)}
-            meta={<span>{transactionTypeLabel(entry.tx.type)} · {dayLabel(entry.tx.date)}</span>}
+            title={entry.tx.name || entry.tx.isin || transactionTypeLabel(t, entry.tx.type)}
+            meta={<span>{transactionTypeLabel(t, entry.tx.type)} · {dayLabel(entry.tx.date)}</span>}
             trailing={(
               <span className="ui-row-actions">
                 <Button size="sm" icon={<RotateCcw size={14} />} onClick={() => onRestore(entry)}>Wiederherstellen</Button>
@@ -201,9 +205,11 @@ const DeletedTransactionsModal = ({
       </div>
     )}
   </Modal>
-);
+  );
+};
 
 export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfolioIds: string[] }) => {
+  const t = useT();
   const project = useProjectData();
   const { updateProject } = useProjectActions();
   const [activeTab, setActiveTab] = useState<'transactions' | 'cash'>('transactions');
@@ -364,7 +370,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
     setTxDateFrom('');
     setTxDateTo('');
   };
-  const nameOf = (tx: TransactionLike) => project?.securities?.[tx.isin || '']?.name || tx.name || tx.isin || transactionTypeLabel(tx.type);
+  const nameOf = (tx: TransactionLike) => project?.securities?.[tx.isin || '']?.name || tx.name || tx.isin || transactionTypeLabel(t, tx.type);
   const amountText = (amount: number, currency: string | undefined) => formatters.moneyIn(amount, currency || baseCurrency, { sign: true });
   const isTransactions = activeTab === 'transactions';
   const shownCount = isTransactions ? visibleTransactions.length : visibleCashMovements.length;
@@ -392,7 +398,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
         <Kpi
           label="Letzte Buchung"
           value={lastTx ? dayLabel(lastTx.date) : '–'}
-          sub={lastTx ? `${transactionTypeLabel(lastTx.type)} · ${amountText(lastTx.amount || 0, lastTx.currency)}` : 'Noch keine Buchungen'}
+          sub={lastTx ? `${transactionTypeLabel(t, lastTx.type)} · ${amountText(lastTx.amount || 0, lastTx.currency)}` : 'Noch keine Buchungen'}
           icon={<CalendarClock size={16} />}
           tone="amber"
         />
@@ -429,7 +435,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
           </label>
           {isTransactions && (
             <SelectInput aria-label="Art" value={txType} onChange={(e) => setTxType(e.target.value)} className="ui-input-compact">
-              {transactionTypes.map((type) => <option key={type} value={type}>{type === 'Alle' ? 'Alle Arten' : transactionTypeLabel(type)}</option>)}
+              {transactionTypes.map((type) => <option key={type} value={type}>{type === 'Alle' ? 'Alle Arten' : transactionTypeLabel(t, type)}</option>)}
             </SelectInput>
           )}
           <label className="ui-date-filter"><span>Von</span><input type="date" value={txDateFrom} onChange={(e) => setTxDateFrom(e.target.value)} /></label>
@@ -470,7 +476,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
                           title={nameOf(tx)}
                           meta={(
                             <>
-                              {nameOf(tx) !== transactionTypeLabel(tx.type) && <span>{transactionTypeLabel(tx.type)}</span>}
+                              {nameOf(tx) !== transactionTypeLabel(t, tx.type) && <span>{transactionTypeLabel(t, tx.type)}</span>}
                               <span>{dayLabel(tx.date)}</span>
                               {tx.shares ? <span>{formatters.number(Math.abs(tx.shares), Math.abs(tx.shares) % 1 === 0 ? 0 : 3)} Stk.</span> : null}
                               {depot && (project?.portfolios.length ?? 0) > 1 && <Pill>{depot}</Pill>}
@@ -498,10 +504,10 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
                         <ListRow
                           key={entry.id}
                           leading={typeIcon(entry.type)}
-                          title={entry.description || movementTypeLabel(entry.type)}
+                          title={entry.description || movementTypeLabel(t, entry.type)}
                           meta={(
                             <>
-                              {entry.description && <span>{movementTypeLabel(entry.type)}</span>}
+                              {entry.description && <span>{movementTypeLabel(t, entry.type)}</span>}
                               <span>{dayLabel(entry.date)}</span>
                               {entry.isInternal && <Pill>intern</Pill>}
                             </>
