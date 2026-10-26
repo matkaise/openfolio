@@ -5,6 +5,7 @@ import { KeyRound, Smartphone } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button, Field, TextInput } from '@/components/ui/primitives';
 import { useBrokerSync } from './BrokerSyncContext';
+import { useT } from '@/lib/i18n';
 
 const isPngBase64 = (value?: string) => Boolean(value && /^[A-Za-z0-9+/=\s]+$/.test(value) && value.length > 100);
 
@@ -12,6 +13,7 @@ const isPngBase64 = (value?: string) => Boolean(value && /^[A-Za-z0-9+/=\s]+$/.t
 export const TanDialog = () => {
     const { tanRequest, submitTan, cancelTan } = useBrokerSync();
     const [tan, setTan] = useState('');
+    const t = useT();
     if (!tanRequest) return null;
 
     const { type, challenge } = tanRequest.challenge;
@@ -24,13 +26,13 @@ export const TanDialog = () => {
             size="sm"
             onClose={cancel}
             closeOnBackdrop={false}
-            title="TAN für den Abruf"
+            title={t.brokers.tan.title}
             subtitle={`comdirect · ${tanRequest.connection.label}`}
             icon={isPush ? <Smartphone size={20} /> : <KeyRound size={20} />}
             footer={(
                 <>
-                    <Button variant="ghost" onClick={cancel}>Abbrechen</Button>
-                    <Button type="submit" form="tan-form" variant="primary" disabled={!isPush && tan.length !== 6}>{isPush ? 'Freigegeben' : 'Bestätigen'}</Button>
+                    <Button variant="ghost" onClick={cancel}>{t.common.cancel}</Button>
+                    <Button type="submit" form="tan-form" variant="primary" disabled={!isPush && tan.length !== 6}>{isPush ? t.brokers.tan.approved : t.brokers.tan.confirm}</Button>
                 </>
             )}
         >
@@ -45,16 +47,16 @@ export const TanDialog = () => {
                 }}
             >
                 <p className="ui-modal-text">
-                    {isPush && 'Bitte die Anmeldung in der comdirect photoTAN-App freigeben und danach bestätigen.'}
-                    {type === 'M_TAN' && `Die mobileTAN wurde an ${challenge || 'deine Mobilnummer'} gesendet.`}
-                    {type === 'P_TAN' && 'Die Grafik mit der photoTAN-App scannen und die angezeigte TAN eingeben.'}
+                    {isPush && t.brokers.tan.push}
+                    {type === 'M_TAN' && t.brokers.tan.mobile(challenge || null)}
+                    {type === 'P_TAN' && t.brokers.tan.photo}
                 </p>
                 {type === 'P_TAN' && isPngBase64(challenge) && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={`data:image/png;base64,${challenge}`} alt="photoTAN-Grafik" className="ui-phototan" />
+                    <img src={`data:image/png;base64,${challenge}`} alt={t.brokers.tan.photoAlt} className="ui-phototan" />
                 )}
                 {!isPush && (
-                    <Field label="TAN" hint="Jede TAN wird genau einmal gesendet. Nach drei falschen TANs sperrt comdirect den Zugang.">
+                    <Field label="TAN" hint={t.brokers.tan.hint}>
                         <TextInput
                             autoFocus
                             inputMode="numeric"
