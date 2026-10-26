@@ -7,6 +7,7 @@ import { buildMwrSeries, normalizeInvestedForExplicitCash, smoothPerformanceSeri
 import { selectCalculationTransactions, calculateProjectHoldings, filterCashAccountsByPortfolio } from '@/lib/portfolioSelectors';
 import { convertCurrency } from '@/lib/fxUtils';
 import { resolveWealthGoalSource } from '@/lib/wealthGoalUtils';
+import { replayCash } from '@/lib/cashModel';
 import { useProjectActions, useProjectData } from '@/contexts/ProjectContext';
 import { Avatar, CardHeader, Chip, Donut, GlassCard, Kpi, Pill, Segmented, toneOf } from '@/components/ui/primitives';
 import { useFormatters } from '@/components/ui/useFormatters';
@@ -194,8 +195,6 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     ? latestKpiHistoryPoint.value
     : holdings.reduce((sum, h) => sum + h.value, 0);
 
-  const cashFlowTypes = useMemo(() => new Set(['Deposit', 'Withdrawal', 'Dividend', 'Tax', 'Fee', 'Interest']), []);
-
   const cashBalance = useMemo(() => {
     if (!project) return 0;
 
@@ -213,27 +212,13 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       }, 0);
     }
 
-    const cashTransactions = filteredTransactions.filter((tx) => cashFlowTypes.has(tx.type));
-    if (cashTransactions.length === 0) return 0;
+    // No account statements: cash from the bookings, incl. sale proceeds not reinvested yet
+    const derived = replayCash(filteredTransactions, (amount, currency, date) => convertCurrency(project.fxData, amount, currency, baseCurrency, date), baseCurrency);
+    return Object.entries(derived.byCurrency).reduce((sum, [currency, amount]) => sum + convertCurrency(project.fxData, amount, currency, baseCurrency), 0);
+  }, [project, filteredCashAccounts, filteredTransactions, baseCurrency]);
 
-    return cashTransactions.reduce((sum, tx) => {
-      return sum + convertCurrency(project.fxData, tx.amount, tx.currency, baseCurrency, tx.date);
-    }, 0);
-  }, [project, filteredCashAccounts, filteredTransactions, baseCurrency, cashFlowTypes]);
-
-  const hasExplicitCashBalances = useMemo(() => (
-    filteredCashAccounts.some((account) => account.balanceHistory && Object.keys(account.balanceHistory).length > 0)
-  ), [filteredCashAccounts]);
-
-  const hasCashFlows = useMemo(() => (
-    filteredTransactions.some((tx) => cashFlowTypes.has(tx.type))
-  ), [filteredTransactions, cashFlowTypes]);
-
-  const totalReturnBaseValue = (hasExplicitCashBalances || hasCashFlows)
-    ? holdingsMarketValue
-    : currentMaketValue;
-
-  const totalReturn = (totalReturnBaseValue - holdingsCostBasis) + (realizedPnL || 0);
+  // Gain = open positions against their cost plus what sales realized; cash is not gain
+  const totalReturn = (holdingsMarketValue - holdingsCostBasis) + (realizedPnL || 0);
   const wealthGoalStep = 25000;
   const goalSource = resolveWealthGoalSource(project?.settings);
   const storedGoal = goalSource.amount;
@@ -631,7 +616,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
           valueTone={cashBalance < 0 ? 'down' : undefined}
           sub={cashAccountsWithBalance.length > 0
             ? `${cashAccountsWithBalance.length} ${cashAccountsWithBalance.length === 1 ? 'Konto' : 'Konten'} · ${cashCurrencies.join(', ')}`
-            : 'Aus Einzahlungen und Erträgen'}
+            : 'Aus Einzahlungen, Erträgen und Verkäufen'}
           icon="◎"
           tone="amber"
         />
