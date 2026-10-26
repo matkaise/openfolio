@@ -1,3 +1,4 @@
+import { applyToCash, createCashState, sortForCash } from './cashModel';
 import { Transaction, Security, CurrencyHistory, CashAccount } from '../types/domain';
 import { getFxTable } from './domain/fx/rates';
 import { getRangeStartDate } from './dateUtils';
@@ -35,26 +36,6 @@ export const getTradeFeeCost = (tx: Transaction): { cost: number; currency: stri
     cost: -((tx.fee || 0) + (tx.fxFee || 0)),
     currency: tx.feeCurrency || tx.currency
 });
-
-const getAbsoluteAmount = (amount: number | undefined) => {
-    return Math.abs(amount || 0);
-};
-
-// Cash flow types: the amount carries its sign from the source (refunds and reversals included).
-const CASH_FLOW_TYPES = new Set<Transaction['type']>(['Deposit', 'Withdrawal', 'Dividend', 'Tax', 'Fee', 'Interest']);
-
-const getCashDeltaForTransaction = (tx: Transaction, includeTrades: boolean): number => {
-    // Only explicit cash-related transactions should affect cash balance.
-    if (CASH_FLOW_TYPES.has(tx.type)) {
-        return tx.amount || 0;
-    }
-
-    if (includeTrades && (isBuyType(tx.type) || tx.type === 'Sell')) {
-        return tx.amount || 0;
-    }
-
-    return 0;
-};
 
 export const buildSplitIgnoreDates = (
     txByIsin: Record<string, Transaction[]>,
@@ -751,22 +732,12 @@ export function calculatePortfolioHistory(
 
     const stateByIsin: Record<string, { quantity: number; invested: number; currency: string }> = {};
     const eventIndexByIsin: Record<string, number> = {};
-    const cashFlowOrder = (tx: Transaction): number => {
-        if (tx.type === 'Deposit' || tx.type === 'Dividend' || tx.type === 'Sell') return 0;
-        if (tx.type === 'Buy' || tx.type === 'Sparplan_Buy') return 2;
-        if (tx.type === 'Withdrawal' || tx.type === 'Fee' || tx.type === 'Tax' || tx.type === 'Interest') return 3;
-        return 1;
-    };
-    const sortedTransactions = [...transactions].sort((a, b) => {
-        const dateDiff = dateKeyToUtcMs(a.date) - dateKeyToUtcMs(b.date);
-        if (dateDiff !== 0) return dateDiff;
-        return cashFlowOrder(a) - cashFlowOrder(b);
-    });
+    const sortedTransactions = sortForCash(transactions);
+    // Imported account statements give the cash; otherwise it is derived from the bookings
+    // (sale proceeds stay cash until the next buy, see cashModel.ts).
     const hasExplicitCashBalances = cashAccounts.some(a => !!a.balanceHistory && Object.keys(a.balanceHistory).length > 0);
-    const hasExplicitCashFlows = transactions.some((tx) => CASH_FLOW_TYPES.has(tx.type));
-    const hasCashFundingTransactions = transactions.some((tx) => tx.type === 'Deposit' || tx.type === 'Withdrawal');
-    const useImplicitFunding = false;
-    const useTradeFlowsForInvested = !hasExplicitCashBalances && !hasCashFundingTransactions;
+    const derivedCash = createCashState(baseCurrency);
+    const toBase = (amount: number, currency: string, date: string) => convert(amount, currency, baseCurrency, dateKeyToUtcMs(date));
 
     allIsins.forEach(isin => {
         const firstTx = txByIsin[isin]?.[0];
@@ -779,10 +750,8 @@ export function calculatePortfolioHistory(
         eventIndexByIsin[isin] = 0;
     });
 
-    const cashByCurrency: Record<string, number> = {};
     let transactionIndex = 0;
     let totalExternalInvested = 0;
-    let totalTradeInvested = 0;
     let totalDividend = 0;
 
     // Calculate portfolio value at each date point (incremental replay)
@@ -835,31 +804,8 @@ export function calculatePortfolioHistory(
             const tx = sortedTransactions[transactionIndex];
             const txCurrency = tx.currency || baseCurrency;
             const txTime = dateKeyToUtcMs(tx.date);
-            const amountAbs = getAbsoluteAmount(tx.amount);
 
-            if (!hasExplicitCashBalances) {
-                // Keep cash separate from trades unless explicit cash balances exist.
-                const cashDelta = getCashDeltaForTransaction(tx, false);
-                const currentCash = cashByCurrency[txCurrency] || 0;
-
-                if (useImplicitFunding && cashDelta < 0 && currentCash + cashDelta < 0) {
-                    const requiredFunding = -(currentCash + cashDelta);
-                    cashByCurrency[txCurrency] = currentCash + requiredFunding;
-                    totalExternalInvested += convert(requiredFunding, txCurrency, baseCurrency, txTime);
-                }
-
-                cashByCurrency[txCurrency] = currentCash + cashDelta;
-            }
-
-            if (useTradeFlowsForInvested) {
-                const fees = getTradeFeeCost(tx);
-                const feesBase = fees.cost ? convert(fees.cost, fees.currency, baseCurrency, txTime) : 0;
-                if (isBuyType(tx.type)) {
-                    totalTradeInvested += convert(amountAbs, txCurrency, baseCurrency, txTime) + feesBase;
-                } else if (tx.type === 'Sell') {
-                    totalTradeInvested -= convert(amountAbs, txCurrency, baseCurrency, txTime) - feesBase;
-                }
-            }
+            if (!hasExplicitCashBalances) applyToCash(derivedCash, tx, toBase);
 
             // Signed amounts: a withdrawal is negative, a dividend reversal reduces the total.
             if (tx.type === 'Deposit' || tx.type === 'Withdrawal') {
@@ -897,16 +843,14 @@ export function calculatePortfolioHistory(
                 if (Math.abs(balance) < 0.0000001) return sum;
                 return sum + convert(balance, account.currency, baseCurrency, dateTime);
             }, 0);
-        } else if (hasExplicitCashFlows) {
-            totalCashValue = Object.entries(cashByCurrency).reduce((sum, [currency, amount]) => {
+        } else {
+            totalCashValue = Object.entries(derivedCash.byCurrency).reduce((sum, [currency, amount]) => {
                 if (Math.abs(amount) < 0.0000001) return sum;
                 return sum + convert(amount, currency, baseCurrency, dateTime);
             }, 0);
-        } else {
-            totalCashValue = 0;
         }
 
-        const investedValue = useTradeFlowsForInvested ? totalTradeInvested : totalExternalInvested;
+        const investedValue = hasExplicitCashBalances ? totalExternalInvested : derivedCash.invested;
 
         result.push({
             date: dateStr,

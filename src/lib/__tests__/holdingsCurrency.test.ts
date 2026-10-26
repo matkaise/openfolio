@@ -53,7 +53,7 @@ describe('holdings across trading currencies (B10)', () => {
     expect(realizedPnL).toBeCloseTo(360 - 4 * 80, 6);
   });
 
-  it('agrees with the history chart', () => {
+  it('agrees with the history chart (positions plus the sale proceeds held as cash)', () => {
     const transactions = [
       trade({}),
       trade({ date: '2024-09-10', type: 'Sell', shares: 4, amount: 360, currency: 'EUR' })
@@ -61,6 +61,6 @@ describe('holdings across trading currencies (B10)', () => {
     const { holdings } = calculateHoldings(transactions, [security], { [security.isin]: 100 }, fxRates, 'EUR');
     const history = calculatePortfolioHistory(transactions, [security], fxRates, [], 'EUR', 'MAX', 'daily');
 
-    expect(history[history.length - 1].value).toBeCloseTo(holdings[0].value, 6);
+    expect(history[history.length - 1].value).toBeCloseTo(holdings[0].value + 360, 6);
   });
 });

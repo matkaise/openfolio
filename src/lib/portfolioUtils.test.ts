@@ -22,10 +22,7 @@ describe('calculatePortfolioHistory', () => {
         expect(day2?.value).toBeCloseTo(100, 6);
     });
 
-    // Sale proceeds are not tracked as cash when a portfolio has no cash data, so the value
-    // drops to 0 between a sale and the next buy. The ledger-based history (brief §3, step 3)
-    // models cash for trade-only portfolios and re-enables this test.
-    it.skip('keeps sale proceeds as cash until the next buy (no cash data imported)', () => {
+    it('keeps sale proceeds as cash until the next buy (no cash data imported)', () => {
         const transactionsGap: Transaction[] = [
             { id: '1', date: '2021-01-01', type: 'Buy', isin: 'A', amount: -100, shares: 1, currency: 'EUR', broker: 'Test' },
             { id: '2', date: '2021-01-02', type: 'Sell', isin: 'A', amount: 100, shares: 1, currency: 'EUR', broker: 'Test' },
@@ -35,6 +32,7 @@ describe('calculatePortfolioHistory', () => {
         const historyGap = calculatePortfolioHistory(transactionsGap, securities, fxRates, [], 'EUR', 'MAX', 'daily');
         const gapDay2 = historyGap.find(h => h.date === '2021-01-02');
 
-        expect(gapDay2?.value).toBeGreaterThan(90);
+        expect(gapDay2?.value).toBeCloseTo(100, 6);
+        expect(historyGap.find(h => h.date === '2021-01-03')?.value).toBeCloseTo(100, 6);
     });
 });
