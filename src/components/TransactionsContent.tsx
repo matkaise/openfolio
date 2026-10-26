@@ -6,6 +6,7 @@ import {
 import { useProjectActions, useProjectData } from '@/contexts/ProjectContext';
 import { useNotifications } from '@/components/ui/notifications';
 import { useFormatters } from '@/components/ui/useFormatters';
+import type { Formatters } from '@/lib/format';
 import { Button, CardHeader, EmptyState, Field, GlassCard, IconButton, IconTile, Kpi, ListRow, Pill, Segmented, SelectInput, TextInput, toneOf } from '@/components/ui/primitives';
 import { Modal } from '@/components/ui/Modal';
 import { filterTransactionsByPortfolio } from '@/lib/portfolioSelectors';
@@ -40,9 +41,9 @@ const typeIcon = (type: string) => {
   return <IconTile tone={entry.tone} size={40}>{entry.icon}</IconTile>;
 };
 
-const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
-const monthLabel = (date: string) => new Date(`${date.slice(0, 7)}-01T00:00:00`).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
-const dayLabel = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const ALL_TYPES = 'all';
+const monthLabel = (formatters: Formatters, date: string) => formatters.date(`${date.slice(0, 7)}-01`, { month: 'long', year: 'numeric' });
+const dayLabel = (formatters: Formatters, date: string) => formatters.date(date.slice(0, 10));
 
 /** Rows grouped under month headers; the list is already sorted newest first. */
 function groupByMonth<T extends { date: string }>(items: T[]): { month: string; items: T[] }[] {
@@ -112,9 +113,9 @@ const TransactionEditModal = ({
 
   const handleDelete = () => {
     void confirm({
-      title: 'Buchung löschen?',
-      message: 'Sie landet im Papierkorb und lässt sich bis zum Schließen des Projekts wiederherstellen.',
-      confirmLabel: 'Löschen',
+      title: t.transactions.deleteTitle,
+      message: t.transactions.deleteText,
+      confirmLabel: t.transactions.delete,
       tone: 'danger'
     }).then((ok) => {
       if (ok) onDelete(transaction);
@@ -125,42 +126,42 @@ const TransactionEditModal = ({
     <Modal
       open
       onClose={onClose}
-      title="Buchung bearbeiten"
+      title={t.transactions.editTitle}
       subtitle={transaction.name || transaction.isin || transactionTypeLabel(t, transaction.type)}
       icon={TYPE_ICONS[type]?.icon}
       footer={(
         <>
-          <Button variant="danger" icon={<Trash2 size={15} />} onClick={handleDelete} className="ui-foot-start">Löschen</Button>
-          <Button variant="ghost" onClick={onClose}>Abbrechen</Button>
-          <Button variant="primary" onClick={handleSave}>Speichern</Button>
+          <Button variant="danger" icon={<Trash2 size={15} />} onClick={handleDelete} className="ui-foot-start">{t.transactions.delete}</Button>
+          <Button variant="ghost" onClick={onClose}>{t.common.cancel}</Button>
+          <Button variant="primary" onClick={handleSave}>{t.common.save}</Button>
         </>
       )}
     >
       <div className="ui-grid-2">
-        <Field label="Art">
+        <Field label={t.transactions.type}>
           <SelectInput value={type} onChange={(e) => setType(e.target.value as Transaction['type'])}>
             {EDITABLE_TYPES.map((type) => <option key={type} value={type}>{transactionTypeLabel(t, type)}</option>)}
           </SelectInput>
         </Field>
-        <Field label="Datum">
+        <Field label={t.transactions.date}>
           <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
         {isTrade && (
           <>
-            <Field label="Stück">
+            <Field label={t.transactions.shares}>
               <TextInput type="number" step="0.0001" inputMode="decimal" value={shares} onChange={(e) => setShares(e.target.value)} />
             </Field>
-            <Field label="Preis pro Stück">
-              <TextInput type="number" step="0.0001" inputMode="decimal" value={pricePerShare} onChange={(e) => setPricePerShare(e.target.value)} placeholder="unverändert" />
+            <Field label={t.transactions.price}>
+              <TextInput type="number" step="0.0001" inputMode="decimal" value={pricePerShare} onChange={(e) => setPricePerShare(e.target.value)} placeholder={t.transactions.unchanged} />
             </Field>
           </>
         )}
-        <Field label="Währung">
+        <Field label={t.transactions.currency}>
           <SelectInput value={currency} onChange={(e) => setCurrency(e.target.value)}>
             {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
           </SelectInput>
         </Field>
-        <Field label="Betrag" hint={isTrade ? 'Aus Stück × Preis; ohne Preis bleibt der gespeicherte Betrag.' : undefined}>
+        <Field label={t.transactions.amount} hint={isTrade ? t.transactions.amountHint : undefined}>
           <div className={`ui-input ui-input-static is-${toneOf(amount)}`}>{formatters.moneyIn(amount, currency, { sign: true })}</div>
         </Field>
       </div>
@@ -182,10 +183,11 @@ const DeletedTransactionsModal = ({
   onPurge: (entry: DeletedTxEntry) => void;
 }) => {
   const t = useT();
+  const formatters = useFormatters();
   return (
-  <Modal open={isOpen} onClose={onClose} size="lg" title="Papierkorb" subtitle={`${items.length} ${items.length === 1 ? 'Buchung' : 'Buchungen'}, bis zum Schließen des Projekts wiederherstellbar`} icon={<Trash2 size={20} />}>
+  <Modal open={isOpen} onClose={onClose} size="lg" title={t.transactions.trash} subtitle={t.transactions.trashSubtitle(items.length)} icon={<Trash2 size={20} />}>
     {items.length === 0 ? (
-      <EmptyState icon={<Trash2 size={22} />} title="Der Papierkorb ist leer" text="Gelöschte Buchungen erscheinen hier und lassen sich wiederherstellen." />
+      <EmptyState icon={<Trash2 size={22} />} title={t.transactions.trashEmptyTitle} text={t.transactions.trashEmptyText} />
     ) : (
       <div className="ui-rows">
         {items.map((entry) => (
@@ -193,11 +195,11 @@ const DeletedTransactionsModal = ({
             key={entry.tx.id}
             leading={typeIcon(entry.tx.type)}
             title={entry.tx.name || entry.tx.isin || transactionTypeLabel(t, entry.tx.type)}
-            meta={<span>{transactionTypeLabel(t, entry.tx.type)} · {dayLabel(entry.tx.date)}</span>}
+            meta={<span>{transactionTypeLabel(t, entry.tx.type)} · {dayLabel(formatters, entry.tx.date)}</span>}
             trailing={(
               <span className="ui-row-actions">
-                <Button size="sm" icon={<RotateCcw size={14} />} onClick={() => onRestore(entry)}>Wiederherstellen</Button>
-                <IconButton label="Endgültig entfernen" className="is-danger" onClick={() => onPurge(entry)}><Trash2 size={15} /></IconButton>
+                <Button size="sm" icon={<RotateCcw size={14} />} onClick={() => onRestore(entry)}>{t.transactions.restore}</Button>
+                <IconButton label={t.transactions.purge} className="is-danger" onClick={() => onPurge(entry)}><Trash2 size={15} /></IconButton>
               </span>
             )}
           />
@@ -214,7 +216,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
   const { updateProject } = useProjectActions();
   const [activeTab, setActiveTab] = useState<'transactions' | 'cash'>('transactions');
   const [txSearch, setTxSearch] = useState('');
-  const [txType, setTxType] = useState('Alle');
+  const [txType, setTxType] = useState(ALL_TYPES);
   const [txDateFrom, setTxDateFrom] = useState('');
   const [txDateTo, setTxDateTo] = useState('');
   const [editingTx, setEditingTx] = useState<TransactionLike | null>(null);
@@ -239,7 +241,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
     filteredTransactions.forEach((t) => {
       if (t.type) types.add(t.type);
     });
-    return ['Alle', ...Array.from(types).sort()];
+    return [ALL_TYPES, ...Array.from(types).sort()];
   }, [filteredTransactions]);
 
   const currencies = useMemo(() => getCurrencyOptions(project?.fxData), [project?.fxData]);
@@ -258,7 +260,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
     const toDate = txDateTo ? new Date(`${txDateTo}T23:59:59`) : null;
 
     return filteredTransactions
-      .filter((t) => txType === 'Alle' || t.type === txType)
+      .filter((t) => txType === ALL_TYPES || t.type === txType)
       .filter((t) => {
         if (!fromDate && !toDate) return true;
         const d = new Date(`${t.date}T00:00:00`);
@@ -300,7 +302,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
   ), [visibleCashMovements, project, baseCurrency]);
 
   const activeFilterCount = (txSearch ? 1 : 0)
-    + (txType !== 'Alle' ? 1 : 0)
+    + (txType !== ALL_TYPES ? 1 : 0)
     + (txDateFrom ? 1 : 0)
     + (txDateTo ? 1 : 0);
 
@@ -366,7 +368,7 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
   const formatters = useFormatters();
   const resetFilters = () => {
     setTxSearch('');
-    setTxType('Alle');
+    setTxType(ALL_TYPES);
     setTxDateFrom('');
     setTxDateTo('');
   };
@@ -380,43 +382,43 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
     <>
       <div className="ui-kpis">
         <Kpi
-          label="Buchungen"
+          label={t.transactions.bookings}
           value={formatters.number(summary?.count ?? 0)}
-          sub={summary ? [plural(summary.buyCount, 'Kauf', 'Käufe'), plural(summary.sellCount, 'Verkauf', 'Verkäufe'), plural(summary.dividendCount, 'Dividende', 'Dividenden')].join(' · ') : undefined}
+          sub={summary ? t.transactions.bookingsSub(summary.buyCount, summary.sellCount, summary.dividendCount) : undefined}
           icon={<FileText size={16} />}
           tone="accent"
         />
         <Kpi
-          label="Nettofluss"
+          label={t.transactions.netFlow}
           value={formatters.money(summary?.net ?? 0, { sign: true })}
           valueTone={toneOf(summary?.net ?? 0)}
-          sub={summary ? `Zufluss ${formatters.money(summary.inflow)} · Abfluss ${formatters.money(summary.outflow)}` : undefined}
+          sub={summary ? t.transactions.flows(formatters.money(summary.inflow), formatters.money(summary.outflow)) : undefined}
           icon={<TrendingUp size={16} />}
           tone="gain"
         />
-        <Kpi label="Volumen" value={formatters.money(summary?.volume ?? 0)} sub="Summe aller Beträge" icon={<ArrowLeftRight size={16} />} tone="teal" />
+        <Kpi label={t.transactions.volume} value={formatters.money(summary?.volume ?? 0)} sub={t.transactions.volumeSub} icon={<ArrowLeftRight size={16} />} tone="teal" />
         <Kpi
-          label="Letzte Buchung"
-          value={lastTx ? dayLabel(lastTx.date) : '–'}
-          sub={lastTx ? `${transactionTypeLabel(t, lastTx.type)} · ${amountText(lastTx.amount || 0, lastTx.currency)}` : 'Noch keine Buchungen'}
+          label={t.transactions.lastBooking}
+          value={lastTx ? dayLabel(formatters, lastTx.date) : '–'}
+          sub={lastTx ? `${transactionTypeLabel(t, lastTx.type)} · ${amountText(lastTx.amount || 0, lastTx.currency)}` : t.transactions.noBookings}
           icon={<CalendarClock size={16} />}
           tone="amber"
         />
       </div>
 
       <GlassCard>
-        <CardHeader title={isTransactions ? 'Buchungen' : 'Kontobewegungen'}>
+        <CardHeader title={isTransactions ? t.transactions.bookings : t.transactions.cashMovements}>
           <div className="ui-head-actions">
             <Segmented
-              options={[{ value: 'transactions', label: 'Buchungen' }, { value: 'cash', label: 'Konto' }]}
+              options={[{ value: 'transactions', label: t.transactions.bookings }, { value: 'cash', label: t.transactions.account }]}
               value={activeTab}
               onChange={setActiveTab}
-              ariaLabel="Ansicht"
+              ariaLabel={t.transactions.view}
               size="sm"
             />
             {isTransactions && (
               <Button size="sm" variant="ghost" icon={<Trash2 size={14} />} onClick={() => setShowDeletedModal(true)}>
-                Papierkorb{deletedTxs.length > 0 ? ` (${deletedTxs.length})` : ''}
+                {t.transactions.trashCount(deletedTxs.length)}
               </Button>
             )}
           </div>
@@ -429,29 +431,29 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
               type="search"
               value={txSearch}
               onChange={(e) => setTxSearch(e.target.value)}
-              placeholder={isTransactions ? 'Name, ISIN oder Art suchen' : 'Beschreibung, Art oder Währung suchen'}
-              aria-label="Suchen"
+              placeholder={isTransactions ? t.transactions.searchBookings : t.transactions.searchCash}
+              aria-label={t.transactions.search}
             />
           </label>
           {isTransactions && (
-            <SelectInput aria-label="Art" value={txType} onChange={(e) => setTxType(e.target.value)} className="ui-input-compact">
-              {transactionTypes.map((type) => <option key={type} value={type}>{type === 'Alle' ? 'Alle Arten' : transactionTypeLabel(t, type)}</option>)}
+            <SelectInput aria-label={t.transactions.type} value={txType} onChange={(e) => setTxType(e.target.value)} className="ui-input-compact">
+              {transactionTypes.map((type) => <option key={type} value={type}>{type === ALL_TYPES ? t.transactions.allTypes : transactionTypeLabel(t, type)}</option>)}
             </SelectInput>
           )}
-          <label className="ui-date-filter"><span>Von</span><input type="date" value={txDateFrom} onChange={(e) => setTxDateFrom(e.target.value)} /></label>
-          <label className="ui-date-filter"><span>Bis</span><input type="date" value={txDateTo} onChange={(e) => setTxDateTo(e.target.value)} /></label>
+          <label className="ui-date-filter"><span>{t.transactions.from}</span><input type="date" value={txDateFrom} onChange={(e) => setTxDateFrom(e.target.value)} /></label>
+          <label className="ui-date-filter"><span>{t.transactions.to}</span><input type="date" value={txDateTo} onChange={(e) => setTxDateTo(e.target.value)} /></label>
           {activeFilterCount > 0 && (
-            <Button size="sm" variant="ghost" icon={<RotateCcw size={14} />} onClick={resetFilters}>Filter zurücksetzen</Button>
+            <Button size="sm" variant="ghost" icon={<RotateCcw size={14} />} onClick={resetFilters}>{t.transactions.resetFilters}</Button>
           )}
         </div>
 
         <div className="ui-list-meta">
-          <span>{shownCount === totalCount ? `${totalCount} Einträge` : `${shownCount} von ${totalCount} Einträgen`}</span>
+          <span>{t.transactions.entries(shownCount, totalCount)}</span>
           {!isTransactions && (
             <span className="ui-row-sub">
-              <Pill>{cashMovementSummary.externalCount} extern</Pill>
-              <Pill>{cashMovementSummary.internalCount} intern</Pill>
-              <Pill tone={toneOf(cashMovementSummary.net)}>Netto {formatters.money(cashMovementSummary.net, { sign: true })}</Pill>
+              <Pill>{t.transactions.external(cashMovementSummary.externalCount)}</Pill>
+              <Pill>{t.transactions.internal(cashMovementSummary.internalCount)}</Pill>
+              <Pill tone={toneOf(cashMovementSummary.net)}>{t.transactions.net(formatters.money(cashMovementSummary.net, { sign: true }))}</Pill>
             </span>
           )}
         </div>
@@ -459,11 +461,11 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
         <div className="ui-scroll" style={{ maxHeight: '68vh' }}>
           {isTransactions ? (
             visibleTransactions.length === 0 ? (
-              <EmptyState icon={<FileText size={22} />} title={activeFilterCount > 0 ? 'Keine Treffer' : 'Noch keine Buchungen'} text={activeFilterCount > 0 ? 'Passe die Filter an oder setze sie zurück.' : 'Importiere eine Datei oder erfasse eine Transaktion.'} />
+              <EmptyState icon={<FileText size={22} />} title={activeFilterCount > 0 ? t.transactions.noMatches : t.transactions.noBookings} text={activeFilterCount > 0 ? t.transactions.noMatchesText : t.transactions.emptyText} />
             ) : (
               groupByMonth(visibleTransactions).map((group) => (
                 <section key={group.month} className="ui-group">
-                  <h3 className="ui-group-title">{monthLabel(group.month)}</h3>
+                  <h3 className="ui-group-title">{monthLabel(formatters, group.month)}</h3>
                   <div className="ui-rows">
                     {group.items.map((tx) => {
                       const amount = tx.amount || 0;
@@ -477,8 +479,8 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
                           meta={(
                             <>
                               {nameOf(tx) !== transactionTypeLabel(t, tx.type) && <span>{transactionTypeLabel(t, tx.type)}</span>}
-                              <span>{dayLabel(tx.date)}</span>
-                              {tx.shares ? <span>{formatters.number(Math.abs(tx.shares), Math.abs(tx.shares) % 1 === 0 ? 0 : 3)} Stk.</span> : null}
+                              <span>{dayLabel(formatters, tx.date)}</span>
+                              {tx.shares ? <span>{t.units.shares(formatters.number(Math.abs(tx.shares), Math.abs(tx.shares) % 1 === 0 ? 0 : 3))}</span> : null}
                               {depot && (project?.portfolios.length ?? 0) > 1 && <Pill>{depot}</Pill>}
                             </>
                           )}
@@ -492,11 +494,11 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
             )
           ) : (
             visibleCashMovements.length === 0 ? (
-              <EmptyState title={activeFilterCount > 0 ? 'Keine Treffer' : 'Keine Kontobewegungen'} text={activeFilterCount > 0 ? 'Passe die Filter an oder setze sie zurück.' : 'Kontobewegungen kommen aus Kontoauszügen und Broker-Importen.'} />
+              <EmptyState title={activeFilterCount > 0 ? t.transactions.noMatches : t.transactions.noCashMovements} text={activeFilterCount > 0 ? t.transactions.noMatchesText : t.transactions.noCashMovementsText} />
             ) : (
               groupByMonth(visibleCashMovements).map((group) => (
                 <section key={group.month} className="ui-group">
-                  <h3 className="ui-group-title">{monthLabel(group.month)}</h3>
+                  <h3 className="ui-group-title">{monthLabel(formatters, group.month)}</h3>
                   <div className="ui-rows">
                     {group.items.map((entry: CashMovement) => {
                       const amount = entry.amount || 0;
@@ -508,8 +510,8 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
                           meta={(
                             <>
                               {entry.description && <span>{movementTypeLabel(t, entry.type)}</span>}
-                              <span>{dayLabel(entry.date)}</span>
-                              {entry.isInternal && <Pill>intern</Pill>}
+                              <span>{dayLabel(formatters, entry.date)}</span>
+                              {entry.isInternal && <Pill>{t.transactions.internalTag}</Pill>}
                             </>
                           )}
                           trailing={<span className={`ui-row-value is-${toneOf(amount)}`}>{amountText(amount, entry.currency)}</span>}
@@ -586,10 +588,10 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
           <div className="ui-toast glass">
             <span className="ui-toast-icon"><Trash2 size={18} /></span>
             <span className="ui-toast-text">
-              <span className="ui-toast-title">Buchung gelöscht</span>
-              <span className="ui-toast-message">Im Papierkorb bis zum Schließen des Projekts.</span>
+              <span className="ui-toast-title">{t.transactions.deleted}</span>
+              <span className="ui-toast-message">{t.transactions.deletedText}</span>
             </span>
-            <Button size="sm" variant="tonal" icon={<Undo2 size={14} />} onClick={() => handleRestoreTransaction(toastEntry)}>Rückgängig</Button>
+            <Button size="sm" variant="tonal" icon={<Undo2 size={14} />} onClick={() => handleRestoreTransaction(toastEntry)}>{t.transactions.undo}</Button>
           </div>
         </div>
       ) : null}

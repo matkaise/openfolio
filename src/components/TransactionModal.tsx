@@ -12,6 +12,7 @@ import { applyImportBatch, emptyImportBatch, isEmptyImportBatch, parseDegiroFile
 import { isTradeEntry } from '@/lib/importers/entries';
 import { searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
 import { createLogger } from '@/lib/logger';
+import { useT } from '@/lib/i18n';
 import { Modal } from '@/components/ui/Modal';
 import { Button, Field, ListRow, Pill, Segmented, TextInput } from '@/components/ui/primitives';
 import { buildGenericCashBalances, buildGenericTransactions, guessCsvMapping, parseGenericCsv, type CsvDateFormat, type CsvMapping } from '@/lib/importers/genericCsv';
@@ -53,6 +54,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         marketSyncProgress: state.marketSyncProgress
     }));
     const { notify } = useNotifications();
+    const t = useT();
 
     // Tab State
     const [activeTab, setActiveTab] = useState<Tab>('import');
@@ -144,13 +146,13 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 setParsedBatch(batch);
                 setImportStatus('ready');
             } else {
-                notify({ tone: 'error', title: 'Keine Daten gefunden', message: 'Die Datei enthält keine erkennbaren DEGIRO-Buchungen. Bitte Export prüfen.' });
+                notify({ tone: 'error', title: t.txModal.noData, message: t.txModal.noDataText });
                 setParsedBatch(emptyImportBatch('Flatex'));
                 setImportStatus('idle');
             }
         } catch (err) {
             log.error(err);
-            notify({ tone: 'error', title: 'Die Datei konnte nicht gelesen werden.' });
+            notify({ tone: 'error', title: t.txModal.unreadable });
             setParsedBatch(emptyImportBatch('Flatex'));
             setImportStatus('idle');
         }
@@ -270,7 +272,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                     imported: 0,
                     importedMovements: 0,
                     skipped: genericRows.length,
-                    errors: errors.length ? errors.slice(0, 3) : ['Keine gültigen Zeilen gefunden.']
+                    errors: errors.length ? errors.slice(0, 3) : [t.txModal.noValidRows]
                 });
                 return;
             }
@@ -294,7 +296,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             setGenericImportSummary({
                 imported: 0,
                 skipped: genericRows.length,
-                errors: errors.length ? errors.slice(0, 3) : ['Keine gültigen Zeilen gefunden.']
+                errors: errors.length ? errors.slice(0, 3) : [t.txModal.noValidRows]
             });
             return;
         }
@@ -462,7 +464,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             : matches;
 
         if (!combinedMatches.length) {
-            setCompanySearchMessage('Kein Treffer gefunden.');
+            setCompanySearchMessage(t.txModal.noMatch);
             return;
         }
 
@@ -503,13 +505,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 ? parsedAmount
                 : -parsedAmount;
 
-            const cashNameMap: Record<ManualCashType, string> = {
-                Deposit: 'Einzahlung',
-                Withdrawal: 'Auszahlung',
-                Dividend: 'Zinsen / Dividende',
-                Tax: 'Steuern',
-                Fee: 'Gebühren'
-            };
+            const cashNameMap: Record<ManualCashType, string> = t.txModal.cashTypes;
 
             newTransaction = {
                 id: crypto.randomUUID(),
@@ -587,23 +583,23 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     const renderBody = () => (
         <>
             <Segmented
-                options={[{ value: 'import', label: 'Datei importieren' }, { value: 'manual', label: 'Manuell erfassen' }]}
+                options={[{ value: 'import', label: t.txModal.tabs.import }, { value: 'manual', label: t.txModal.tabs.manual }]}
                 value={activeTab}
                 onChange={setActiveTab}
-                ariaLabel="Art der Erfassung"
+                ariaLabel={t.txModal.tabsLabel}
             />
 
                 {activeTab === 'import' ? (
                     <div className="space-y-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="ui-field-label">Importart</div>
+                            <div className="ui-field-label">{t.txModal.importMode}</div>
                             <select
                                 value={importMode}
                                 onChange={(e) => setImportMode(e.target.value as 'generic' | 'template')}
                                 className="ui-input w-full sm:w-auto"
                             >
-                                <option value="generic">CSV mit Spaltenzuordnung</option>
-                                <option value="template">Broker Templates</option>
+                                <option value="generic">{t.txModal.modes.generic}</option>
+                                <option value="template">{t.txModal.modes.template}</option>
                             </select>
                         </div>
 
@@ -612,15 +608,15 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                     <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider">
                                         <span className={`rounded-full px-3 py-1 ${genericStep === 'upload' ? 'md3-chip-tonal' : 'md3-segment md3-text-muted'}`}>
-                                            1 Upload
+                                            {t.txModal.steps.upload}
                                         </span>
                                         <span className="md3-text-muted">→</span>
                                         <span className={`rounded-full px-3 py-1 ${genericStep === 'mapping' && !showGenericPreview ? 'md3-chip-tonal' : 'md3-segment md3-text-muted'}`}>
-                                            2 Zuordnung
+                                            {t.txModal.steps.mapping}
                                         </span>
                                         <span className="md3-text-muted">→</span>
                                         <span className={`rounded-full px-3 py-1 ${genericStep === 'mapping' && showGenericPreview ? 'md3-chip-tonal' : 'md3-segment md3-text-muted'}`}>
-                                            3 Vorschau
+                                            {t.txModal.steps.preview}
                                         </span>
                                     </div>
                                     {genericHeaders.length > 0 && genericStep === 'upload' && (
@@ -629,7 +625,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                             onClick={() => setGenericStep('mapping')}
                                             className="ui-btn is-primary is-md"
                                         >
-                                            Zuordnung starten
+                                            {t.txModal.startMapping}
                                         </button>
                                     )}
                                 </div>
@@ -656,11 +652,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                             </div>
                                             <h3 className="text-sm font-semibold md3-text-main">
                                                 {genericHeaders.length > 0
-                                                    ? `${genericRows.length} Zeilen erkannt (${genericFileName})`
-                                                    : 'CSV Datei hier ablegen'}
+                                                    ? t.txModal.rowsDetected(genericRows.length, genericFileName)
+                                                    : t.txModal.dropCsv}
                                             </h3>
                                             <p className="text-xs md3-text-muted mt-1">
-                                                {genericHeaders.length > 0 ? 'Neue Datei ziehen, um erneut zu mappen' : 'oder klicken zum Auswählen (CSV)'}
+                                                {genericHeaders.length > 0 ? t.txModal.dropAgain : t.txModal.orClick}
                                             </p>
                                         </div>
 
@@ -668,9 +664,9 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                             <div className="flex flex-wrap items-center justify-between gap-3 text-xs md3-text-muted">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <span className="font-semibold md3-text-main">{genericFileName}</span>
-                                                    <span>• {genericRows.length} Zeilen</span>
+                                                    <span>{t.txModal.rows(genericRows.length)}</span>
                                                 </div>
-                                                <span className="md3-chip-tonal px-2 py-0.5 rounded-full">Bereit</span>
+                                                <span className="md3-chip-tonal px-2 py-0.5 rounded-full">{t.txModal.ready}</span>
                                             </div>
                                         )}
                                     </div>
@@ -679,7 +675,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 {genericStep === 'mapping' && genericHeaders.length > 0 && (
                                     <div className="ui-info-card p-4 space-y-4">
                                         <div className="space-y-1">
-                                            <div className="text-sm font-semibold md3-text-main">Spalten zuordnen</div>
+                                            <div className="text-sm font-semibold md3-text-main">{t.txModal.mapColumns}</div>
                                             <div className="text-xs md3-text-muted">{genericFileName}</div>
                                         </div>
                                         <div className="md3-segment flex w-max items-center gap-1 p-1">
@@ -691,7 +687,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     : 'md3-text-muted hover:opacity-90'
                                                     }`}
                                             >
-                                                Wertpapiere
+                                                {t.txModal.securities}
                                             </button>
                                             <button
                                                 type="button"
@@ -701,59 +697,59 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     : 'md3-text-muted hover:opacity-90'
                                                     }`}
                                             >
-                                                Cash
+                                                {t.txModal.cash}
                                             </button>
                                         </div>
 
                                         {genericImportType === 'security' ? (
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 <div className="space-y-1">
-                                                    <label className="ui-field-label">Datum *</label>
+                                                    <label className="ui-field-label">{t.txModal.required(t.txModal.columns.date)}</label>
                                                     <select
                                                         value={genericMapping.date || ''}
                                                         onChange={(e) => updateMapping('date', e.target.value)}
                                                         className="ui-input w-full"
                                                     >
-                                                        <option value="">Bitte wählen...</option>
+                                                        <option value="">{t.txModal.choose}</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`date_${h}`} value={h}>{h}</option>
                                                         ))}
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="ui-field-label">WKN / ISIN / Ticker *</label>
+                                                    <label className="ui-field-label">{t.txModal.required(t.txModal.columns.identifier)}</label>
                                                     <select
                                                         value={genericMapping.identifier || ''}
                                                         onChange={(e) => updateMapping('identifier', e.target.value)}
                                                         className="ui-input w-full"
                                                     >
-                                                        <option value="">Bitte wählen...</option>
+                                                        <option value="">{t.txModal.choose}</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`id_${h}`} value={h}>{h}</option>
                                                         ))}
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="ui-field-label">Anzahl *</label>
+                                                    <label className="ui-field-label">{t.txModal.required(t.txModal.columns.shares)}</label>
                                                     <select
                                                         value={genericMapping.shares || ''}
                                                         onChange={(e) => updateMapping('shares', e.target.value)}
                                                         className="ui-input w-full"
                                                     >
-                                                        <option value="">Bitte wählen...</option>
+                                                        <option value="">{t.txModal.choose}</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`shares_${h}`} value={h}>{h}</option>
                                                         ))}
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="ui-field-label">Preis pro Stück *</label>
+                                                    <label className="ui-field-label">{t.txModal.required(t.txModal.columns.price)}</label>
                                                     <select
                                                         value={genericMapping.price || ''}
                                                         onChange={(e) => updateMapping('price', e.target.value)}
                                                         className="ui-input w-full"
                                                     >
-                                                        <option value="">Bitte wählen...</option>
+                                                        <option value="">{t.txModal.choose}</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`price_${h}`} value={h}>{h}</option>
                                                         ))}
@@ -763,52 +759,52 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                         ) : (
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 <div className="space-y-1">
-                                                    <label className="ui-field-label">Datum *</label>
+                                                    <label className="ui-field-label">{t.txModal.required(t.txModal.columns.date)}</label>
                                                     <select
                                                         value={genericMapping.date || ''}
                                                         onChange={(e) => updateMapping('date', e.target.value)}
                                                         className="ui-input w-full"
                                                     >
-                                                        <option value="">Bitte wählen...</option>
+                                                        <option value="">{t.txModal.choose}</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`date_${h}`} value={h}>{h}</option>
                                                         ))}
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="ui-field-label">Änderung (optional bei Saldo)</label>
+                                                    <label className="ui-field-label">{t.txModal.columns.change}</label>
                                                     <select
                                                         value={genericMapping.amount || ''}
                                                         onChange={(e) => updateMapping('amount', e.target.value)}
                                                         className="ui-input w-full"
                                                     >
-                                                        <option value="">Nicht verwendet</option>
+                                                        <option value="">{t.txModal.unused}</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`amt_${h}`} value={h}>{h}</option>
                                                         ))}
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="ui-field-label">Saldo (optional bei Änderung)</label>
+                                                    <label className="ui-field-label">{t.txModal.columns.balance}</label>
                                                     <select
                                                         value={genericMapping.balance || ''}
                                                         onChange={(e) => updateMapping('balance', e.target.value)}
                                                         className="ui-input w-full"
                                                     >
-                                                        <option value="">Nicht verwendet</option>
+                                                        <option value="">{t.txModal.unused}</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`bal_${h}`} value={h}>{h}</option>
                                                         ))}
                                                     </select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="ui-field-label">Währung (optional)</label>
+                                                    <label className="ui-field-label">{t.txModal.columns.currency}</label>
                                                     <select
                                                         value={genericMapping.currency || ''}
                                                         onChange={(e) => updateMapping('currency', e.target.value)}
                                                         className="ui-input w-full"
                                                     >
-                                                        <option value="">Nicht verwendet</option>
+                                                        <option value="">{t.txModal.unused}</option>
                                                         {headerOptions.map((h) => (
                                                             <option key={`cash_cur_${h}`} value={h}>{h}</option>
                                                         ))}
@@ -822,7 +818,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                             onClick={() => setShowGenericAdvanced(prev => !prev)}
                                             className="inline-flex items-center gap-2 text-xs font-semibold md3-text-muted hover:opacity-90"
                                         >
-                                            Erweiterte Optionen
+                                            {t.txModal.advanced}
                                             <ChevronDown size={14} className={`transition-transform ${showGenericAdvanced ? 'rotate-180' : ''}`} />
                                         </button>
 
@@ -831,13 +827,13 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                     {genericImportType === 'security' && (
                                                         <div className="space-y-1">
-                                                            <label className="ui-field-label">Währung (optional)</label>
+                                                            <label className="ui-field-label">{t.txModal.columns.currency}</label>
                                                             <select
                                                                 value={genericMapping.currency || ''}
                                                                 onChange={(e) => updateMapping('currency', e.target.value)}
                                                                 className="ui-input w-full"
                                                             >
-                                                                <option value="">Nicht verwendet</option>
+                                                                <option value="">{t.txModal.unused}</option>
                                                                 {headerOptions.map((h) => (
                                                                     <option key={`cur_${h}`} value={h}>{h}</option>
                                                                 ))}
@@ -846,13 +842,13 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     )}
                                                     {genericImportType === 'cash' && (
                                                         <div className="space-y-1">
-                                                            <label className="ui-field-label">Beschreibung (optional)</label>
+                                                            <label className="ui-field-label">{t.txModal.columns.description}</label>
                                                             <select
                                                                 value={genericMapping.description || ''}
                                                                 onChange={(e) => updateMapping('description', e.target.value)}
                                                                 className="ui-input w-full"
                                                             >
-                                                                <option value="">Nicht verwendet</option>
+                                                                <option value="">{t.txModal.unused}</option>
                                                                 {headerOptions.map((h) => (
                                                                     <option key={`cash_desc_${h}`} value={h}>{h}</option>
                                                                 ))}
@@ -861,13 +857,13 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     )}
                                                     {genericImportType === 'cash' && (
                                                         <div className="space-y-1">
-                                                            <label className="ui-field-label">Bewegungstyp (optional)</label>
+                                                            <label className="ui-field-label">{t.txModal.columns.movementType}</label>
                                                             <select
                                                                 value={genericMapping.type || ''}
                                                                 onChange={(e) => updateMapping('type', e.target.value)}
                                                                 className="ui-input w-full"
                                                             >
-                                                                <option value="">Nicht verwendet</option>
+                                                                <option value="">{t.txModal.unused}</option>
                                                                 {headerOptions.map((h) => (
                                                                     <option key={`cash_type_${h}`} value={h}>{h}</option>
                                                                 ))}
@@ -875,7 +871,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                         </div>
                                                     )}
                                                     <div className="space-y-1">
-                                                        <label className="ui-field-label">Standardwährung</label>
+                                                        <label className="ui-field-label">{t.txModal.defaultCurrency}</label>
                                                         <select
                                                             value={genericDefaultCurrency}
                                                             onChange={(e) => setGenericDefaultCurrency(e.target.value)}
@@ -887,13 +883,13 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                         </select>
                                                     </div>
                                                     <div className="space-y-1">
-                                                        <label className="ui-field-label">Datumsformat</label>
+                                                        <label className="ui-field-label">{t.txModal.dateFormat}</label>
                                                         <select
                                                             value={genericDateFormat}
                                                             onChange={(e) => setGenericDateFormat(e.target.value as 'auto' | 'ymd' | 'dmy' | 'mdy')}
                                                             className="ui-input w-full"
                                                         >
-                                                            <option value="auto">Auto</option>
+                                                            <option value="auto">{t.txModal.auto}</option>
                                                             <option value="ymd">YYYY-MM-DD</option>
                                                             <option value="dmy">DD.MM.YYYY</option>
                                                             <option value="mdy">MM/DD/YYYY</option>
@@ -902,8 +898,8 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                 </div>
                                                 <div className="text-xs md3-text-muted">
                                                     {genericImportType === 'security'
-                                                        ? 'Hinweis: Negative Anzahl wird als Verkauf interpretiert, positive als Kauf.'
-                                                        : 'Hinweis: Wenn Saldo gesetzt ist, wird er für den Kontostand genutzt. Sonst wird der Saldo aus der Änderung kumuliert.'}
+                                                        ? t.txModal.hintSecurities
+                                                        : t.txModal.hintCash}
                                                 </div>
                                             </div>
                                         )}
@@ -914,14 +910,14 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                 onClick={() => setGenericStep('upload')}
                                                 className="md3-text-muted px-3 py-2 text-xs font-semibold hover:opacity-80"
                                             >
-                                                Zurück
+                                                {t.txModal.back}
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setShowGenericPreview((v) => !v)}
                                                 className="md3-text-muted text-xs font-semibold hover:opacity-80"
                                             >
-                                                {showGenericPreview ? 'Vorschau ausblenden' : 'Vorschau anzeigen'}
+                                                {showGenericPreview ? t.txModal.hidePreview : t.txModal.showPreview}
                                             </button>
                                         </div>
 
@@ -954,12 +950,13 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
                                 {genericImportSummary && (
                                     <div className="ui-info-card p-3 text-xs md3-text-muted">
-                                        Importiert: {genericImportSummary.imported} {genericImportType === 'cash' ? 'Kontostände' : 'Transaktionen'}
-                                        {genericImportType === 'cash' && (
-                                            <> - Kontobewegungen: {genericImportSummary.importedMovements || 0}</>
+                                        {t.txModal.summary(
+                                            genericImportSummary.imported,
+                                            genericImportType === 'cash',
+                                            genericImportSummary.importedMovements || 0,
+                                            genericImportSummary.skipped,
+                                            genericImportSummary.duplicates || 0
                                         )}
-                                        {' '} - Übersprungen: {genericImportSummary.skipped}
-                                        {genericImportSummary.duplicates ? <> (davon {genericImportSummary.duplicates} Duplikate)</> : null}
                                         {genericImportSummary.errors.length > 0 && (
                                             <div className="mt-2 text-xs md3-negative">{genericImportSummary.errors.join(' ')}</div>
                                         )}
@@ -969,17 +966,17 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                         ) : (
                             <div className="space-y-5">
                                 <div className="space-y-2">
-                                    <label className="ui-field-label">Broker</label>
+                                    <label className="ui-field-label">{t.txModal.broker}</label>
                                     <select
                                         value={selectedBroker}
                                         onChange={(e) => setSelectedBroker(e.target.value)}
                                         className="ui-input w-full"
                                     >
-                                        <option value="" disabled>Bitte wählen...</option>
+                                        <option value="" disabled>{t.txModal.choose}</option>
                                         <option value="Flatex">Flatex</option>
-                                        <option value="TR">Trade Republic (Coming Soon)</option>
+                                        <option value="TR">{t.txModal.comingSoon('Trade Republic')}</option>
                                     </select>
-                                    <p className="text-xs md3-text-muted">Aktuell wird nur der Flatex CSV Export (Account & Transactions) unterstützt.</p>
+                                    <p className="text-xs md3-text-muted">{t.txModal.flatexOnly}</p>
                                 </div>
 
                                 <div
@@ -1002,11 +999,16 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     </div>
                                     <h3 className="text-sm font-semibold md3-text-main">
                                         {importStatus === 'ready'
-                                            ? `${parsedBatch.entries.filter(isTradeEntry).length} Transaktionen${importPreviewDuplicates > 0 ? ` (${importPreviewDuplicates} bereits vorhanden)` : ''}, ${parsedBatch.cashBalances.length} Kontostände, ${parsedBatch.entries.filter((entry) => !isTradeEntry(entry)).length} Kontobewegungen erkannt`
-                                            : 'Datei hier ablegen'}
+                                            ? t.txModal.detected(
+                                                parsedBatch.entries.filter(isTradeEntry).length,
+                                                importPreviewDuplicates,
+                                                parsedBatch.cashBalances.length,
+                                                parsedBatch.entries.filter((entry) => !isTradeEntry(entry)).length
+                                            )
+                                            : t.txModal.dropFile}
                                     </h3>
                                     <p className="text-xs md3-text-muted mt-1">
-                                        {importStatus === 'ready' ? 'Klicken zum Ändern oder Import starten' : 'oder klicken zum Auswählen (CSV)'}
+                                        {importStatus === 'ready' ? t.txModal.clickToChange : t.txModal.orClick}
                                     </p>
                                 </div>
 
@@ -1015,7 +1017,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                         <Search size={18} />
                                     </div>
                                     <div className="text-xs md3-text-muted">
-                                        Lade deine <strong>Account.csv</strong> (Kontobewegungen, Dividenden, Salden) oder <strong>Transactions.csv</strong> (Käufe/Verkäufe) hoch.
+                                        {t.txModal.flatexHint}
                                     </div>
                                 </div>
                             </div>
@@ -1024,14 +1026,14 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 ) : (
                     <div className="space-y-5">
                         <div className="space-y-2">
-                            <label className="ui-field-label">Art der Buchung</label>
+                            <label className="ui-field-label">{t.txModal.bookingKind}</label>
                             <select
                                 value={manualHoldingType}
                                 onChange={(e) => setManualHoldingType(e.target.value as ManualHoldingType)}
                                 className="ui-input w-full"
                             >
-                                <option value="security">Wertpapier</option>
-                                <option value="cash">Kontobewegung (Einzahlung, Dividende, Gebühr …)</option>
+                                <option value="security">{t.txModal.kinds.security}</option>
+                                <option value="cash">{t.txModal.kinds.cash}</option>
                             </select>
                         </div>
 
@@ -1046,7 +1048,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                             : 'md3-text-muted hover:opacity-90'
                                             }`}
                                     >
-                                        Kauf
+                                        {t.txModal.buy}
                                     </button>
                                     <button
                                         type="button"
@@ -1056,13 +1058,13 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                             : 'md3-text-muted hover:opacity-90'
                                             }`}
                                     >
-                                        Verkauf
+                                        {t.txModal.sell}
                                     </button>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="space-y-2">
-                                        <label className="ui-field-label">WKN / ISIN / Ticker</label>
+                                        <label className="ui-field-label">{t.txModal.identifier}</label>
                                         <div className="relative">
                                             <Hash size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                             <input
@@ -1075,26 +1077,26 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                                     setCompanySearchMessage(null);
                                                     setCompanyMatches([]);
                                                 }}
-                                                placeholder="z.B. US0378331005"
+                                                placeholder={t.txModal.identifierPlaceholder}
                                                 className="ui-input w-full pl-10"
                                             />
                                         </div>
                                         {resolveStatus === 'unresolved' && manualHoldingType === 'security' && (
                                             <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
-                                                <span>Kein Ticker gefunden. Ticker anpassen, Firmensuche oder Ignorieren.</span>
+                                                <span>{t.txModal.noTicker}</span>
                                                 <button
                                                     type="button"
                                                     onClick={() => setIsCompanySearchOpen(true)}
                                                     className="ui-btn is-primary is-md"
                                                 >
-                                                    Firmensuche
+                                                    {t.txModal.companySearch}
                                                 </button>
                                             </div>
                                         )}
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="ui-field-label">Datum</label>
+                                        <label className="ui-field-label">{t.txModal.date}</label>
                                         <div className="relative">
                                             <Calendar size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                             <input
@@ -1107,7 +1109,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="ui-field-label">Anzahl</label>
+                                        <label className="ui-field-label">{t.txModal.shares}</label>
                                         <div className="relative">
                                             <Tag size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                             <input
@@ -1122,7 +1124,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="ui-field-label">Preis pro Stück</label>
+                                        <label className="ui-field-label">{t.txModal.price}</label>
                                         <div className="relative">
                                             <DollarSign size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                             <input
@@ -1137,7 +1139,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="ui-field-label">Währung</label>
+                                        <label className="ui-field-label">{t.txModal.currency}</label>
                                         <select
                                             value={currency}
                                             onChange={(e) => setCurrency(e.target.value)}
@@ -1153,22 +1155,22 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="ui-field-label">Art der Kontobewegung</label>
+                                    <label className="ui-field-label">{t.txModal.cashKind}</label>
                                     <select
                                         value={cashType}
                                         onChange={(e) => setCashType(e.target.value as ManualCashType)}
                                         className="ui-input w-full"
                                     >
-                                        <option value="Deposit">Einzahlung</option>
-                                        <option value="Withdrawal">Auszahlung</option>
-                                        <option value="Dividend">Zinsen / Dividende</option>
-                                        <option value="Tax">Steuern</option>
-                                        <option value="Fee">Gebühren</option>
+                                        <option value="Deposit">{t.txModal.cashTypes.Deposit}</option>
+                                        <option value="Withdrawal">{t.txModal.cashTypes.Withdrawal}</option>
+                                        <option value="Dividend">{t.txModal.cashTypes.Dividend}</option>
+                                        <option value="Tax">{t.txModal.cashTypes.Tax}</option>
+                                        <option value="Fee">{t.txModal.cashTypes.Fee}</option>
                                     </select>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="ui-field-label">Datum</label>
+                                    <label className="ui-field-label">{t.txModal.date}</label>
                                     <div className="relative">
                                         <Calendar size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                         <input
@@ -1181,7 +1183,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="ui-field-label">Betrag</label>
+                                    <label className="ui-field-label">{t.txModal.amount}</label>
                                     <div className="relative">
                                         <DollarSign size={18} className="absolute left-3 top-1/2 -translate-y-1/2 md3-text-muted" />
                                         <input
@@ -1196,7 +1198,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="ui-field-label">Währung</label>
+                                    <label className="ui-field-label">{t.txModal.currency}</label>
                                     <select
                                         value={currency}
                                         onChange={(e) => setCurrency(e.target.value)}
@@ -1216,7 +1218,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 <div className="px-6 pb-3">
                     <div className="ui-info-card p-3 text-xs md3-text-muted">
                         <div className="flex items-center justify-between">
-                            <span>Marktdaten werden aktualisiert</span>
+                            <span>{t.txModal.marketSync}</span>
                             <span>{marketSyncProgress!.current}/{marketSyncProgress!.total}</span>
                         </div>
                         <div className="mt-2 h-1.5 w-full rounded-full" style={{ background: 'var(--md3-surface-container-highest)' }}>
@@ -1226,7 +1228,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                             />
                         </div>
                         {marketSyncProgress!.symbol && (
-                            <div className="mt-1 text-[11px] md3-text-muted">Aktuell: {marketSyncProgress!.symbol}</div>
+                            <div className="mt-1 text-[11px] md3-text-muted">{t.txModal.current(marketSyncProgress!.symbol)}</div>
                         )}
                     </div>
                 </div>
@@ -1237,7 +1239,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
     const renderFooter = () => (
         <>
-                <button type="button" onClick={onClose} className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80">Abbrechen</button>
+                <button type="button" onClick={onClose} className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80">{t.common.cancel}</button>
                 {activeTab === 'import' ? (
                     importMode === 'generic' ? (
                         <button
@@ -1246,7 +1248,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                             disabled={!isGenericMappingReady}
                             className="ui-btn is-primary is-md"
                         >
-                            CSV importieren
+                            {t.txModal.importCsv}
                         </button>
                     ) : (
                         <button
@@ -1257,9 +1259,9 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                         >
                             {importStatus === 'success'
                                 ? (importResult && importResult.duplicates > 0
-                                    ? `Importiert: ${importResult.added} neu, ${importResult.duplicates} Duplikate übersprungen`
-                                    : 'Erfolgreich!')
-                                : 'Import starten'}
+                                    ? t.txModal.imported(importResult.added, importResult.duplicates)
+                                    : t.txModal.success)
+                                : t.txModal.startImport}
                         </button>
                     )
                 ) : (
@@ -1274,7 +1276,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     }}
                                     className="md3-text-muted px-4 py-2 text-sm font-semibold hover:opacity-80"
                                 >
-                                    Ticker anpassen
+                                    {t.txModal.adjustTicker}
                                 </button>
                                 <button
                                     type="button"
@@ -1293,7 +1295,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                     }}
                                     className="ui-btn is-primary is-md"
                                 >
-                                    Ignorieren &amp; speichern
+                                    {t.txModal.ignoreAndSave}
                                 </button>
                             </>
                         ) : (
@@ -1303,7 +1305,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 disabled={isResolving}
                                 className="ui-btn is-primary is-md"
                             >
-                                {isResolving ? 'Prüfe Ticker...' : 'Transaktion speichern'}
+                                {isResolving ? t.txModal.checkingTicker : t.txModal.save}
                             </button>
                         )}
                     </>
@@ -1318,8 +1320,8 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 open
                 onClose={onClose}
                 size="xl"
-                title="Transaktionen hinzufügen"
-                subtitle={targetPortfolio?.name ? `Depot „${targetPortfolio.name}“` : 'Unbekanntes Depot'}
+                title={t.txModal.title}
+                subtitle={targetPortfolio?.name ? t.txModal.portfolio(targetPortfolio.name) : t.txModal.unknownPortfolio}
                 icon={<Briefcase size={20} />}
                 footer={renderFooter()}
             >
@@ -1328,13 +1330,13 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             <Modal
                 open={isCompanySearchOpen}
                 onClose={() => setIsCompanySearchOpen(false)}
-                title="Ticker zuweisen"
-                subtitle="Wähle den passenden Treffer aus"
+                title={t.txModal.assignTicker}
+                subtitle={t.txModal.assignTickerText}
                 icon={<Search size={20} />}
-                footer={<Button onClick={() => setIsCompanySearchOpen(false)}>Schließen</Button>}
+                footer={<Button onClick={() => setIsCompanySearchOpen(false)}>{t.common.close}</Button>}
             >
                 <form className="ui-inline-form" onSubmit={(e) => { e.preventDefault(); void handleCompanySearch(); }}>
-                    <Field label="Ticker oder Firmenname">
+                    <Field label={t.txModal.tickerOrCompany}>
                         <TextInput
                             value={companyQuery}
                             onChange={(e) => {
@@ -1342,12 +1344,12 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 setCompanySearchMessage(null);
                                 setCompanyMatches([]);
                             }}
-                            placeholder="z. B. AAPL oder Apple"
+                            placeholder={t.txModal.tickerPlaceholder}
                             autoFocus
                         />
                     </Field>
                     <Button type="submit" variant="primary" icon={<Search size={16} className={isCompanySearching ? 'animate-spin' : ''} />} disabled={isCompanySearching || !companyQuery.trim()}>
-                        Suchen
+                        {t.txModal.search}
                     </Button>
                 </form>
                 {companySearchMessage && <p className="ui-field-hint">{companySearchMessage}</p>}
@@ -1364,7 +1366,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                         {match.currency && <Pill>{match.currency}</Pill>}
                                     </>
                                 )}
-                                trailing={<Button size="sm" variant="primary" icon={<Check size={14} />} onClick={() => handleSelectCompanyMatch(match)}>Übernehmen</Button>}
+                                trailing={<Button size="sm" variant="primary" icon={<Check size={14} />} onClick={() => handleSelectCompanyMatch(match)}>{t.txModal.apply}</Button>}
                             />
                         ))}
                     </div>

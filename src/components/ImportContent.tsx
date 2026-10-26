@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Wallet, Plus, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useProjectData } from '@/contexts/ProjectContext';
 import { Button, CardHeader, Field, GlassCard, IconTile, TextInput } from '@/components/ui/primitives';
+import { useT } from '@/lib/i18n';
 
 interface ImportContentProps {
     onContinue: (portfolioId: string, isNew: boolean, newName?: string) => void;
@@ -9,6 +10,7 @@ interface ImportContentProps {
 
 export const ImportContent = ({ onContinue }: ImportContentProps) => {
     const project = useProjectData();
+    const t = useT();
     const initialPortfolioId = project?.portfolios?.[0]?.id || '';
     const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>(initialPortfolioId);
     const [isNewPortfolio, setIsNewPortfolio] = useState(!(project?.portfolios && project.portfolios.length > 0));
@@ -19,9 +21,9 @@ export const ImportContent = ({ onContinue }: ImportContentProps) => {
 
     // Validation
     const validateName = (name: string) => {
-        if (!name.trim()) return "Name darf nicht leer sein.";
+        if (!name.trim()) return t.importTarget.nameEmpty;
         if (project?.portfolios.some(p => p.name.toLowerCase() === name.trim().toLowerCase())) {
-            return "Ein Portfolio mit diesem Namen existiert bereits.";
+            return t.importTarget.nameTaken;
         }
         return null;
     };
@@ -45,10 +47,10 @@ export const ImportContent = ({ onContinue }: ImportContentProps) => {
 
     return (
         <GlassCard className="ui-narrow">
-            <CardHeader title="In welches Depot importieren?" />
-            <p className="ui-text">Wähle ein bestehendes Depot oder lege ein neues an. Im nächsten Schritt lädst du die Datei hoch oder erfasst Buchungen manuell.</p>
+            <CardHeader title={t.importTarget.title} />
+            <p className="ui-text">{t.importTarget.text}</p>
 
-            <div className="ui-options" role="radiogroup" aria-label="Ziel-Depot">
+            <div className="ui-options" role="radiogroup" aria-label={t.importTarget.targetLabel}>
                 {portfolios.map((portfolio) => {
                     const isSelected = !isNewPortfolio && selectedPortfolioId === portfolio.id;
                     return (
@@ -67,7 +69,7 @@ export const ImportContent = ({ onContinue }: ImportContentProps) => {
                             <IconTile tone={isSelected ? 'accent' : 'neutral'}><Wallet size={18} /></IconTile>
                             <span className="ui-option-text">
                                 <span className="ui-row-title">{portfolio.name}</span>
-                                <span className="ui-row-meta">Bestehendes Depot</span>
+                                <span className="ui-row-meta">{t.importTarget.existing}</span>
                             </span>
                             {isSelected && <CheckCircle2 size={20} className="ui-option-check" />}
                         </button>
@@ -84,20 +86,20 @@ export const ImportContent = ({ onContinue }: ImportContentProps) => {
                     >
                         <IconTile tone={isNewPortfolio ? 'accent' : 'neutral'}><Plus size={18} /></IconTile>
                         <span className="ui-option-text">
-                            <span className="ui-row-title">Neues Depot anlegen</span>
-                            <span className="ui-row-meta">Zum Beispiel für einen zweiten Broker oder eine eigene Strategie</span>
+                            <span className="ui-row-title">{t.importTarget.newTitle}</span>
+                            <span className="ui-row-meta">{t.importTarget.newText}</span>
                         </span>
                         {isNewPortfolio && <CheckCircle2 size={20} className="ui-option-check" />}
                     </button>
                     {isNewPortfolio && (
-                        <Field label="Name des Depots" hint={error ? <span className="ui-error"><AlertCircle size={14} />{error}</span> : undefined}>
+                        <Field label={t.importTarget.name} hint={error ? <span className="ui-error"><AlertCircle size={14} />{error}</span> : undefined}>
                             <TextInput
                                 value={newPortfolioName}
                                 onChange={(e) => {
                                     setNewPortfolioName(e.target.value);
                                     if (error) setError(null);
                                 }}
-                                placeholder="z. B. ETF-Sparplan"
+                                placeholder={t.importTarget.namePlaceholder}
                                 aria-invalid={!!error}
                                 autoFocus={portfolios.length > 0}
                             />
@@ -108,7 +110,7 @@ export const ImportContent = ({ onContinue }: ImportContentProps) => {
 
             <div className="ui-card-foot">
                 <Button variant="primary" onClick={handleContinue} disabled={isNewPortfolio && !!error}>
-                    Weiter zum Import
+                    {t.importTarget.continue}
                 </Button>
             </div>
         </GlassCard>
