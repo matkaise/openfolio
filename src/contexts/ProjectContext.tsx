@@ -19,6 +19,7 @@ import { downloadFile, pickFileWithInput, supportsFileSystemAccess } from '@/lib
 import { useNotifications } from '@/components/ui/notifications';
 import { createLogger } from '@/lib/logger';
 import { bookingPortfolioIds } from '@/lib/domain/ledger/store';
+import { getT } from '@/lib/i18n';
 
 const log = createLogger('Project');
 
@@ -38,7 +39,7 @@ const ensurePortfoliosFromData = (project: ProjectData): ProjectData => {
 
     const rebuiltPortfolios = discoveredIds.map((id, index) => ({
         id,
-        name: `Depot ${index + 1}`
+        name: getT().services.numberedPortfolio(index + 1)
     }));
 
     log.warn(`Portfolios were missing in loaded data. Rebuilt ${rebuiltPortfolios.length} entries from transaction/cash references.`);
@@ -117,7 +118,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
 
     const serializeForSave = useCallback(async (targetName: string, data: ProjectData) => {
         if (encryptionKeyRef.current && !isSqliteFileName(targetName)) {
-            throw new Error('Verschlüsselte Projekte können nur als .openfolio/.sqlite gespeichert werden.');
+            throw new Error(getT().services.project.encryptedFormats);
         }
         const serialized = await serializeProjectForFile(
             targetName,
@@ -334,7 +335,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
             const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
             log.error('Failed to open project:', err);
-            notify({ tone: 'error', title: 'Datei konnte nicht geöffnet werden', message });
+            notify({ tone: 'error', title: getT().services.project.openFailed, message });
         }
     }, [notify, performSync, setSqliteSession, store]);
 
@@ -389,7 +390,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
             const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
             log.error('Failed to save project:', err);
-            notify({ tone: 'error', title: 'Speichern fehlgeschlagen', message });
+            notify({ tone: 'error', title: getT().services.project.saveFailed, message });
         }
     }, [markSaved, notify, serializeForSave, store, writeToHandle]);
 
@@ -415,16 +416,16 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
             const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
-            notify({ tone: 'error', title: 'Speichern fehlgeschlagen', message });
+            notify({ tone: 'error', title: getT().services.project.saveFailed, message });
         }
     }, [markSaved, notify, saveProjectAs, store, writeToHandle]);
 
     const closeProject = useCallback(async () => {
         if (store.getState().isModified) {
             const ok = await confirm({
-                title: 'Projekt schließen?',
-                message: 'Es gibt ungespeicherte Änderungen. Sie gehen beim Schließen verloren.',
-                confirmLabel: 'Ohne Speichern schließen',
+                title: getT().services.project.closeTitle,
+                message: getT().services.project.closeText,
+                confirmLabel: getT().services.project.closeConfirm,
                 tone: 'danger'
             });
             if (!ok) return false;

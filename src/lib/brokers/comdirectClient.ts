@@ -1,4 +1,5 @@
 import type { ComdirectData } from '@/lib/importers/comdirect';
+import { MESSAGES, type Messages } from '@/lib/i18n';
 
 // Server side only. Implements the login of the official comdirect REST API
 // ("Schnittstellenspezifikation", chapter 2): password grant -> session -> TAN challenge
@@ -43,7 +44,13 @@ export interface ComdirectLoginState {
     requestSessionId: string;
 }
 
-type Deps = { fetchImpl?: (url: string, init: RequestInit & { headers: Record<string, string> }) => Promise<Response> };
+type Deps = {
+    fetchImpl?: (url: string, init: RequestInit & { headers: Record<string, string> }) => Promise<Response>;
+    /** Texts for error messages (the request's interface language); German by default. */
+    t?: Messages;
+};
+
+const texts = (deps: Deps) => (deps.t ?? MESSAGES.de).services.comdirect;
 
 const getFetch = (deps: Deps) => deps.fetchImpl ?? ((url: string, init: RequestInit) => fetch(url, init));
 
@@ -73,7 +80,7 @@ const call = async (deps: Deps, url: string, init: RequestInit & { headers: Reco
     try {
         res = await getFetch(deps)(url, init);
     } catch {
-        throw new ComdirectError('comdirect ist nicht erreichbar.', 0);
+        throw new ComdirectError(texts(deps).unreachable, 0);
     }
     if (!res.ok) {
         const detail = await apiMessage(res);
@@ -93,9 +100,10 @@ export const startComdirectLogin = async (
     deps: Deps = {}
 ): Promise<{ state: ComdirectLoginState; challenge: ComdirectChallenge }> => {
     const { clientId, clientSecret, username, pin } = credentials;
-    if (!clientId?.trim() || !clientSecret?.trim()) throw new ComdirectError('client_id und client_secret fehlen.', 0);
-    if (!/^\d{8}$/.test(username || '')) throw new ComdirectError('Die Zugangsnummer hat acht Ziffern.', 0);
-    if (!/^\d{4,8}$/.test(pin || '')) throw new ComdirectError('Die PIN hat ein ungültiges Format.', 0);
+    const t = texts(deps);
+    if (!clientId?.trim() || !clientSecret?.trim()) throw new ComdirectError(t.missingClient, 0);
+    if (!/^\d{8}$/.test(username || '')) throw new ComdirectError(t.accessNumberDigits, 0);
+    if (!/^\d{4,8}$/.test(pin || '')) throw new ComdirectError(t.pinFormat, 0);
 
     // 2.1 Resource owner password credentials
     const tokenRes = await tokenRequest(deps, {
@@ -104,9 +112,9 @@ export const startComdirectLogin = async (
         grant_type: 'password',
         username,
         password: pin
-    }, 'Anmeldung abgelehnt (Zugangsdaten prüfen)');
+    }, t.loginRejected);
     const { access_token: accessToken } = await tokenRes.json() as { access_token?: string };
-    if (!accessToken) throw new ComdirectError('comdirect hat kein Token geliefert.', 0);
+    if (!accessToken) throw new ComdirectError(t.noToken, 0);
 
     const requestSessionId = crypto.randomUUID();
 
@@ -114,17 +122,17 @@ export const startComdirectLogin = async (
     const sessionRes = await call(deps, `${API}/api/session/clients/user/v1/sessions`, {
         method: 'GET',
         headers: jsonHeaders(accessToken, requestSessionId)
-    }, 'Session konnte nicht abgerufen werden');
+    }, t.sessionFailed);
     const sessionBody = await sessionRes.json() as { identifier?: string } | { identifier?: string }[];
     const sessionIdentifier = (Array.isArray(sessionBody) ? sessionBody[0] : sessionBody)?.identifier;
-    if (!sessionIdentifier) throw new ComdirectError('comdirect hat keine Session geliefert.', 0);
+    if (!sessionIdentifier) throw new ComdirectError(t.noSession, 0);
 
     // 2.3 Request a TAN challenge for the session
     const validateRes = await call(deps, `${API}/api/session/clients/user/v1/sessions/${encodeURIComponent(sessionIdentifier)}/validate`, {
         method: 'POST',
         headers: jsonHeaders(accessToken, requestSessionId),
         body: JSON.stringify({ identifier: sessionIdentifier, sessionTanActive: true, activated2FA: true })
-    }, 'TAN-Anforderung fehlgeschlagen');
+    }, t.tanRequestFailed);
     const rawInfo = validateRes.headers.get('x-once-authentication-info');
     let info: { id?: string; typ?: string; challenge?: string; availableTypes?: string[] } = {};
     try {
@@ -132,7 +140,7 @@ export const startComdirectLogin = async (
     } catch {
         info = {};
     }
-    if (!info.id || !info.typ) throw new ComdirectError('comdirect hat keine TAN-Challenge geliefert.', 0);
+    if (!info.id || !info.typ) throw new ComdirectError(t.noChallenge, 0);
 
     return {
         state: {
@@ -170,7 +178,8 @@ export const completeComdirectLogin = async (
     deps: Deps = {}
 ): Promise<ComdirectData> => {
     const isPush = state.challengeType === 'P_TAN_PUSH';
-    if (!isPush && !/^\d{6}$/.test(tan || '')) throw new ComdirectError('Bitte die sechsstellige TAN eingeben.', 0);
+    const t = texts(deps);
+    if (!isPush && !/^\d{6}$/.test(tan || '')) throw new ComdirectError(t.tanDigits, 0);
 
     // 2.4 Activate the session TAN
     await call(deps, `${API}/api/session/clients/user/v1/sessions/${encodeURIComponent(state.sessionIdentifier)}`, {
@@ -181,7 +190,7 @@ export const completeComdirectLogin = async (
             ...(isPush ? {} : { 'x-once-authentication': tan as string })
         },
         body: JSON.stringify({ identifier: state.sessionIdentifier, sessionTanActive: true, activated2FA: true })
-    }, isPush ? 'Freigabe in der photoTAN-App nicht erkannt' : 'TAN wurde nicht akzeptiert');
+    }, isPush ? t.pushNotRecognized : t.tanRejected);
 
     // 2.5 cd_secondary: token with banking and brokerage rights
     const secondaryRes = await tokenRequest(deps, {
@@ -189,26 +198,26 @@ export const completeComdirectLogin = async (
         client_secret: state.clientSecret,
         grant_type: 'cd_secondary',
         token: state.accessToken
-    }, 'Zugriffstoken konnte nicht erstellt werden');
+    }, t.accessTokenFailed);
     const { access_token: token } = await secondaryRes.json() as { access_token?: string };
-    if (!token) throw new ComdirectError('comdirect hat kein Zugriffstoken geliefert.', 0);
+    if (!token) throw new ComdirectError(t.noAccessToken, 0);
     const headers = () => jsonHeaders(token, state.requestSessionId);
 
     try {
-        const depotRes = await call(deps, `${API}/api/brokerage/clients/user/v3/depots`, { method: 'GET', headers: headers() }, 'Depot konnte nicht abgerufen werden');
+        const depotRes = await call(deps, `${API}/api/brokerage/clients/user/v3/depots`, { method: 'GET', headers: headers() }, t.depotFailed);
         const depots = (await depotRes.json() as { values?: ComdirectData['depot'][] }).values || [];
         const depot = depots[0];
-        if (!depot?.depotId) throw new ComdirectError('Kein Depot gefunden.', 404);
+        if (!depot?.depotId) throw new ComdirectError(t.noDepot, 404);
 
         const depotPath = `${API}/api/brokerage/v3/depots/${encodeURIComponent(depot.depotId)}`;
-        const positions = await fetchAll<ComdirectData['positions'][number]>(deps, `${depotPath}/positions?with-attr=instrument`, headers, 'Depotpositionen konnten nicht abgerufen werden');
-        const depotTransactions = await fetchAll<ComdirectData['depotTransactions'][number]>(deps, `${depotPath}/transactions`, headers, 'Depotumsätze konnten nicht abgerufen werden');
+        const positions = await fetchAll<ComdirectData['positions'][number]>(deps, `${depotPath}/positions?with-attr=instrument`, headers, t.positionsFailed);
+        const depotTransactions = await fetchAll<ComdirectData['depotTransactions'][number]>(deps, `${depotPath}/transactions`, headers, t.depotTransactionsFailed);
         const accountTransactions = depot.defaultSettlementAccountId
             ? await fetchAll<ComdirectData['accountTransactions'][number]>(
                 deps,
                 `${API}/api/banking/v1/accounts/${encodeURIComponent(depot.defaultSettlementAccountId)}/transactions?transactionState=BOOKED`,
                 headers,
-                'Kontoumsätze konnten nicht abgerufen werden'
+                t.accountTransactionsFailed
             )
             : [];
 

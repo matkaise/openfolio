@@ -1,5 +1,5 @@
 import initSqlJs from 'sql.js';
-import { OUTDATED_PROJECT_MESSAGE, parseNumberRecordMap, parseProjectData, ProjectFormatError } from '@/lib/schemas/project';
+import { outdatedProjectMessage, parseNumberRecordMap, parseProjectData, ProjectFormatError } from '@/lib/schemas/project';
 import {
   InvalidPasswordError,
   decryptProjectBytes,
@@ -8,6 +8,7 @@ import {
   type ProjectEncryptionKey
 } from '@/lib/projectCrypto';
 import type { CashAccount, FxData, ISIN, LedgerEntry, Portfolio, ProjectData, Security } from '@/types/domain';
+import { getT } from '@/lib/i18n';
 
 const SQLITE_FILE_EXTENSIONS = ['.openfolio', '.sqlite', '.sqlite3', '.db'];
 const SQLITE_HEADER = 'SQLite format 3\u0000';
@@ -220,8 +221,8 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
     const version = this.getMetaValue('schema_version');
     if (version === SQLITE_SCHEMA_VERSION) return;
     // No or an older schema version: written by an older test version of Openfolio
-    if (!version || Number(version) < Number(SQLITE_SCHEMA_VERSION)) throw new Error(OUTDATED_PROJECT_MESSAGE);
-    throw new Error(`Nicht unterstütztes SQLite-Projektformat v${version}. Erwartet: v${SQLITE_SCHEMA_VERSION}.`);
+    if (!version || Number(version) < Number(SQLITE_SCHEMA_VERSION)) throw new Error(outdatedProjectMessage());
+    throw new Error(getT().services.project.sqliteVersion(Number(version), Number(SQLITE_SCHEMA_VERSION)));
   }
 
 
@@ -433,7 +434,7 @@ export const openProjectFile = async (
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new ProjectFormatError('kein gültiges JSON');
+    throw new ProjectFormatError(getT().services.project.invalidJson);
   }
   const project = parseProjectData(parsed);
 
@@ -463,7 +464,7 @@ export const serializeProjectForFile = async (
   }
 
   if (encryptionKey) {
-    throw new Error('Verschlüsselte Projekte können nur als .openfolio gespeichert werden.');
+    throw new Error(getT().services.project.encryptedOpenfolioOnly);
   }
 
   return {

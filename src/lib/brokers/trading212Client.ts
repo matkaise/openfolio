@@ -1,4 +1,5 @@
 import type { Trading212Data } from '@/lib/importers/trading212';
+import { MESSAGES, type Messages } from '@/lib/i18n';
 
 // Server side only. API key and secret go from the browser to the local server and from
 // there to Trading 212 as HTTP Basic auth; they are never logged or returned.
@@ -23,6 +24,8 @@ type Deps = {
     sleep?: (ms: number) => Promise<void>;
     /** YYYY-MM-DD: stop paging once a page only has older items (lists are newest first). */
     since?: string;
+    /** Texts for error messages (the request's interface language); German by default. */
+    t?: Messages;
 };
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -39,8 +42,9 @@ const itemDate = (item: Record<string, unknown>): string => {
 
 export const fetchTrading212Data = async (credentials: Credentials, deps: Deps = {}): Promise<Trading212Data> => {
     const { apiKey, apiSecret, environment } = credentials;
-    if (!apiKey?.trim() || !apiSecret?.trim()) throw new Trading212Error('API-Schlüssel und Secret fehlen.', 0);
-    if (environment !== 'live' && environment !== 'demo') throw new Trading212Error('Unbekannte Umgebung.', 0);
+    const t = (deps.t ?? MESSAGES.de).services.t212;
+    if (!apiKey?.trim() || !apiSecret?.trim()) throw new Trading212Error(t.missingKeys, 0);
+    if (environment !== 'live' && environment !== 'demo') throw new Trading212Error(t.unknownEnvironment, 0);
 
     const host = HOSTS[environment];
     const fetchImpl = deps.fetchImpl ?? ((url: string, init: RequestInit) => fetch(url, init));
@@ -53,7 +57,7 @@ export const fetchTrading212Data = async (credentials: Credentials, deps: Deps =
             try {
                 res = await fetchImpl(`${host}${path}`, { headers });
             } catch {
-                throw new Trading212Error('Trading 212 ist nicht erreichbar.', 0);
+                throw new Trading212Error(t.unreachable, 0);
             }
             if (res.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES) {
                 const reset = Number(res.headers.get('x-ratelimit-reset'));
@@ -62,9 +66,9 @@ export const fetchTrading212Data = async (credentials: Credentials, deps: Deps =
                 continue;
             }
             if (res.status === 401 || res.status === 403) {
-                throw new Trading212Error('Trading 212 lehnt den API-Schlüssel ab (ungültig, abgelaufen oder ohne Leserechte).', res.status);
+                throw new Trading212Error(t.rejected, res.status);
             }
-            if (!res.ok) throw new Trading212Error(`Trading 212 antwortet mit HTTP ${res.status}.`, res.status);
+            if (!res.ok) throw new Trading212Error(t.http(res.status), res.status);
             return res.json();
         }
     };
@@ -79,7 +83,7 @@ export const fetchTrading212Data = async (credentials: Credentials, deps: Deps =
             items.push(...pageItems);
             const next = body.nextPagePath ?? null;
             if (next !== null && !next.startsWith(`${endpoint}?`)) {
-                throw new Trading212Error('Unerwarteter Seitenpfad in der Antwort von Trading 212.', 0);
+                throw new Trading212Error(t.unexpectedPage, 0);
             }
             const reachedSince = deps.since && pageItems.length > 0
                 && pageItems.every((item) => itemDate(item as Record<string, unknown>) < deps.since!);

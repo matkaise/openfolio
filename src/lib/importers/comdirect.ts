@@ -1,5 +1,6 @@
 import { statementEntry, tradeEntry, type StatementType } from './entries';
 import { emptyImportBatch, type ImportBatch } from './importBatch';
+import { getT } from '@/lib/i18n';
 
 // comdirect REST API (brokerage v3, banking v1). Shapes follow the official
 // "comdirect REST API - Schnittstellenspezifikation"; only the used fields are typed.
@@ -88,11 +89,11 @@ export const parseComdirectData = (data: ComdirectData): ComdirectParseResult =>
             return;
         }
         const type = row.transactionType?.key;
-        const name = row.instrument?.name || row.instrument?.isin || 'Unbekanntes Wertpapier';
+        const name = row.instrument?.name || row.instrument?.isin || getT().services.comdirect.unknownSecurity;
         if (type === 'TRANSFER_IN' || type === 'TRANSFER_OUT') {
             // No purchase price in the API: the position must be added manually
             skipped.transfers += 1;
-            warnings.push(`Depotübertrag ${type === 'TRANSFER_IN' ? 'eingehend' : 'ausgehend'}: ${amount(row.quantity)} × ${name} – bitte manuell mit Einstandskurs erfassen.`);
+            warnings.push(getT().services.comdirect.transfer(type === 'TRANSFER_IN', String(amount(row.quantity)), name));
             return;
         }
         if (type !== 'BUY' && type !== 'SELL') return;

@@ -1,5 +1,6 @@
 import { createEmptyProject, type ProjectData, type Security, type Transaction } from '@/types/domain';
 import { addTransactions } from '@/lib/domain/ledger/store';
+import { getT } from '@/lib/i18n';
 
 // Demo portfolio with well-known public securities, to try the app without own data.
 // Trades and amounts are made up; prices come from the normal market data sync.
@@ -17,8 +18,8 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const roundCents = (value: number) => Math.round(value * 100) / 100;
 
 export const createDemoProject = (now: Date = new Date()): ProjectData => {
-    const project = createEmptyProject('Demo-Portfolio');
-    project.portfolios = [{ id: PORTFOLIO_ID, name: 'Demo-Depot' }];
+    const project = createEmptyProject(getT().services.demoProject);
+    project.portfolios = [{ id: PORTFOLIO_ID, name: getT().services.demoPortfolio }];
     project.securities = Object.fromEntries(SECURITIES.map((sec) => [sec.isin, sec]));
 
     const txs: Transaction[] = [];

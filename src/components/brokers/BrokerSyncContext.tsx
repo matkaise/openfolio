@@ -27,7 +27,7 @@ import { parseComdirectData, type ComdirectData } from '@/lib/importers/comdirec
 import type { ComdirectChallenge } from '@/lib/brokers/comdirectClient';
 import { applyImportBatch, type ImportBatch, type ImportSummary } from '@/lib/importers/importBatch';
 import type { BrokerConnection, ProjectData } from '@/types/domain';
-import { getT } from '@/lib/i18n';
+import { getT, LANGUAGE_HEADER, languageStore } from '@/lib/i18n';
 
 export type ConnectionStatus =
     | { state: 'idle' }
@@ -132,7 +132,7 @@ const addPortfolioIfNew = (project: ProjectData, target: PortfolioTarget): Proje
 const fetchTrading212 = async (secrets: ConnectionSecrets, environment: 'live' | 'demo', since?: string): Promise<Trading212Data> => {
     const res = await fetch('/api/brokers/trading212', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', [LANGUAGE_HEADER]: languageStore.getState().language },
         body: JSON.stringify({ apiKey: secrets.apiKey, apiSecret: secrets.apiSecret, environment, since })
     });
     const data = await res.json().catch(() => ({})) as { data?: Trading212Data; error?: string };
@@ -143,7 +143,7 @@ const fetchTrading212 = async (secrets: ConnectionSecrets, environment: 'live' |
 const comdirectRequest = async <T,>(body: Record<string, unknown>): Promise<T> => {
     const res = await fetch('/api/brokers/comdirect', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', [LANGUAGE_HEADER]: languageStore.getState().language },
         body: JSON.stringify(body)
     });
     const data = await res.json().catch(() => ({})) as T & { error?: string };
@@ -161,7 +161,7 @@ const sinceDate = (lastCheckedAt?: string) => {
 const fetchIbkrStatement = async (token: string, queryId: string): Promise<string> => {
     const res = await fetch('/api/brokers/ibkr-flex', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', [LANGUAGE_HEADER]: languageStore.getState().language },
         body: JSON.stringify({ token, queryId })
     });
     const data = await res.json().catch(() => ({})) as { xml?: string; error?: string };

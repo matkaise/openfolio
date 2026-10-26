@@ -1,5 +1,6 @@
 import type { CashBalanceImportPoint } from '@/lib/csvParser';
 import { statementEntry, tradeEntry, type ImportEntry, type StatementType } from './entries';
+import { getT } from '@/lib/i18n';
 
 // Generic CSV import (any broker or bank): split the file, guess the column mapping and
 // build transactions or cash balances/movements from a mapping the user confirmed.
@@ -407,12 +408,12 @@ export const buildGenericTransactions = (input: GenericCsvInput): { entries: Imp
     const { headers, rows, mapping, dateFormat, defaultCurrency } = input;
     const errors: string[] = [];
     if (!headers.length || !rows.length) {
-        errors.push('Keine CSV-Daten geladen.');
+        errors.push(getT().services.csv.noData);
         return { entries: [], errors };
     }
 
     if (!mapping.date || !mapping.identifier || !mapping.shares || !mapping.price) {
-        errors.push('Bitte Datum, Identifier, Anzahl und Preis zuordnen.');
+        errors.push(getT().services.csv.mapSecurities);
         return { entries: [], errors };
     }
 
@@ -435,7 +436,7 @@ export const buildGenericTransactions = (input: GenericCsvInput): { entries: Imp
         const identifierValue = identifierRaw.trim().toUpperCase();
         const sharesValue = parseNumberFlexible(sharesRaw);
         if (!identifierValue || !dateValue || !sharesValue) {
-            errors.push(`Zeile ${index + 2}: Pflichtfelder fehlen.`);
+            errors.push(getT().services.csv.missingFields(index + 2));
             return;
         }
 
@@ -446,13 +447,13 @@ export const buildGenericTransactions = (input: GenericCsvInput): { entries: Imp
         const isSell = sharesValue < 0;
         const absShares = Math.abs(sharesValue);
         if (!absShares) {
-            errors.push(`Zeile ${index + 2}: Preis oder Anzahl ungültig.`);
+            errors.push(getT().services.csv.invalidPriceOrShares(index + 2));
             return;
         }
 
         const hasExplicitPrice = priceRaw.length > 0;
         if (!hasExplicitPrice) {
-            errors.push(`Zeile ${index + 2}: Preis oder Anzahl ungültig.`);
+            errors.push(getT().services.csv.invalidPriceOrShares(index + 2));
             return;
         }
 
@@ -480,12 +481,12 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
     const errors: string[] = [];
     let processedRows = 0;
     if (!headers.length || !rows.length) {
-        errors.push('Keine CSV-Daten geladen.');
+        errors.push(getT().services.csv.noData);
         return { cashPoints: [], entries: [], errors, processedRows };
     }
 
     if (!mapping.date || (!mapping.amount && !mapping.balance)) {
-        errors.push('Bitte Datum und Betrag oder Saldo zuordnen.');
+        errors.push(getT().services.csv.mapCash);
         return { cashPoints: [], entries: [], errors, processedRows };
     }
 
@@ -825,18 +826,18 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
         rows.forEach((row, index) => {
             const dateValue = parseEffectiveDate(row);
             if (!dateValue) {
-                errors.push(`Zeile ${index + 2}: Datum ungültig.`);
+                errors.push(getT().services.csv.invalidDate(index + 2));
                 return;
             }
             const currencyValue = resolveCurrencyValue(row);
             if (!currencyValue) {
-                errors.push(`Zeile ${index + 2}: Währung ungültig.`);
+                errors.push(getT().services.csv.invalidCurrency(index + 2));
                 return;
             }
             const balanceRaw = row[balanceIdx] ?? '';
             const balanceValue = parseNumberStrict(balanceRaw);
             if (!Number.isFinite(balanceValue)) {
-                errors.push(`Zeile ${index + 2}: Saldo ungültig.`);
+                errors.push(getT().services.csv.invalidBalance(index + 2));
                 return;
             }
             processedRows += 1;
@@ -878,18 +879,18 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
         if (amountIdx < 0) return;
         const dateValue = parseEffectiveDate(row);
         if (!dateValue) {
-            errors.push(`Zeile ${index + 2}: Datum ungültig.`);
+            errors.push(getT().services.csv.invalidDate(index + 2));
             return;
         }
         const currencyValue = resolveCurrencyValue(row);
         if (!currencyValue) {
-            errors.push(`Zeile ${index + 2}: Währung ungültig.`);
+            errors.push(getT().services.csv.invalidCurrency(index + 2));
             return;
         }
         const amountRaw = row[amountIdx] ?? '';
         const amountValue = parseNumberStrict(amountRaw);
         if (!Number.isFinite(amountValue)) {
-            errors.push(`Zeile ${index + 2}: Betrag ungültig.`);
+            errors.push(getT().services.csv.invalidAmount(index + 2));
             return;
         }
 
