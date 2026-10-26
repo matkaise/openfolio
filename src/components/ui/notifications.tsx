@@ -70,6 +70,7 @@ const ConfirmDialog = ({ request, onClose }: { request: ConfirmRequest; onClose:
 };
 
 export const NotificationsProvider = ({ children }: { children: ReactNode }) => {
+    const t = useT();
     const [toasts, setToasts] = useState<Toast[]>([]);
     const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
     const nextId = useRef(1);
@@ -106,7 +107,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
                             <span className="ui-toast-title">{toast.title}</span>
                             {toast.message && <span className="ui-toast-message">{toast.message}</span>}
                         </span>
-                        <button type="button" className="ui-toast-close" onClick={() => dismiss(toast.id)} aria-label="Hinweis schließen">
+                        <button type="button" className="ui-toast-close" onClick={() => dismiss(toast.id)} aria-label={t.services.dismissHint}>
                             <X size={14} />
                         </button>
                     </div>

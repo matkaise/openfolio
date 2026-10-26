@@ -83,7 +83,7 @@ export const MultiSelectDropdown = ({ options, selectedIds, onChange, label }: M
                 className="pl-1 font-medium"
                 style={{ color: isAllSelected ? 'var(--md3-on-surface)' : 'var(--md3-on-surface-variant)' }}
               >
-                Alle
+                {t.common.all}
               </span>
               {isAllSelected && <Check size={16} style={{ color: 'var(--md3-primary)' }} />}
             </button>

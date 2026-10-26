@@ -361,7 +361,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     });
 
     // Prepare Chart Data
-    const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+    const monthNames = Array.from({ length: 12 }, (_, index) => `m${index + 1}`); // keys only; labels come from t.months
 
     const chartData = monthNames.map((name, monthIndex) => {
       // Create 5-year values

@@ -716,6 +716,101 @@ export const en: Messages = {
         }
     },
 
+    services: {
+        invalidRequest: 'Invalid request.',
+        fetchFailed: 'Fetch failed.',
+        unknownAction: 'Unknown action.',
+        loginExpired: 'The sign-in has expired. Please start again.',
+        comdirect: {
+            unreachable: 'comdirect cannot be reached.',
+            missingClient: 'client_id and client_secret are missing.',
+            accessNumberDigits: 'The access number has eight digits.',
+            pinFormat: 'The PIN has an invalid format.',
+            loginRejected: 'Sign-in rejected (check credentials)',
+            noToken: 'comdirect returned no token.',
+            sessionFailed: 'Could not fetch the session',
+            noSession: 'comdirect returned no session.',
+            noChallenge: 'comdirect returned no TAN challenge.',
+            tanRequestFailed: 'TAN request failed',
+            tanDigits: 'Please enter the six-digit TAN.',
+            pushNotRecognized: 'Approval in the photoTAN app not detected',
+            tanRejected: 'TAN was not accepted',
+            accessTokenFailed: 'Could not create the access token',
+            noAccessToken: 'comdirect returned no access token.',
+            depotFailed: 'Could not fetch the securities account',
+            noDepot: 'No securities account found.',
+            positionsFailed: 'Could not fetch the positions',
+            depotTransactionsFailed: 'Could not fetch the securities transactions',
+            accountTransactionsFailed: 'Could not fetch the account transactions',
+            transfer: (incoming: boolean, quantity: string, name: string) => (
+                `${incoming ? 'Incoming' : 'Outgoing'} securities transfer: ${quantity} × ${name} – please add it manually with its cost basis.`
+            ),
+            unknownSecurity: 'Unknown security'
+        },
+        ibkr: {
+            tokenFormat: 'The token has an invalid format.',
+            queryIdFormat: 'The query ID has an invalid format.',
+            unreachable: 'IBKR cannot be reached.',
+            http: (status: number) => `IBKR responded with HTTP ${status}.`,
+            unexpected: 'Unexpected response from IBKR.',
+            timeout: 'IBKR did not create the report in time.'
+        },
+        t212: {
+            missingKeys: 'API key and secret are missing.',
+            unknownEnvironment: 'Unknown environment.',
+            unreachable: 'Trading 212 cannot be reached.',
+            rejected: 'Trading 212 rejects the API key (invalid, expired or without read permissions).',
+            http: (status: number) => `Trading 212 responded with HTTP ${status}.`,
+            unexpectedPage: 'Unexpected page path in the Trading 212 response.'
+        },
+        project: {
+            encryptedFormats: 'Encrypted projects can only be saved as .openfolio/.sqlite.',
+            encryptedOpenfolioOnly: 'Encrypted projects can only be saved as .openfolio.',
+            sqliteVersion: (version: number, expected: number) => `Unsupported SQLite project format v${version}. Expected: v${expected}.`,
+            invalidJson: 'not valid JSON',
+            corrupt: (detail: string) => `The project file is damaged or has an unknown format: ${detail}`,
+            outdated: 'This project file comes from an older test version of Openfolio and can no longer be read. Please create a new project and import the broker exports again.',
+            openFailed: 'Could not open the file',
+            saveFailed: 'Saving failed',
+            closeTitle: 'Close project?',
+            closeText: 'There are unsaved changes. They will be lost when you close.',
+            closeConfirm: 'Close without saving'
+        },
+        schema: {
+            types: { string: 'text', number: 'number', boolean: 'yes/no', object: 'object', array: 'list' },
+            root: '(root)',
+            missing: (path: string, expected: string) => `${path}: missing (${expected} expected)`,
+            expected: (path: string, expected: string) => `${path}: ${expected} expected`,
+            unknownValue: (path: string) => `${path}: unknown value`,
+            invalid: (path: string) => `${path}: invalid`,
+            more: (count: number) => ` (+${count} more)`
+        },
+        crypto: {
+            noWebCrypto: 'WebCrypto is not available in this browser.',
+            emptyPassword: 'The password must not be empty.',
+            notEncrypted: 'Not an encrypted Openfolio file.',
+            version: (version: string | number) => `Unsupported encryption version ${version}.`,
+            unknownKdf: 'Unknown key derivation in the project file.'
+        },
+        csv: {
+            noData: 'No CSV data loaded.',
+            mapSecurities: 'Please map date, identifier, quantity and price.',
+            mapCash: 'Please map date and amount or balance.',
+            missingFields: (line: number) => `Line ${line}: required fields missing.`,
+            invalidPriceOrShares: (line: number) => `Line ${line}: invalid price or quantity.`,
+            invalidDate: (line: number) => `Line ${line}: invalid date.`,
+            invalidCurrency: (line: number) => `Line ${line}: invalid currency.`,
+            invalidBalance: (line: number) => `Line ${line}: invalid balance.`,
+            invalidAmount: (line: number) => `Line ${line}: invalid amount.`
+        },
+        dismissHint: 'Dismiss',
+        unexpectedEcb: (detail: string) => `Unexpected response from the ECB interface: ${detail}`,
+        unexpectedQuotes: (detail: string) => `Unexpected response from the price interface: ${detail}`,
+        demoProject: 'Demo project',
+        demoPortfolio: 'Demo portfolio',
+        numberedPortfolio: (index: number) => `Portfolio ${index}`
+    },
+
     errors: {
         title: 'Something went wrong',
         unknown: 'An unknown error occurred. Your project file was not changed.',

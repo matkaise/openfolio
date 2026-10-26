@@ -12,6 +12,8 @@
 // The whole header is passed as additional authenticated data, so tampering with
 // the iteration count or salt fails decryption just like a wrong password.
 
+import { getT } from '@/lib/i18n';
+
 export const ENCRYPTED_MAGIC = 'OFENC1';
 export const ENCRYPTION_FORMAT_VERSION = 1;
 export const KDF_PBKDF2_SHA256 = 1;
@@ -38,7 +40,7 @@ export class InvalidPasswordError extends Error {
 const getSubtle = (): SubtleCrypto => {
     const subtle = globalThis.crypto?.subtle;
     if (!subtle) {
-        throw new Error('WebCrypto ist in diesem Browser nicht verfügbar.');
+        throw new Error(getT().services.crypto.noWebCrypto);
     }
     return subtle;
 };
@@ -61,7 +63,7 @@ export const deriveProjectKey = async (
     iterations: number = DEFAULT_KDF_ITERATIONS
 ): Promise<ProjectEncryptionKey> => {
     if (!password) {
-        throw new Error('Passwort darf nicht leer sein.');
+        throw new Error(getT().services.crypto.emptyPassword);
     }
     const subtle = getSubtle();
     const keyMaterial = await subtle.importKey(
@@ -115,7 +117,7 @@ export interface EncryptedProjectHeader {
 
 export const readEncryptedHeader = (bytes: Uint8Array): EncryptedProjectHeader => {
     if (!isEncryptedProjectBytes(bytes) || bytes.length < HEADER_BYTES) {
-        throw new Error('Keine verschlüsselte Openfolio-Datei.');
+        throw new Error(getT().services.crypto.notEncrypted);
     }
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     let offset = MAGIC_BYTES.length;
@@ -128,10 +130,10 @@ export const readEncryptedHeader = (bytes: Uint8Array): EncryptedProjectHeader =
     const iv = bytes.slice(offset, offset + IV_BYTES);
 
     if (version !== ENCRYPTION_FORMAT_VERSION) {
-        throw new Error(`Nicht unterstützte Verschlüsselungsversion ${version}.`);
+        throw new Error(getT().services.crypto.version(version));
     }
     if (kdf !== KDF_PBKDF2_SHA256 || iterations <= 0) {
-        throw new Error('Unbekanntes Schlüsselverfahren in der Projektdatei.');
+        throw new Error(getT().services.crypto.unknownKdf);
     }
     return { version, kdf, iterations, salt, iv };
 };

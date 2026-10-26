@@ -717,6 +717,101 @@ export const de = {
         }
     },
 
+    services: {
+        invalidRequest: 'Ungültige Anfrage.',
+        fetchFailed: 'Abruf fehlgeschlagen.',
+        unknownAction: 'Unbekannte Aktion.',
+        loginExpired: 'Die Anmeldung ist abgelaufen. Bitte neu starten.',
+        comdirect: {
+            unreachable: 'comdirect ist nicht erreichbar.',
+            missingClient: 'client_id und client_secret fehlen.',
+            accessNumberDigits: 'Die Zugangsnummer hat acht Ziffern.',
+            pinFormat: 'Die PIN hat ein ungültiges Format.',
+            loginRejected: 'Anmeldung abgelehnt (Zugangsdaten prüfen)',
+            noToken: 'comdirect hat kein Token geliefert.',
+            sessionFailed: 'Session konnte nicht abgerufen werden',
+            noSession: 'comdirect hat keine Session geliefert.',
+            noChallenge: 'comdirect hat keine TAN-Challenge geliefert.',
+            tanRequestFailed: 'TAN-Anforderung fehlgeschlagen',
+            tanDigits: 'Bitte die sechsstellige TAN eingeben.',
+            pushNotRecognized: 'Freigabe in der photoTAN-App nicht erkannt',
+            tanRejected: 'TAN wurde nicht akzeptiert',
+            accessTokenFailed: 'Zugriffstoken konnte nicht erstellt werden',
+            noAccessToken: 'comdirect hat kein Zugriffstoken geliefert.',
+            depotFailed: 'Depot konnte nicht abgerufen werden',
+            noDepot: 'Kein Depot gefunden.',
+            positionsFailed: 'Depotpositionen konnten nicht abgerufen werden',
+            depotTransactionsFailed: 'Depotumsätze konnten nicht abgerufen werden',
+            accountTransactionsFailed: 'Kontoumsätze konnten nicht abgerufen werden',
+            transfer: (incoming: boolean, quantity: string, name: string) => (
+                `Depotübertrag ${incoming ? 'eingehend' : 'ausgehend'}: ${quantity} × ${name} – bitte manuell mit Einstandskurs erfassen.`
+            ),
+            unknownSecurity: 'Unbekanntes Wertpapier'
+        },
+        ibkr: {
+            tokenFormat: 'Token hat ein ungültiges Format.',
+            queryIdFormat: 'Query-ID hat ein ungültiges Format.',
+            unreachable: 'IBKR ist nicht erreichbar.',
+            http: (status: number) => `IBKR antwortet mit HTTP ${status}.`,
+            unexpected: 'Unerwartete Antwort von IBKR.',
+            timeout: 'IBKR hat den Bericht nicht rechtzeitig erstellt.'
+        },
+        t212: {
+            missingKeys: 'API-Schlüssel und Secret fehlen.',
+            unknownEnvironment: 'Unbekannte Umgebung.',
+            unreachable: 'Trading 212 ist nicht erreichbar.',
+            rejected: 'Trading 212 lehnt den API-Schlüssel ab (ungültig, abgelaufen oder ohne Leserechte).',
+            http: (status: number) => `Trading 212 antwortet mit HTTP ${status}.`,
+            unexpectedPage: 'Unerwarteter Seitenpfad in der Antwort von Trading 212.'
+        },
+        project: {
+            encryptedFormats: 'Verschlüsselte Projekte können nur als .openfolio/.sqlite gespeichert werden.',
+            encryptedOpenfolioOnly: 'Verschlüsselte Projekte können nur als .openfolio gespeichert werden.',
+            sqliteVersion: (version: number, expected: number) => `Nicht unterstütztes SQLite-Projektformat v${version}. Erwartet: v${expected}.`,
+            invalidJson: 'kein gültiges JSON',
+            corrupt: (detail: string) => `Die Projektdatei ist beschädigt oder hat ein unbekanntes Format: ${detail}`,
+            outdated: 'Diese Projektdatei stammt aus einer älteren Testversion von Openfolio und wird nicht mehr gelesen. Bitte ein neues Projekt anlegen und die Broker-Exporte neu importieren.',
+            openFailed: 'Datei konnte nicht geöffnet werden',
+            saveFailed: 'Speichern fehlgeschlagen',
+            closeTitle: 'Projekt schließen?',
+            closeText: 'Es gibt ungespeicherte Änderungen. Sie gehen beim Schließen verloren.',
+            closeConfirm: 'Ohne Speichern schließen'
+        },
+        schema: {
+            types: { string: 'Text', number: 'Zahl', boolean: 'Ja/Nein', object: 'Objekt', array: 'Liste' } as Record<string, string>,
+            root: '(Wurzel)',
+            missing: (path: string, expected: string) => `${path}: fehlt (${expected} erwartet)`,
+            expected: (path: string, expected: string) => `${path}: ${expected} erwartet`,
+            unknownValue: (path: string) => `${path}: unbekannter Wert`,
+            invalid: (path: string) => `${path}: ungültig`,
+            more: (count: number) => ` (+${count} weitere)`
+        },
+        crypto: {
+            noWebCrypto: 'WebCrypto ist in diesem Browser nicht verfügbar.',
+            emptyPassword: 'Passwort darf nicht leer sein.',
+            notEncrypted: 'Keine verschlüsselte Openfolio-Datei.',
+            version: (version: string | number) => `Nicht unterstützte Verschlüsselungsversion ${version}.`,
+            unknownKdf: 'Unbekanntes Schlüsselverfahren in der Projektdatei.'
+        },
+        csv: {
+            noData: 'Keine CSV-Daten geladen.',
+            mapSecurities: 'Bitte Datum, Identifier, Anzahl und Preis zuordnen.',
+            mapCash: 'Bitte Datum und Betrag oder Saldo zuordnen.',
+            missingFields: (line: number) => `Zeile ${line}: Pflichtfelder fehlen.`,
+            invalidPriceOrShares: (line: number) => `Zeile ${line}: Preis oder Anzahl ungültig.`,
+            invalidDate: (line: number) => `Zeile ${line}: Datum ungültig.`,
+            invalidCurrency: (line: number) => `Zeile ${line}: Währung ungültig.`,
+            invalidBalance: (line: number) => `Zeile ${line}: Saldo ungültig.`,
+            invalidAmount: (line: number) => `Zeile ${line}: Betrag ungültig.`
+        },
+        dismissHint: 'Hinweis schließen',
+        unexpectedEcb: (detail: string) => `Unerwartete Antwort der EZB-Schnittstelle: ${detail}`,
+        unexpectedQuotes: (detail: string) => `Unerwartete Antwort der Kursdaten-Schnittstelle: ${detail}`,
+        demoProject: 'Demo-Portfolio',
+        demoPortfolio: 'Demo-Depot',
+        numberedPortfolio: (index: number) => `Depot ${index}`
+    },
+
     errors: {
         title: 'Etwas ist schiefgelaufen',
         unknown: 'Ein unbekannter Fehler ist aufgetreten. Deine Projektdatei wurde nicht verändert.',

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CURRENT_PROJECT_VERSION, type ProjectData } from '@/types/domain';
 import { describeIssues, numberRecord, optionalNumber, optionalString } from './common';
+import { getT } from '@/lib/i18n';
 
 // Lenient on purpose: unknown fields pass through (newer app versions, legacy fields) and
 // missing collections get defaults. Strict only where a wrong type would break calculations.
@@ -66,18 +67,17 @@ const projectSchema = z.object({
 
 export class ProjectFormatError extends Error {
     constructor(detail: string, complete = false) {
-        super(complete ? detail : `Die Projektdatei ist beschädigt oder hat ein unbekanntes Format: ${detail}`);
+        super(complete ? detail : getT().services.project.corrupt(detail));
         this.name = 'ProjectFormatError';
     }
 }
 
 /** Validates loaded project data before anything calculates with it. */
-export const OUTDATED_PROJECT_MESSAGE =
-    'Diese Projektdatei stammt aus einer älteren Testversion von Openfolio und wird nicht mehr gelesen. Bitte ein neues Projekt anlegen und die Broker-Exporte neu importieren.';
+export const outdatedProjectMessage = () => getT().services.project.outdated;
 
 export const parseProjectData = (value: unknown): ProjectData => {
     const version = (value as { version?: unknown } | null)?.version;
-    if (typeof version === 'number' && version < CURRENT_PROJECT_VERSION) throw new ProjectFormatError(OUTDATED_PROJECT_MESSAGE, true);
+    if (typeof version === 'number' && version < CURRENT_PROJECT_VERSION) throw new ProjectFormatError(outdatedProjectMessage(), true);
     const result = projectSchema.safeParse(value);
     if (!result.success) throw new ProjectFormatError(describeIssues(result.error));
     return result.data as unknown as ProjectData;

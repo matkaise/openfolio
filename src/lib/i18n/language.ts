@@ -30,6 +30,11 @@ export const resolveLanguage = (preference: LanguagePreference, browserLanguages
     preference === 'system' ? detectLanguage(browserLanguages) : preference
 );
 
+/** Sent with requests to the local API routes so their error texts match the interface. */
+export const LANGUAGE_HEADER = 'x-openfolio-language';
+
+export const parseLanguage = (value: unknown): Language => (isLanguage(value) ? value : DEFAULT_LANGUAGE);
+
 /** Locale for dates and, unless the project sets a number format, for amounts. */
 export const LANGUAGE_LOCALES: Record<Language, { date: string; number: 'de-DE' | 'en-US' }> = {
     de: { date: 'de-DE', number: 'de-DE' },

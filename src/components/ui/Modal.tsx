@@ -2,6 +2,7 @@
 
 import React, { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useT } from '@/lib/i18n';
 
 /**
  * Dialog of design v2: glass panel over a blurred backdrop, header with title and close
@@ -19,6 +20,7 @@ export const Modal = ({ open, onClose, title, subtitle, icon, size = 'md', foote
     closeOnBackdrop?: boolean;
     labelledBy?: string;
 }) => {
+    const t = useT();
     const titleId = useId();
     const panelRef = useRef<HTMLDivElement>(null);
 
@@ -49,7 +51,7 @@ export const Modal = ({ open, onClose, title, subtitle, icon, size = 'md', foote
                         <h2 id={titleId} className="ui-modal-title">{title}</h2>
                         {subtitle && <div className="ui-modal-sub">{subtitle}</div>}
                     </div>
-                    <button type="button" className="ui-icon-btn" onClick={onClose} aria-label="Schließen" title="Schließen">
+                    <button type="button" className="ui-icon-btn" onClick={onClose} aria-label={t.common.close} title={t.common.close}>
                         <X size={18} />
                     </button>
                 </header>

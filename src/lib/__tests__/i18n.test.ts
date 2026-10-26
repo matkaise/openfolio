@@ -105,3 +105,24 @@ describe('language boot script', () => {
         expect(run('system', ['de-DE'])).toEqual({ lang: 'de', pending: false });
     });
 });
+
+describe('service messages', () => {
+    it('follow the interface language outside React', async () => {
+        const { buildGenericTransactions } = await import('../importers/genericCsv');
+        const build = () => buildGenericTransactions({ headers: [], rows: [], mapping: {}, dateFormat: 'auto', defaultCurrency: 'EUR' }).errors[0];
+        expect(build()).toBe('Keine CSV-Daten geladen.');
+        languageStore.setState({ language: 'en' });
+        try {
+            expect(build()).toBe('No CSV data loaded.');
+        } finally {
+            languageStore.setState({ language: 'de' });
+        }
+    });
+
+    it('lets the server answer in the language of the request', async () => {
+        const { fetchTrading212Data } = await import('../brokers/trading212Client');
+        const credentials = { apiKey: '', apiSecret: '', environment: 'live' as const };
+        await expect(fetchTrading212Data(credentials)).rejects.toThrow('API-Schlüssel und Secret fehlen.');
+        await expect(fetchTrading212Data(credentials, { t: MESSAGES.en })).rejects.toThrow('API key and secret are missing.');
+    });
+});

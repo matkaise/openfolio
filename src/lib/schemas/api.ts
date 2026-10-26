@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { getT } from '@/lib/i18n';
 import { describeIssues, numberRecord, optionalNumber, optionalString } from './common';
 
 const ecbResponseSchema = z.object({
@@ -12,7 +13,7 @@ export type EcbResponse = z.infer<typeof ecbResponseSchema>;
 
 export const parseEcbResponse = (value: unknown): EcbResponse => {
     const result = ecbResponseSchema.safeParse(value);
-    if (!result.success) throw new Error(`Unerwartete Antwort der EZB-Schnittstelle: ${describeIssues(result.error)}`);
+    if (!result.success) throw new Error(getT().services.unexpectedEcb(describeIssues(result.error)));
     return result.data;
 };
 
@@ -59,6 +60,6 @@ export type YahooQuoteResponse = z.infer<typeof yahooQuoteResponseSchema>;
 
 export const parseYahooQuoteResponse = (value: unknown): YahooQuoteResponse => {
     const result = yahooQuoteResponseSchema.safeParse(value);
-    if (!result.success) throw new Error(`Unerwartete Antwort der Kursdaten-Schnittstelle: ${describeIssues(result.error)}`);
+    if (!result.success) throw new Error(getT().services.unexpectedQuotes(describeIssues(result.error)));
     return result.data;
 };

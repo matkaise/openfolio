@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { getT } from '@/lib/i18n';
 
 /** JSON turns NaN into null; treat null like a missing optional value. */
 export const optionalNumber = z.preprocess((value) => (value === null ? undefined : value), z.number().finite().optional());
@@ -20,25 +21,18 @@ export const numberRecord = z
         return clean;
     });
 
-const TYPE_NAMES: Record<string, string> = {
-    string: 'Text',
-    number: 'Zahl',
-    boolean: 'Ja/Nein',
-    object: 'Objekt',
-    array: 'Liste'
-};
-
-/** Short German description of the first problems, e.g. "transactions.1.amount: Zahl erwartet". */
+/** Short description of the first problems, e.g. "transactions.1.amount: Zahl erwartet". */
 export const describeIssues = (error: z.ZodError, limit = 3): string => {
+    const t = getT().services.schema;
     const lines = error.issues.slice(0, limit).map((issue) => {
-        const path = issue.path.join('.') || '(Wurzel)';
+        const path = issue.path.join('.') || t.root;
         if (issue.code === 'invalid_type') {
-            const expected = TYPE_NAMES[issue.expected] ?? issue.expected;
-            return issue.received === 'undefined' ? `${path}: fehlt (${expected} erwartet)` : `${path}: ${expected} erwartet`;
+            const expected = t.types[issue.expected] ?? issue.expected;
+            return issue.received === 'undefined' ? t.missing(path, expected) : t.expected(path, expected);
         }
-        if (issue.code === 'invalid_enum_value') return `${path}: unbekannter Wert`;
-        return `${path}: ungültig`;
+        if (issue.code === 'invalid_enum_value') return t.unknownValue(path);
+        return t.invalid(path);
     });
-    const more = error.issues.length > limit ? ` (+${error.issues.length - limit} weitere)` : '';
+    const more = error.issues.length > limit ? t.more(error.issues.length - limit) : '';
     return lines.join('; ') + more;
 };
