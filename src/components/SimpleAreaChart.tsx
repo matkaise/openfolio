@@ -11,6 +11,8 @@ import {
     Tooltip
 } from 'recharts';
 import { parseDateOnlyUTC } from '@/lib/dateUtils';
+import { useT } from '@/lib/i18n';
+import { useFormatters } from '@/components/ui/useFormatters';
 
 type ChartPoint = { date: string; value: number };
 
@@ -36,11 +38,13 @@ export const SimpleAreaChart = ({
     markers?: { date: string, label?: string, color?: string, type?: 'Buy' | 'Sell' }[]
 }) => {
     const gradientId = `colorGradient-${React.useId().replace(/:/g, '')}`;
+    const t = useT();
+    const formatters = useFormatters();
 
     if (!data || data.length === 0) {
         return (
             <div className={`w-full flex items-center justify-center md3-text-muted text-sm`} style={{ height }}>
-                Keine Daten verfügbar
+                {t.charts.noData}
             </div>
         );
     }
@@ -60,7 +64,7 @@ export const SimpleAreaChart = ({
         if (['3J', '5J', 'MAX'].includes(timeRange)) {
             return d.getUTCFullYear().toString();
         }
-        return `${d.getUTCDate()}.${d.getUTCMonth() + 1}.`;
+        return formatters.date(d, { day: 'numeric', month: 'numeric', timeZone: 'UTC' });
     };
 
     const formatYAxis = (val: number) => {
@@ -153,14 +157,14 @@ export const SimpleAreaChart = ({
                         formatter={(value: number | string | undefined) => {
                             if (value === undefined) return ['', ''];
                             return [
-                                isPercentage ? `${Number(value) > 0 ? '+' : ''}${Number(value).toFixed(2)}%` : `${Number(value).toFixed(2)}`,
-                                isPercentage ? (tooltipLabel || 'Performance') : (tooltipLabel || 'Kurs')
+                                isPercentage ? formatters.percent(Number(value), { sign: true }) : formatters.number(Number(value), 2),
+                                isPercentage ? (tooltipLabel || t.charts.performance) : (tooltipLabel || t.charts.price)
                             ];
                         }}
                         labelFormatter={(label: unknown) => {
                             if (!label) return '';
                             const d = parseDateOnlyUTC(String(label));
-                            return d.toLocaleDateString('de-DE', { timeZone: 'UTC' });
+                            return formatters.date(d, { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
                         }}
                     />
                     <Area

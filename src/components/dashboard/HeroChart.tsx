@@ -4,6 +4,7 @@ import React, { useId, useSyncExternalStore } from 'react';
 import { Area, AreaChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { Formatters } from '@/lib/format';
 import { parseDateOnlyUTC } from '@/lib/dateUtils';
+import { useT } from '@/lib/i18n';
 
 type Point = { date: string; value: number; invested?: number };
 
@@ -14,11 +15,11 @@ const subscribeReducedMotion = (callback: () => void) => {
 };
 const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-const formatTick = (date: string, spanDays: number) => {
+const formatTick = (formatters: Formatters, date: string, spanDays: number) => {
     const d = parseDateOnlyUTC(date);
     if (spanDays > 3 * 365) return String(d.getUTCFullYear());
-    if (spanDays > 62) return d.toLocaleDateString('de-DE', { month: 'short', timeZone: 'UTC' }).replace('.', '');
-    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+    if (spanDays > 62) return formatters.date(d, { month: 'short', timeZone: 'UTC' }).replace('.', '');
+    return formatters.date(d, { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
 };
 
 /** Value (or performance) chart inside the hero card. */
@@ -28,6 +29,7 @@ export const HeroChart = ({ data, mode, formatters, height = 260 }: {
     formatters: Formatters;
     height?: number;
 }) => {
+    const t = useT();
     const id = useId().replace(/:/g, '');
     const reduceMotion = useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => true);
     const showInvested = mode === 'value' && data.some((p) => (p.invested || 0) > 0);
@@ -36,7 +38,7 @@ export const HeroChart = ({ data, mode, formatters, height = 260 }: {
         : 0;
 
     if (data.length < 2) {
-        return <div className="hero-chart-empty" style={{ height }}>Noch keine Kursdaten für diesen Zeitraum.</div>;
+        return <div className="hero-chart-empty" style={{ height }}>{t.charts.noPrices}</div>;
     }
 
     const format = (value: number) => (mode === 'value' ? formatters.money(value, { decimals: 0 }) : formatters.percent(value, { sign: true }));
@@ -62,7 +64,7 @@ export const HeroChart = ({ data, mode, formatters, height = 260 }: {
                         tickLine={false}
                         minTickGap={48}
                         tick={{ fill: 'var(--text3)', fontSize: 11, fontWeight: 600 }}
-                        tickFormatter={(value: string) => formatTick(value, spanDays)}
+                        tickFormatter={(value: string) => formatTick(formatters, value, spanDays)}
                     />
                     <YAxis hide domain={['auto', 'auto']} />
                     <Tooltip
@@ -72,10 +74,10 @@ export const HeroChart = ({ data, mode, formatters, height = 260 }: {
                             const point = payload[0].payload as Point;
                             return (
                                 <div className="hero-tip glass">
-                                    <span className="ui-label">{parseDateOnlyUTC(String(label)).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}</span>
+                                    <span className="ui-label">{formatters.date(parseDateOnlyUTC(String(label)), { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}</span>
                                     <span className="hero-tip-value">{format(point.value)}</span>
                                     {showInvested && point.invested !== undefined && (
-                                        <span className="ui-sub">Eingezahlt {formatters.money(point.invested, { decimals: 0 })}</span>
+                                        <span className="ui-sub">{t.charts.invested(formatters.money(point.invested, { decimals: 0 }))}</span>
                                     )}
                                 </div>
                             );

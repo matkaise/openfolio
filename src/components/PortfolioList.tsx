@@ -3,21 +3,17 @@ import { ChevronDown, Coins, Layers, TrendingUp, Wallet } from 'lucide-react';
 import { selectCalculationTransactions, calculateProjectHoldings } from '@/lib/portfolioSelectors';
 import { calculateClosedPositions } from '@/lib/closedPositions';
 import { quoteTypeLabel } from '@/lib/labels';
-import { useT } from '@/lib/i18n';
+import { useLanguage, useT } from '@/lib/i18n';
 import { useProjectData } from '@/contexts/ProjectContext';
 import { useFormatters } from '@/components/ui/useFormatters';
 import { Avatar, CardHeader, EmptyState, GlassCard, Kpi, ListRow, Pill, Segmented, toneOf } from '@/components/ui/primitives';
 
 type SortKey = 'value' | 'performance' | 'name';
 
-const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: 'value', label: 'Wert' },
-  { value: 'performance', label: 'Rendite' },
-  { value: 'name', label: 'Name' }
-];
 
 export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { selectedPortfolioIds: string[], onSelectSecurity: (isin: string, currency?: string) => void }) => {
   const t = useT();
+  const language = useLanguage();
   const project = useProjectData();
   const formatters = useFormatters();
   const [sortKey, setSortKey] = useState<SortKey>('value');
@@ -47,41 +43,51 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
     const list = [...holdings];
     if (sortKey === 'value') list.sort((a, b) => b.value - a.value);
     if (sortKey === 'performance') list.sort((a, b) => b.totalReturnPercent - a.totalReturnPercent);
-    if (sortKey === 'name') list.sort((a, b) => a.security.name.localeCompare(b.security.name, 'de'));
+    if (sortKey === 'name') list.sort((a, b) => a.security.name.localeCompare(b.security.name, language));
     return list;
-  }, [holdings, sortKey]);
+  }, [holdings, sortKey, language]);
 
   const realizedTotal = closedPositions.reduce((sum, p) => sum + p.realized, 0);
 
   return (
     <>
       <div className="ui-kpis is-3">
-        <Kpi label="Depotwert" value={formatters.money(totals.value)} sub={`${holdings.length} offene Positionen`} icon={<Wallet size={16} />} tone="accent" />
+        <Kpi label={t.positions.value} value={formatters.money(totals.value)} sub={t.positions.openCount(holdings.length)} icon={<Wallet size={16} />} tone="accent" />
         <Kpi
-          label="Gewinn"
+          label={t.positions.gain}
           value={formatters.money(totals.gain, { sign: true })}
           valueTone={toneOf(totals.gain)}
-          sub={`${formatters.percent(totals.gainPercent, { sign: true, decimals: 1 })} auf den Einstand`}
+          sub={t.positions.onCost(formatters.percent(totals.gainPercent, { sign: true, decimals: 1 }))}
           icon={<TrendingUp size={16} />}
           tone="gain"
         />
         <Kpi
-          label="Realisiert"
+          label={t.positions.realized}
           value={formatters.money(realizedTotal, { sign: true })}
           valueTone={toneOf(realizedTotal)}
-          sub={`${closedPositions.length} geschlossene Positionen`}
+          sub={t.positions.closedCount(closedPositions.length)}
           icon={<Coins size={16} />}
           tone="amber"
         />
       </div>
 
       <GlassCard>
-        <CardHeader title="Offene Positionen">
-          <Segmented options={SORT_OPTIONS} value={sortKey} onChange={setSortKey} ariaLabel="Sortierung" size="sm" />
+        <CardHeader title={t.positions.open}>
+          <Segmented
+            options={[
+              { value: 'value' as SortKey, label: t.positions.sortValue },
+              { value: 'performance' as SortKey, label: t.positions.sortReturn },
+              { value: 'name' as SortKey, label: t.positions.sortName }
+            ]}
+            value={sortKey}
+            onChange={setSortKey}
+            ariaLabel={t.positions.sort}
+            size="sm"
+          />
         </CardHeader>
 
         {sortedHoldings.length === 0 ? (
-          <EmptyState icon={<Layers size={22} />} title="Noch keine Positionen" text="Importiere deine Trades oder erfasse eine Transaktion." />
+          <EmptyState icon={<Layers size={22} />} title={t.positions.emptyTitle} text={t.positions.emptyText} />
         ) : (
           <div className="ui-rows">
             {sortedHoldings.map((holding) => {
@@ -98,10 +104,10 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
                   title={holding.security.name}
                   meta={(
                     <>
-                      <span>{quoteTypeLabel(t, holding.security.quoteType)} · {formatters.number(holding.quantity, decimals)} Stk.</span>
+                      <span>{quoteTypeLabel(t, holding.security.quoteType)} · {t.units.shares(formatters.number(holding.quantity, decimals))}</span>
                       <span>Ø {formatters.moneyIn(holding.averageBuyPriceInOriginalCurrency, holding.currency)} → {formatters.moneyIn(holding.currentPriceInOriginalCurrency, holding.currency)}</span>
-                      {unresolved && <Pill tone="down">Ticker fehlt</Pill>}
-                      {ignored && <Pill>Ohne Kurse</Pill>}
+                      {unresolved && <Pill tone="down">{t.positions.missingTicker}</Pill>}
+                      {ignored && <Pill>{t.positions.noPrices}</Pill>}
                     </>
                   )}
                   trailing={(
@@ -129,7 +135,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
           onClick={() => setShowClosedPositions((v) => !v)}
           aria-expanded={showClosedPositions}
         >
-          <span className="ui-card-title">Geschlossene Positionen</span>
+          <span className="ui-card-title">{t.positions.closed}</span>
           <span className="ui-collapse-meta">
             {closedPositions.length}
             <ChevronDown size={18} className={showClosedPositions ? 'is-open' : ''} />
@@ -137,7 +143,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
         </button>
         {showClosedPositions && (
           closedPositions.length === 0 ? (
-            <EmptyState title="Keine geschlossenen Positionen" text="Sobald du eine Position vollständig verkaufst, erscheint sie hier mit ihrem Ergebnis." />
+            <EmptyState title={t.positions.closedEmptyTitle} text={t.positions.closedEmptyText} />
           ) : (
             <div className="ui-rows" style={{ marginTop: 10 }}>
               {closedPositions.map((pos) => (
@@ -146,7 +152,7 @@ export const PortfolioList = ({ selectedPortfolioIds, onSelectSecurity }: { sele
                   onClick={() => onSelectSecurity(pos.isin, pos.currency)}
                   leading={<Avatar seed={pos.isin} label={pos.name} size={40} />}
                   title={pos.name}
-                  meta={<span>{quoteTypeLabel(t, pos.quoteType)} · {pos.currency} · letzter Trade {new Date(pos.lastDate).toLocaleDateString('de-DE')}</span>}
+                  meta={<span>{quoteTypeLabel(t, pos.quoteType)} · {pos.currency} · {t.positions.lastTrade(formatters.date(pos.lastDate))}</span>}
                   trailing={<Pill tone={toneOf(pos.realized)}>{formatters.money(pos.realized, { sign: true })}</Pill>}
                 />
               ))}

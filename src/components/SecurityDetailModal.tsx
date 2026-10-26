@@ -9,7 +9,7 @@ import { SimpleAreaChart } from './SimpleAreaChart';
 import { Security, Transaction } from '@/types/domain';
 import { getRangeStartDate, toDateKeyLocal } from '@/lib/dateUtils';
 
-const RANGE_OPTIONS = ['1M', '6M', '1J', '3J', '5J', 'MAX'].map((value) => ({ value, label: value }));
+const RANGES = ['1M', '6M', '1J', '3J', '5J', 'MAX'];
 
 interface SecurityDetailModalProps {
     isOpen: boolean;
@@ -46,15 +46,15 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
     // Prepare Markers
     const markers = useMemo(() => {
         return transactions
-            .filter(t => t.isin === security.isin && (t.type === 'Buy' || t.type === 'Sell'))
-            .filter(t => (normalizedCurrencyFilter ? (t.currency || '').trim().toUpperCase() === normalizedCurrencyFilter : true))
-            .map(t => ({
-                date: t.date.split('T')[0],
-                label: t.type === 'Buy' ? 'Kauf' : 'Verkauf',
-                color: t.type === 'Buy' ? 'var(--gain)' : 'var(--loss)',
-                type: t.type as 'Buy' | 'Sell'
+            .filter(tx => tx.isin === security.isin && (tx.type === 'Buy' || tx.type === 'Sell'))
+            .filter(tx => (normalizedCurrencyFilter ? (tx.currency || '').trim().toUpperCase() === normalizedCurrencyFilter : true))
+            .map(tx => ({
+                date: tx.date.split('T')[0],
+                label: tx.type === 'Buy' ? t.security.buy : t.security.sell,
+                color: tx.type === 'Buy' ? 'var(--gain)' : 'var(--loss)',
+                type: tx.type as 'Buy' | 'Sell'
             }));
-    }, [transactions, security.isin, normalizedCurrencyFilter]);
+    }, [transactions, security.isin, normalizedCurrencyFilter, t]);
 
     const latestPrice = chartData.length > 0 ? chartData[chartData.length - 1].value : 0;
     const startPrice = chartData.length > 0 ? chartData[0].value : 0;
@@ -63,7 +63,7 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
     const isPositive = change >= 0;
     const money = (value: number) => formatters.moneyIn(value, security.currency);
     const ratio = (value: number | undefined) => (value === undefined || !Number.isFinite(value) ? '–' : formatters.number(value, 2));
-    const billions = (value: number | undefined) => (value ? `${formatters.number(value / 1e9, 2)} Mrd. ${security.currency}` : '–');
+    const billions = (value: number | undefined) => (value ? `${t.units.billions(formatters.number(value / 1e9, 2))} ${security.currency}` : '–');
 
     return (
         <Modal
@@ -71,7 +71,7 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
             onClose={onClose}
             size="xl"
             title={security.name}
-            subtitle={[quoteTypeLabel(t, security.quoteType), security.symbol, security.isin, normalizedCurrencyFilter ? `Trades in ${normalizedCurrencyFilter}` : null].filter(Boolean).join(' · ')}
+            subtitle={[quoteTypeLabel(t, security.quoteType), security.symbol, security.isin, normalizedCurrencyFilter ? t.security.tradesIn(normalizedCurrencyFilter) : null].filter(Boolean).join(' · ')}
             icon={<Avatar seed={security.isin} label={security.name} size={44} />}
         >
             <div className="ui-price-head">
@@ -81,7 +81,7 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
                     {formatters.moneyIn(change, security.currency, { sign: true })} · {formatters.percent(changePercent, { sign: true })}
                 </Pill>
                 <span className="ui-price-range">
-                    <Segmented options={RANGE_OPTIONS} value={timeRange} onChange={setTimeRange} ariaLabel="Zeitraum" size="sm" />
+                    <Segmented options={RANGES.map((value) => ({ value, label: t.ranges.short[value] }))} value={timeRange} onChange={setTimeRange} ariaLabel={t.ranges.label} size="sm" />
                 </span>
             </div>
 
@@ -96,45 +96,45 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
                 />
                 {markers.length > 0 && (
                     <div className="ui-legend">
-                        <span><i style={{ background: 'var(--gain)' }} /> Kauf</span>
-                        <span><i style={{ background: 'var(--loss)' }} /> Verkauf</span>
+                        <span><i style={{ background: 'var(--gain)' }} /> {t.security.buy}</span>
+                        <span><i style={{ background: 'var(--loss)' }} /> {t.security.sell}</span>
                     </div>
                 )}
             </div>
 
             <div className="ui-info-grid">
                 <section className="ui-info-card">
-                    <h3 className="ui-info-title">Profil</h3>
+                    <h3 className="ui-info-title">{t.security.profile}</h3>
                     <dl className="ui-dl">
-                        <dt>Land</dt><dd>{security.country || '–'}</dd>
-                        <dt>Sektor</dt><dd>{security.sector || '–'}</dd>
-                        <dt>Branche</dt><dd title={security.industry}>{security.industry || '–'}</dd>
-                        <dt>Marktkapitalisierung</dt><dd>{billions(security.marketCap)}</dd>
+                        <dt>{t.security.country}</dt><dd>{security.country || '–'}</dd>
+                        <dt>{t.security.sector}</dt><dd>{security.sector || '–'}</dd>
+                        <dt>{t.security.industry}</dt><dd title={security.industry}>{security.industry || '–'}</dd>
+                        <dt>{t.security.marketCap}</dt><dd>{billions(security.marketCap)}</dd>
                     </dl>
                 </section>
 
                 <section className="ui-info-card">
-                    <h3 className="ui-info-title">Kennzahlen</h3>
+                    <h3 className="ui-info-title">{t.security.keyFigures}</h3>
                     <div className="ui-metric-grid">
-                        <div><span className="ui-label">KGV</span><span className="ui-metric">{ratio(security.trailingPE)}</span></div>
-                        <div><span className="ui-label">KGV erwartet</span><span className="ui-metric">{ratio(security.forwardPE)}</span></div>
-                        <div><span className="ui-label">Gewinn je Aktie</span><span className="ui-metric">{ratio(security.epsTrailingTwelveMonths)}</span></div>
-                        <div><span className="ui-label">Umsatz</span><span className="ui-metric">{security.totalRevenue ? `${formatters.number(security.totalRevenue / 1e9, 2)} Mrd.` : '–'}</span></div>
+                        <div><span className="ui-label">{t.security.pe}</span><span className="ui-metric">{ratio(security.trailingPE)}</span></div>
+                        <div><span className="ui-label">{t.security.forwardPe}</span><span className="ui-metric">{ratio(security.forwardPE)}</span></div>
+                        <div><span className="ui-label">{t.security.eps}</span><span className="ui-metric">{ratio(security.epsTrailingTwelveMonths)}</span></div>
+                        <div><span className="ui-label">{t.security.revenue}</span><span className="ui-metric">{security.totalRevenue ? t.units.billions(formatters.number(security.totalRevenue / 1e9, 2)) : '–'}</span></div>
                     </div>
                 </section>
 
                 <section className="ui-info-card is-wide">
-                    <h3 className="ui-info-title">Dividenden</h3>
+                    <h3 className="ui-info-title">{t.security.dividends}</h3>
                     <div className="ui-metric-grid is-3">
-                        <div><span className="ui-label">Dividendenrendite</span><span className="ui-metric is-up">{formatters.percent((security.dividendYield || 0) * 100)}</span></div>
-                        <div><span className="ui-label">Jährlich (Prognose)</span><span className="ui-metric">{security.annualDividendRate ? money(security.annualDividendRate) : '–'}</span></div>
-                        <div><span className="ui-label">Nächster Ex-Tag</span><span className="ui-metric">{security.upcomingDividends?.[0]?.exDate || '–'}</span></div>
+                        <div><span className="ui-label">{t.security.dividendYield}</span><span className="ui-metric is-up">{formatters.percent((security.dividendYield || 0) * 100)}</span></div>
+                        <div><span className="ui-label">{t.security.annualForecast}</span><span className="ui-metric">{security.annualDividendRate ? money(security.annualDividendRate) : '–'}</span></div>
+                        <div><span className="ui-label">{t.security.nextExDate}</span><span className="ui-metric">{security.upcomingDividends?.[0]?.exDate ? formatters.date(security.upcomingDividends[0].exDate) : '–'}</span></div>
                     </div>
                     {security.dividendHistory && security.dividendHistory.length > 0 && (
                         <div className="ui-chips">
                             {security.dividendHistory.slice(-5).reverse().map((div) => (
                                 <span key={div.date} className="ui-chip-stat">
-                                    <span className="ui-sub">{div.date}</span>
+                                    <span className="ui-sub">{formatters.date(div.date)}</span>
                                     <strong>{money(div.amount)}</strong>
                                 </span>
                             ))}
