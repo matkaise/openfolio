@@ -169,6 +169,141 @@ export const en: Messages = {
         smoothings: { '1d': '1 day', '7d': '7 days', '1m': '1 month' }
     },
 
+    ranges: {
+        short: { '1W': '1W', '1M': '1M', '6M': '6M', YTD: 'YTD', '1J': '1Y', '3J': '3Y', '5J': '5Y', MAX: 'MAX' },
+        long: {
+            '1W': '1 week', '1M': '1 month', '6M': '6 months', YTD: 'year to date', '1J': '1 year', '3J': '3 years', '5J': '5 years', MAX: 'since start'
+        },
+        label: 'Period'
+    },
+
+    assetClasses: {
+        stocks: 'Stocks',
+        etfs: 'ETFs',
+        crypto: 'Crypto',
+        funds: 'Funds',
+        derivatives: 'Derivatives',
+        indices: 'Indices',
+        currencies: 'Currencies',
+        cash: 'Cash',
+        other: 'Other'
+    },
+
+    brokerMethods: { 'degiro-folder': 'Folder sync', 'ibkr-flex': 'Flex API', trading212: 'API', comdirect: 'API with TAN' },
+
+    units: {
+        shares: (quantity: string) => `${quantity} sh.`,
+        billions: (value: string) => `${value} bn`
+    },
+
+    dashboard: {
+        netWorth: 'Net worth',
+        dayChangeTitle: 'Change since the last trading day',
+        today: (percent: string) => `${percent} today`,
+        twr: 'Time-weighted return',
+        mwr: 'Money-weighted return',
+        portfolio: 'Portfolio',
+        legendValue: 'Portfolio',
+        legendReturn: 'Return',
+        legendInvested: 'Paid in',
+        includeDividends: 'Include dividends',
+        chartMode: 'View',
+        modeValue: 'Value',
+        modeReturn: 'Return %',
+        invested: 'Invested',
+        investedSub: 'Cost basis of positions',
+        gain: 'Gain',
+        gainSub: (total: string, range: string) => `${total} total · period ${range}`,
+        annualReturn: 'Return p.a.',
+        historyTooShort: 'History too short',
+        mwrShort: 'Money-weighted (MWR)',
+        cash: 'Cash',
+        cashAccounts: (count: number, currencies: string) => `${count} ${count === 1 ? 'account' : 'accounts'} · ${currencies}`,
+        cashDerived: 'From deposits, income and sales',
+        goal: 'Wealth goal',
+        saveGoal: 'Save goal',
+        cancelEdit: 'Cancel editing',
+        editGoal: 'Edit goal',
+        goalProgress: (percent: string, remaining: string) => `${percent} reached · ${remaining} to go`,
+        topPositions: 'Top positions',
+        showAll: (count: number) => `All ${count} →`,
+        noPositions: 'No positions yet. Add the first ones via “Import” or “+ Transaction”.',
+        ofPortfolio: (percent: string) => `${percent} of portfolio`,
+        dividends: 'Dividends',
+        ytd: (amount: string) => `${amount} YTD`,
+        dividendsChart: 'Dividends of the last 12 months',
+        nextPayment: (date: string, forecast: boolean) => `Next payment · ${date}${forecast ? ' · forecast' : ''}`,
+        noPayouts: 'No planned payouts known.',
+        allocation: 'Allocation',
+        assetClasses: 'Asset classes',
+        nothingToAllocate: 'Nothing to allocate yet.',
+        positions: (count: number) => (count === 1 ? 'position' : 'positions'),
+        connectedBrokers: 'Connected brokers',
+        syncOnOpen: 'Sync on open',
+        noBroker: 'No broker connected yet.',
+        connectBroker: '+ Connect broker',
+        synced: {
+            never: 'not synced yet',
+            now: 'just synced',
+            minutes: (count: number) => `synced ${count} min ago`,
+            hours: (count: number) => `synced ${count} h ago`,
+            days: (count: number) => `synced ${count} days ago`
+        }
+    },
+
+    charts: {
+        noData: 'No data available',
+        noPrices: 'No price data for this period yet.',
+        invested: (amount: string) => `Paid in ${amount}`,
+        price: 'Price',
+        performance: 'Performance',
+        returnSubtitle: 'Performance in the period',
+        emptyTitle: 'No data',
+        emptyText: 'There are no values for this period.'
+    },
+
+    positions: {
+        value: 'Portfolio value',
+        openCount: (count: number) => `${count} open ${count === 1 ? 'position' : 'positions'}`,
+        gain: 'Gain',
+        onCost: (percent: string) => `${percent} on cost`,
+        realized: 'Realized',
+        closedCount: (count: number) => `${count} closed ${count === 1 ? 'position' : 'positions'}`,
+        open: 'Open positions',
+        sort: 'Sort order',
+        sortValue: 'Value',
+        sortReturn: 'Return',
+        sortName: 'Name',
+        emptyTitle: 'No positions yet',
+        emptyText: 'Import your trades or add a transaction.',
+        missingTicker: 'Ticker missing',
+        noPrices: 'No prices',
+        closed: 'Closed positions',
+        closedEmptyTitle: 'No closed positions',
+        closedEmptyText: 'Once you sell a position completely, it appears here with its result.',
+        lastTrade: (date: string) => `last trade ${date}`
+    },
+
+    security: {
+        tradesIn: (currency: string) => `Trades in ${currency}`,
+        buy: 'Buy',
+        sell: 'Sell',
+        profile: 'Profile',
+        country: 'Country',
+        sector: 'Sector',
+        industry: 'Industry',
+        marketCap: 'Market cap',
+        keyFigures: 'Key figures',
+        pe: 'P/E',
+        forwardPe: 'Forward P/E',
+        eps: 'Earnings per share',
+        revenue: 'Revenue',
+        dividends: 'Dividends',
+        dividendYield: 'Dividend yield',
+        annualForecast: 'Annual (forecast)',
+        nextExDate: 'Next ex-date'
+    },
+
     errors: {
         title: 'Something went wrong',
         unknown: 'An unknown error occurred. Your project file was not changed.',

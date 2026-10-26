@@ -170,6 +170,141 @@ export const de = {
         smoothings: { '1d': '1 Tag', '7d': '7 Tage', '1m': '1 Monat' }
     },
 
+    ranges: {
+        short: { '1W': '1W', '1M': '1M', '6M': '6M', YTD: 'YTD', '1J': '1J', '3J': '3J', '5J': '5J', MAX: 'MAX' } as Record<string, string>,
+        long: {
+            '1W': '1 Woche', '1M': '1 Monat', '6M': '6 Monate', YTD: 'seit Jahresbeginn', '1J': '1 Jahr', '3J': '3 Jahre', '5J': '5 Jahre', MAX: 'seit Start'
+        } as Record<string, string>,
+        label: 'Zeitraum'
+    },
+
+    assetClasses: {
+        stocks: 'Einzelaktien',
+        etfs: 'ETFs',
+        crypto: 'Krypto',
+        funds: 'Fonds',
+        derivatives: 'Derivate',
+        indices: 'Indizes',
+        currencies: 'Währungen',
+        cash: 'Cash',
+        other: 'Sonstige'
+    },
+
+    brokerMethods: { 'degiro-folder': 'Ordner-Sync', 'ibkr-flex': 'Flex API', trading212: 'API', comdirect: 'API mit TAN' },
+
+    units: {
+        shares: (quantity: string) => `${quantity} Stk.`,
+        billions: (value: string) => `${value} Mrd.`
+    },
+
+    dashboard: {
+        netWorth: 'Gesamtvermögen',
+        dayChangeTitle: 'Veränderung seit dem letzten Handelstag',
+        today: (percent: string) => `${percent} heute`,
+        twr: 'Zeitgewichtete Rendite',
+        mwr: 'Geldgewichtete Rendite',
+        portfolio: 'Depot',
+        legendValue: 'Depot',
+        legendReturn: 'Rendite',
+        legendInvested: 'Eingezahlt',
+        includeDividends: 'Dividenden einrechnen',
+        chartMode: 'Darstellung',
+        modeValue: 'Wert',
+        modeReturn: 'Rendite %',
+        invested: 'Investiert',
+        investedSub: 'Einstand der Positionen',
+        gain: 'Gewinn',
+        gainSub: (total: string, range: string) => `${total} gesamt · Zeitraum ${range}`,
+        annualReturn: 'Rendite p. a.',
+        historyTooShort: 'Historie zu kurz',
+        mwrShort: 'Geldgewichtet (MWR)',
+        cash: 'Cash',
+        cashAccounts: (count: number, currencies: string) => `${count} ${count === 1 ? 'Konto' : 'Konten'} · ${currencies}`,
+        cashDerived: 'Aus Einzahlungen, Erträgen und Verkäufen',
+        goal: 'Zielvermögen',
+        saveGoal: 'Ziel speichern',
+        cancelEdit: 'Bearbeiten abbrechen',
+        editGoal: 'Ziel bearbeiten',
+        goalProgress: (percent: string, remaining: string) => `${percent} erreicht · noch ${remaining}`,
+        topPositions: 'Top-Positionen',
+        showAll: (count: number) => `Alle ${count} →`,
+        noPositions: 'Noch keine Positionen. Über „Import“ oder „+ Transaktion“ kommen die ersten dazu.',
+        ofPortfolio: (percent: string) => `${percent} vom Depot`,
+        dividends: 'Dividenden',
+        ytd: (amount: string) => `${amount} YTD`,
+        dividendsChart: 'Dividenden der letzten 12 Monate',
+        nextPayment: (date: string, forecast: boolean) => `Nächste Zahlung · ${date}${forecast ? ' · Prognose' : ''}`,
+        noPayouts: 'Keine geplanten Auszahlungen bekannt.',
+        allocation: 'Aufteilung',
+        assetClasses: 'Anlageklassen',
+        nothingToAllocate: 'Noch nichts aufzuteilen.',
+        positions: (count: number): string => (count === 1 ? 'Position' : 'Positionen'),
+        connectedBrokers: 'Verbundene Broker',
+        syncOnOpen: 'Sync beim Öffnen',
+        noBroker: 'Noch kein Broker verbunden.',
+        connectBroker: '+ Broker verbinden',
+        synced: {
+            never: 'noch nicht synchronisiert',
+            now: 'gerade synchronisiert',
+            minutes: (count: number) => `vor ${count} Min. synchronisiert`,
+            hours: (count: number) => `vor ${count} Std. synchronisiert`,
+            days: (count: number) => `vor ${count} Tagen synchronisiert`
+        }
+    },
+
+    charts: {
+        noData: 'Keine Daten verfügbar',
+        noPrices: 'Noch keine Kursdaten für diesen Zeitraum.',
+        invested: (amount: string) => `Eingezahlt ${amount}`,
+        price: 'Kurs',
+        performance: 'Performance',
+        returnSubtitle: 'Wertentwicklung im Zeitraum',
+        emptyTitle: 'Keine Daten',
+        emptyText: 'Für diesen Zeitraum liegen keine Werte vor.'
+    },
+
+    positions: {
+        value: 'Depotwert',
+        openCount: (count: number) => `${count} offene ${count === 1 ? 'Position' : 'Positionen'}`,
+        gain: 'Gewinn',
+        onCost: (percent: string) => `${percent} auf den Einstand`,
+        realized: 'Realisiert',
+        closedCount: (count: number) => `${count} geschlossene ${count === 1 ? 'Position' : 'Positionen'}`,
+        open: 'Offene Positionen',
+        sort: 'Sortierung',
+        sortValue: 'Wert',
+        sortReturn: 'Rendite',
+        sortName: 'Name',
+        emptyTitle: 'Noch keine Positionen',
+        emptyText: 'Importiere deine Trades oder erfasse eine Transaktion.',
+        missingTicker: 'Ticker fehlt',
+        noPrices: 'Ohne Kurse',
+        closed: 'Geschlossene Positionen',
+        closedEmptyTitle: 'Keine geschlossenen Positionen',
+        closedEmptyText: 'Sobald du eine Position vollständig verkaufst, erscheint sie hier mit ihrem Ergebnis.',
+        lastTrade: (date: string) => `letzter Trade ${date}`
+    },
+
+    security: {
+        tradesIn: (currency: string) => `Trades in ${currency}`,
+        buy: 'Kauf',
+        sell: 'Verkauf',
+        profile: 'Profil',
+        country: 'Land',
+        sector: 'Sektor',
+        industry: 'Branche',
+        marketCap: 'Marktkapitalisierung',
+        keyFigures: 'Kennzahlen',
+        pe: 'KGV',
+        forwardPe: 'KGV erwartet',
+        eps: 'Gewinn je Aktie',
+        revenue: 'Umsatz',
+        dividends: 'Dividenden',
+        dividendYield: 'Dividendenrendite',
+        annualForecast: 'Jährlich (Prognose)',
+        nextExDate: 'Nächster Ex-Tag'
+    },
+
     errors: {
         title: 'Etwas ist schiefgelaufen',
         unknown: 'Ein unbekannter Fehler ist aufgetreten. Deine Projektdatei wurde nicht verändert.',

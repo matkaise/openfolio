@@ -11,6 +11,8 @@ import { replayCash } from '@/lib/cashModel';
 import { useProjectActions, useProjectData } from '@/contexts/ProjectContext';
 import { Avatar, CardHeader, Chip, Donut, GlassCard, Kpi, Pill, Segmented, toneOf } from '@/components/ui/primitives';
 import { useFormatters } from '@/components/ui/useFormatters';
+import { useT, type Messages } from '@/lib/i18n';
+import { quoteTypeLabel } from '@/lib/labels';
 import { HeroChart } from '@/components/dashboard/HeroChart';
 import { annualizedReturnFromHistory } from '@/lib/domain/performance/xirr';
 import { getBrokerConnections } from '@/lib/brokers/connections';
@@ -74,31 +76,54 @@ type DashboardProps = {
 };
 
 const RANGES = ['1W', '1M', 'YTD', '1J', '5J', 'MAX'] as const;
-const RANGE_NAMES: Record<string, string> = {
-  '1W': '1 Woche', '1M': '1 Monat', '6M': '6 Monate', YTD: 'seit Jahresbeginn', '1J': '1 Jahr', '3J': '3 Jahre', '5J': '5 Jahre', MAX: 'seit Start'
-};
-const QUOTE_TYPE_LABELS: Record<string, string> = { Stock: 'Aktie', ETF: 'ETF', Fund: 'Fonds', Crypto: 'Krypto', Bond: 'Anleihe' };
-const BROKER_LABELS: Record<BrokerConnection['kind'], { name: string; short: string; method: string }> = {
-  'degiro-folder': { name: 'DEGIRO', short: 'DG', method: 'Ordner-Sync' },
-  'ibkr-flex': { name: 'Interactive Brokers', short: 'IB', method: 'Flex API' },
-  trading212: { name: 'Trading 212', short: 'T2', method: 'API' },
-  comdirect: { name: 'comdirect', short: 'CD', method: 'API mit TAN' }
+const BROKER_LABELS: Record<BrokerConnection['kind'], { name: string; short: string }> = {
+  'degiro-folder': { name: 'DEGIRO', short: 'DG' },
+  'ibkr-flex': { name: 'Interactive Brokers', short: 'IB' },
+  trading212: { name: 'Trading 212', short: 'T2' },
+  comdirect: { name: 'comdirect', short: 'CD' }
 };
 
-const relativeTime = (iso: string | undefined, nowMs: number) => {
-  if (!iso) return 'noch nicht synchronisiert';
+const relativeTime = (t: Messages, iso: string | undefined, nowMs: number) => {
+  if (!iso) return t.dashboard.synced.never;
   const minutes = Math.round((nowMs - Date.parse(iso)) / 60000);
-  if (minutes < 1) return 'gerade synchronisiert';
-  if (minutes < 60) return `vor ${minutes} Min. synchronisiert`;
+  if (minutes < 1) return t.dashboard.synced.now;
+  if (minutes < 60) return t.dashboard.synced.minutes(minutes);
   const hours = Math.round(minutes / 60);
-  if (hours < 48) return `vor ${hours} Std. synchronisiert`;
-  return `vor ${Math.round(hours / 24)} Tagen synchronisiert`;
+  if (hours < 48) return t.dashboard.synced.hours(hours);
+  return t.dashboard.synced.days(Math.round(hours / 24));
+};
+
+type AssetClass = keyof Messages['assetClasses'];
+// Yahoo quote types and our own security types
+const ASSET_CLASS_BY_TYPE: Record<string, AssetClass> = {
+  EQUITY: 'stocks',
+  STOCK: 'stocks',
+  ETF: 'etfs',
+  CRYPTOCURRENCY: 'crypto',
+  CRYPTO: 'crypto',
+  MUTUALFUND: 'funds',
+  FUND: 'funds',
+  FUTURE: 'derivatives',
+  INDEX: 'indices',
+  CURRENCY: 'currencies'
+};
+const ASSET_CLASS_COLORS: Record<AssetClass, string> = {
+  stocks: 'var(--c2)',
+  etfs: 'var(--c1)',
+  cash: 'var(--c3)',
+  crypto: 'var(--c5)',
+  funds: 'var(--c4)',
+  derivatives: 'var(--loss)',
+  indices: 'var(--text3)',
+  currencies: 'var(--text3)',
+  other: 'var(--text3)'
 };
 
 export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds, onSelectPortfolios, onSelectSecurity, onShowPortfolio, onShowBrokers, includeDividends, onToggleDividends }: DashboardProps) => {
   const project = useProjectData();
   const { updateProject } = useProjectActions();
   const formatters = useFormatters();
+  const t = useT();
   const [nowMs] = useState(() => Date.now());
   const [chartMode, setChartMode] = useState<'value' | 'performance'>('value');
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
@@ -272,7 +297,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
     if (!project) {
       return {
         ytdValue: 0,
-        nextPayout: null as null | { name: string; amount: number; date: string },
+        nextPayout: null as null | { name: string; amount: number; date: Date },
         monthlyBars1J: new Array(12).fill(0),
         monthlyBarsYTD: [],
         isTheoretical: false
@@ -436,7 +461,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
 
     return {
       ytdValue,
-      nextPayout: next ? { name: next.name, amount: next.amount, date: next.date.toLocaleDateString('de-DE') } : null,
+      nextPayout: next ? { name: next.name, amount: next.amount, date: next.date } : null,
       monthlyBars1J,
       monthlyBarsYTD,
       isTheoretical: dividendsTx.length === 0
@@ -445,63 +470,34 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
 
   // Calculate Allocation Data
   const allocationData = useMemo(() => {
-    const groups: Record<string, { value: number; count: number }> = {};
+    const groups: Partial<Record<AssetClass, { value: number; count: number }>> = {};
     let totalValue = 0;
 
     holdings.forEach(h => {
-      // Normalize type
-      const type = h.security.quoteType || 'Sonstige';
-      // Yahoo types normalization
-      const yahooTypeMap: Record<string, string> = {
-        'EQUITY': 'Einzelaktien',
-        'ETF': 'ETFs',
-        'CRYPTOCURRENCY': 'Krypto',
-        'MUTUALFUND': 'Fonds',
-        'FUTURE': 'Derivate',
-        'INDEX': 'Indizes',
-        'CURRENCY': 'Währungen'
-      };
-
-      const normalizedType = yahooTypeMap[type.toUpperCase()] || (type === 'Stock' ? 'Einzelaktien' : type);
-
-      if (!groups[normalizedType]) groups[normalizedType] = { value: 0, count: 0 };
-      groups[normalizedType].value += h.value;
-      groups[normalizedType].count += 1;
+      const assetClass = ASSET_CLASS_BY_TYPE[(h.security.quoteType || '').toUpperCase()] || 'other';
+      const group = groups[assetClass] ?? (groups[assetClass] = { value: 0, count: 0 });
+      group.value += h.value;
+      group.count += 1;
       totalValue += h.value;
     });
 
     // Show positive cash as separate allocation bucket.
     if (cashBalance > 0.000001) {
-      groups['Cash'] = {
-        value: cashBalance,
-        count: 1
-      };
+      groups.cash = { value: cashBalance, count: 1 };
       totalValue += cashBalance;
     }
 
-    // Define colors
-    const colorMap: Record<string, string> = {
-      'Einzelaktien': 'var(--c2)',
-      'Aktie': 'var(--c2)',
-      'ETFs': 'var(--c1)',
-      'Cash': 'var(--c3)',
-      'Krypto': 'var(--c5)',
-      'Fonds': 'var(--c4)',
-      'Derivate': 'var(--loss)',
-      'Sonstige': 'var(--text3)'
-    };
-
-    return Object.entries(groups)
-      .map(([name, data]) => ({
-        id: name,
-        name,
+    return (Object.entries(groups) as [AssetClass, { value: number; count: number }][])
+      .map(([assetClass, data]) => ({
+        id: assetClass,
+        name: t.assetClasses[assetClass],
         value: data.value,
         count: data.count,
         percentage: totalValue > 0 ? (data.value / totalValue) * 100 : 0,
-        color: colorMap[name] || 'var(--text3)'
+        color: ASSET_CLASS_COLORS[assetClass]
       }))
       .sort((a, b) => b.value - a.value);
-  }, [holdings, cashBalance]);
+  }, [holdings, cashBalance, t]);
 
   const totalHoldingsValue = holdings.reduce((sum, h) => sum + h.value, 0);
   const totalParts = formatters.moneyParts(currentMaketValue);
@@ -522,34 +518,34 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
 
   const monthLabels = Array.from({ length: 12 }, (_, i) => {
     const d = new Date(new Date(nowMs).getFullYear(), new Date(nowMs).getMonth() - 11 + i, 1);
-    return d.toLocaleDateString('de-DE', { month: 'narrow' });
+    return formatters.date(d, { month: 'narrow' });
   });
   const dividendBars = dividendSummary.monthlyBars1J;
   const maxDividendBar = Math.max(...dividendBars, 0);
 
   return (
     <>
-      <GlassCard className="hero anim-in anim-in-1" aria-label="Gesamtvermögen">
+      <GlassCard className="hero anim-in anim-in-1" aria-label={t.dashboard.netWorth}>
         <div className="hero-top">
           <div>
-            <div className="ui-label">Gesamtvermögen</div>
+            <div className="ui-label">{t.dashboard.netWorth}</div>
             <div className="hero-big">
               {totalParts.main}<span className="hero-big-rest">{totalParts.rest}</span>
             </div>
             <div className="hero-row">
-              <Pill tone={toneOf(dayChangeValue)} title="Veränderung seit dem letzten Handelstag">
+              <Pill tone={toneOf(dayChangeValue)} title={t.dashboard.dayChangeTitle}>
                 {dayChangeValue >= 0 ? '↑' : '↓'} {formatters.money(Math.abs(dayChangeValue))}
               </Pill>
-              <Pill tone={toneOf(dayChangePercent)}>{formatters.percent(dayChangePercent, { sign: true })} heute</Pill>
-              <Pill tone="neutral" title={performanceMethod === 'TWR' ? 'Zeitgewichtete Rendite' : 'Geldgewichtete Rendite'}>
-                {formatters.percent(rangePerformance, { sign: true, decimals: 1 })} · {RANGE_NAMES[timeRange] || timeRange}
+              <Pill tone={toneOf(dayChangePercent)}>{t.dashboard.today(formatters.percent(dayChangePercent, { sign: true }))}</Pill>
+              <Pill tone="neutral" title={performanceMethod === 'TWR' ? t.dashboard.twr : t.dashboard.mwr}>
+                {formatters.percent(rangePerformance, { sign: true, decimals: 1 })} · {t.ranges.long[timeRange] || timeRange}
               </Pill>
             </div>
           </div>
           <div className="hero-controls">
             {portfolios.length > 1 && (
-              <div className="hero-row" role="group" aria-label="Depot">
-                <Chip active={selectedPortfolioIds.length === 0} onClick={() => onSelectPortfolios([])}>Alle</Chip>
+              <div className="hero-row" role="group" aria-label={t.dashboard.portfolio}>
+                <Chip active={selectedPortfolioIds.length === 0} onClick={() => onSelectPortfolios([])}>{t.common.all}</Chip>
                 {portfolios.map((portfolio) => (
                   <Chip
                     key={portfolio.id}
@@ -562,8 +558,8 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
               </div>
             )}
             <Segmented
-              ariaLabel="Zeitraum"
-              options={RANGES.map((range) => ({ value: range, label: range }))}
+              ariaLabel={t.ranges.label}
+              options={RANGES.map((range) => ({ value: range, label: t.ranges.short[range] }))}
               value={(RANGES as readonly string[]).includes(timeRange) ? timeRange as typeof RANGES[number] : 'MAX'}
               onChange={(range) => setTimeRange(range)}
             />
@@ -574,17 +570,17 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
 
         <div className="hero-row" style={{ justifyContent: 'space-between' }}>
           <div className="hero-legend">
-            <span><i aria-hidden="true" />{chartMode === 'value' ? 'Depot' : 'Rendite'}</span>
-            {chartMode === 'value' && <span><i className="is-invested" aria-hidden="true" />Eingezahlt</span>}
+            <span><i aria-hidden="true" />{chartMode === 'value' ? t.dashboard.legendValue : t.dashboard.legendReturn}</span>
+            {chartMode === 'value' && <span><i className="is-invested" aria-hidden="true" />{t.dashboard.legendInvested}</span>}
           </div>
           <div className="hero-row">
             {chartMode === 'performance' && (
-              <Chip active={includeDividends} onClick={onToggleDividends}>Dividenden einrechnen</Chip>
+              <Chip active={includeDividends} onClick={onToggleDividends}>{t.dashboard.includeDividends}</Chip>
             )}
             <Segmented
               size="sm"
-              ariaLabel="Darstellung"
-              options={[{ value: 'value', label: 'Wert' }, { value: 'performance', label: 'Rendite %' }]}
+              ariaLabel={t.dashboard.chartMode}
+              options={[{ value: 'value', label: t.dashboard.modeValue }, { value: 'performance', label: t.dashboard.modeReturn }]}
               value={chartMode}
               onChange={setChartMode}
             />
@@ -593,37 +589,37 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       </GlassCard>
 
       <div className="dash-kpis anim-in anim-in-2">
-        <Kpi label="Investiert" value={formatters.money(investedCapital, { decimals: 0 })} sub="Einstand der Positionen" icon="€" tone="accent" />
+        <Kpi label={t.dashboard.invested} value={formatters.money(investedCapital, { decimals: 0 })} sub={t.dashboard.investedSub} icon="€" tone="accent" />
         <Kpi
-          label="Gewinn"
+          label={t.dashboard.gain}
           value={formatters.money(totalReturn, { decimals: 0, sign: true })}
           valueTone={toneOf(totalReturn)}
-          sub={`${formatters.percent(totalReturnPercent, { sign: true, decimals: 1 })} gesamt · Zeitraum ${formatters.money(rangeProfit, { decimals: 0, sign: true })}`}
+          sub={t.dashboard.gainSub(formatters.percent(totalReturnPercent, { sign: true, decimals: 1 }), formatters.money(rangeProfit, { decimals: 0, sign: true }))}
           icon="↗"
           tone="gain"
         />
         <Kpi
-          label="Rendite p. a."
+          label={t.dashboard.annualReturn}
           value={annualizedReturn === null ? '–' : formatters.percent(annualizedReturn * 100, { decimals: 1 })}
           valueTone={annualizedReturn === null ? undefined : toneOf(annualizedReturn)}
-          sub={annualizedReturn === null ? 'Historie zu kurz' : 'Geldgewichtet (MWR)'}
+          sub={annualizedReturn === null ? t.dashboard.historyTooShort : t.dashboard.mwrShort}
           icon="%"
           tone="teal"
         />
         <Kpi
-          label="Cash"
+          label={t.dashboard.cash}
           value={formatters.money(cashBalance, { decimals: 0 })}
           valueTone={cashBalance < 0 ? 'down' : undefined}
           sub={cashAccountsWithBalance.length > 0
-            ? `${cashAccountsWithBalance.length} ${cashAccountsWithBalance.length === 1 ? 'Konto' : 'Konten'} · ${cashCurrencies.join(', ')}`
-            : 'Aus Einzahlungen, Erträgen und Verkäufen'}
+            ? t.dashboard.cashAccounts(cashAccountsWithBalance.length, cashCurrencies.join(', '))
+            : t.dashboard.cashDerived}
           icon="◎"
           tone="amber"
         />
       </div>
 
       <div className="dash-goal glass anim-in anim-in-2">
-        <span className="ui-label">Zielvermögen</span>
+        <span className="ui-label">{t.dashboard.goal}</span>
         {isEditingGoal ? (
           <span className="hero-row">
             <input
@@ -636,30 +632,30 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
               inputMode="numeric"
               autoFocus
               className="md3-field w-32 px-3 text-sm font-bold outline-none"
-              aria-label="Zielvermögen"
+              aria-label={t.dashboard.goal}
             />
-            <button type="button" onClick={saveGoalEdit} className="md3-icon-btn" aria-label="Ziel speichern"><Check size={15} /></button>
-            <button type="button" onClick={cancelGoalEdit} className="md3-icon-btn" aria-label="Bearbeiten abbrechen"><X size={15} /></button>
+            <button type="button" onClick={saveGoalEdit} className="md3-icon-btn" aria-label={t.dashboard.saveGoal}><Check size={15} /></button>
+            <button type="button" onClick={cancelGoalEdit} className="md3-icon-btn" aria-label={t.dashboard.cancelEdit}><X size={15} /></button>
           </span>
         ) : (
-          <button type="button" onClick={startGoalEdit} className="ui-link" title="Ziel bearbeiten">
+          <button type="button" onClick={startGoalEdit} className="ui-link" title={t.dashboard.editGoal}>
             {formatters.money(wealthGoal, { decimals: 0 })} <PenLine size={12} className="inline" />
           </button>
         )}
         <div className="dash-goal-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(wealthGoalProgress)}>
           <div className="dash-goal-fill" style={{ width: `${wealthGoalProgress}%` }} />
         </div>
-        <span className="ui-sub">{formatters.percent(wealthGoalProgress, { decimals: 1 })} erreicht · noch {formatters.money(wealthGoalRemaining, { decimals: 0 })}</span>
+        <span className="ui-sub">{t.dashboard.goalProgress(formatters.percent(wealthGoalProgress, { decimals: 1 }), formatters.money(wealthGoalRemaining, { decimals: 0 }))}</span>
       </div>
 
       <div className="dash-grid">
         <div className="dash-col">
           <GlassCard className="anim-in anim-in-3">
-            <CardHeader title="Top-Positionen">
-              {holdings.length > 0 && <button type="button" className="ui-link" onClick={onShowPortfolio}>Alle {holdings.length} →</button>}
+            <CardHeader title={t.dashboard.topPositions}>
+              {holdings.length > 0 && <button type="button" className="ui-link" onClick={onShowPortfolio}>{t.dashboard.showAll(holdings.length)}</button>}
             </CardHeader>
             {topHoldings.length === 0 ? (
-              <p className="ui-sub">Noch keine Positionen. Über „Import“ oder „+ Transaktion“ kommen die ersten dazu.</p>
+              <p className="ui-sub">{t.dashboard.noPositions}</p>
             ) : topHoldings.map((holding) => {
               const security = project?.securities?.[holding.security.isin];
               const weight = totalHoldingsValue > 0 ? (holding.value / totalHoldingsValue) * 100 : 0;
@@ -674,12 +670,12 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
                   <span style={{ minWidth: 0 }}>
                     <span className="dash-pos-name" style={{ display: 'block' }}>{holding.security.name}</span>
                     <span className="dash-pos-meta" style={{ display: 'block' }}>
-                      {QUOTE_TYPE_LABELS[holding.security.quoteType || ''] || 'Wertpapier'} · {formatters.number(holding.quantity, holding.quantity % 1 === 0 ? 0 : 3)} Stk.
+                      {quoteTypeLabel(t, holding.security.quoteType)} · {t.units.shares(formatters.number(holding.quantity, holding.quantity % 1 === 0 ? 0 : 3))}
                     </span>
                   </span>
                   <span>
                     <span className="dash-pos-value" style={{ display: 'block' }}>{formatters.money(holding.value)}</span>
-                    <span className="dash-pos-weight" style={{ display: 'block' }}>{formatters.percent(weight, { decimals: 1 })} vom Depot</span>
+                    <span className="dash-pos-weight" style={{ display: 'block' }}>{t.dashboard.ofPortfolio(formatters.percent(weight, { decimals: 1 }))}</span>
                   </span>
                   <Pill tone={toneOf(holding.totalReturnPercent)} className="dash-pos-perf">
                     {formatters.percent(holding.totalReturnPercent, { sign: true, decimals: 1 })}
@@ -690,10 +686,10 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
           </GlassCard>
 
           <GlassCard className="anim-in anim-in-4">
-            <CardHeader title="Dividenden">
-              <Pill tone={dividendSummary.ytdValue > 0 ? 'up' : 'neutral'}>{formatters.money(dividendSummary.ytdValue, { decimals: 0 })} YTD</Pill>
+            <CardHeader title={t.dashboard.dividends}>
+              <Pill tone={dividendSummary.ytdValue > 0 ? 'up' : 'neutral'}>{t.dashboard.ytd(formatters.money(dividendSummary.ytdValue, { decimals: 0 }))}</Pill>
             </CardHeader>
-            <div className="dash-bars" role="img" aria-label="Dividenden der letzten 12 Monate">
+            <div className="dash-bars" role="img" aria-label={t.dashboard.dividendsChart}>
               {dividendBars.map((value, index) => (
                 <div className="dash-bar-col" key={index} title={`${monthLabels[index]}: ${formatters.money(value)}`}>
                   <div
@@ -708,27 +704,27 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
               <div className="dash-next">
                 <span>
                   <span className="dash-next-title" style={{ display: 'block' }}>{dividendSummary.nextPayout.name}</span>
-                  <span className="ui-sub">Nächste Zahlung · {dividendSummary.nextPayout.date}{dividendSummary.isTheoretical ? ' · Prognose' : ''}</span>
+                  <span className="ui-sub">{t.dashboard.nextPayment(formatters.date(dividendSummary.nextPayout.date), dividendSummary.isTheoretical)}</span>
                 </span>
                 <span className="dash-next-value">≈ {formatters.money(dividendSummary.nextPayout.amount)}</span>
               </div>
             ) : (
-              <p className="ui-sub mt-4">Keine geplanten Auszahlungen bekannt.</p>
+              <p className="ui-sub mt-4">{t.dashboard.noPayouts}</p>
             )}
           </GlassCard>
         </div>
 
         <div className="dash-col">
           <GlassCard className="anim-in anim-in-3">
-            <CardHeader title="Aufteilung"><span className="ui-sub">Anlageklassen</span></CardHeader>
+            <CardHeader title={t.dashboard.allocation}><span className="ui-sub">{t.dashboard.assetClasses}</span></CardHeader>
             {allocationData.length === 0 ? (
-              <p className="ui-sub">Noch nichts aufzuteilen.</p>
+              <p className="ui-sub">{t.dashboard.nothingToAllocate}</p>
             ) : (
               <div className="dash-donut">
                 <Donut
                   segments={allocationData.map((item) => ({ label: item.name, value: item.value, color: item.color }))}
                   centerValue={holdings.length}
-                  centerLabel={holdings.length === 1 ? 'Position' : 'Positionen'}
+                  centerLabel={t.dashboard.positions(holdings.length)}
                 />
                 <div className="dash-legend">
                   {allocationData.map((item) => (
@@ -744,8 +740,8 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
           </GlassCard>
 
           <GlassCard className="anim-in anim-in-4">
-            <CardHeader title="Verbundene Broker"><span className="ui-sub">{connections.length > 0 ? 'Sync beim Öffnen' : ''}</span></CardHeader>
-            {connections.length === 0 && <p className="ui-sub">Noch kein Broker verbunden.</p>}
+            <CardHeader title={t.dashboard.connectedBrokers}><span className="ui-sub">{connections.length > 0 ? t.dashboard.syncOnOpen : ''}</span></CardHeader>
+            {connections.length === 0 && <p className="ui-sub">{t.dashboard.noBroker}</p>}
             {connections.map((connection) => {
               const info = BROKER_LABELS[connection.kind];
               return (
@@ -755,14 +751,14 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
                     <span className="dash-broker-name" style={{ display: 'block' }}>{info.name}</span>
                     <span className="dash-broker-meta">
                       <span className={connection.lastCheckedAt ? 'app-live' : 'app-live is-warn'} aria-hidden="true" />
-                      {relativeTime(connection.lastCheckedAt, nowMs)}
+                      {relativeTime(t, connection.lastCheckedAt, nowMs)}
                     </span>
                   </span>
-                  <span className="dash-broker-tag">{info.method}</span>
+                  <span className="dash-broker-tag">{t.brokerMethods[connection.kind]}</span>
                 </div>
               );
             })}
-            <button type="button" onClick={onShowBrokers} className="md3-tonal-btn mt-3 w-full text-sm">+ Broker verbinden</button>
+            <button type="button" onClick={onShowBrokers} className="md3-tonal-btn mt-3 w-full text-sm">{t.dashboard.connectBroker}</button>
           </GlassCard>
         </div>
       </div>
