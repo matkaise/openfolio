@@ -70,6 +70,10 @@ export const fileImportDe = {
             'en-15': 'CSV, Englisch (15 Spalten, mit Nettobetrag in Kontowährung)',
             'de-15': 'CSV, Deutsch (15 Spalten, mit Nettobetrag in Kontowährung)',
             'de-13': 'CSV, Deutsch (13 Spalten)'
+        },
+        saxo: {
+            booked: 'Transaktionsexport (aus Excel als CSV gespeichert, Spalte „Booked Amount“)',
+            amount: 'Transaktionsexport (aus Excel als CSV gespeichert, ältere Spalte „Amount“)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -158,6 +162,39 @@ export const fileImportDe = {
             limits: [
                 'Dividenden werden mit dem Nettobetrag gebucht, da der Export keinen Bruttobetrag mit Steuer enthält.',
                 'Das Format ist nur mit synthetischen Dateien nach öffentlichen Beispielen getestet, nicht mit aktuellen Original-Exporten.'
+            ]
+        },
+        saxo: {
+            scope: 'Saxo-Handelskonten (Saxo Bank und andere Saxo-Gesellschaften): Export der Transaktionsübersicht. Kein Portfolio- oder Positionsbericht.',
+            steps: [
+                'Bei Saxo (SaxoTrader oder SaxoInvestor) anmelden und im Kontobereich Transaktionen (Transactions) öffnen; alternativ oben rechts über das Profil → Transaction overview.',
+                'Den Zeitraum möglichst ab Kontoeröffnung einstellen und die Filter Trades, Corporate actions und Cash transfers eingeschaltet lassen.',
+                'Auf Export klicken und Excel wählen. Saxo liefert eine XLSX-Datei.',
+                'Die XLSX-Datei in Excel oder LibreOffice öffnen und mit Datei → Speichern unter als CSV speichern (Trennzeichen Komma oder Semikolon).',
+                'Die CSV-Datei hier ablegen.'
+            ],
+            settings: [
+                'XLSX-Dateien werden nicht direkt gelesen. Beim Speichern als CSV keine Spalten löschen und keine Zahlen- oder Datumsformate ändern.',
+                'Datum wie im Export (z. B. 02-Apr-2025) oder als 2025-04-02 bzw. 02.04.2025. Datumsangaben mit Schrägstrich sind mehrdeutig und werden abgelehnt.',
+                'Beträge mit Dezimalkomma oder Dezimalpunkt, aber innerhalb der Datei einheitlich.',
+                'Englische Oberfläche empfohlen. Niederländische Exporte werden für Käufe (Koop) gelesen.'
+            ],
+            accounts: 'Je Saxo-Konto ein eigenes Depot verwenden. Die Kontowährung ergibt sich aus den Kontobewegungen der Datei; stehen dort mehrere Währungen, erscheinen umgerechnete Buchungen als nicht übernommen. Überlappende Exporte werden nicht doppelt gebucht.',
+            supported: [
+                'Käufe und Verkäufe (Buy/Sell, Koop/Verkoop) mit Stückzahl und Kurs aus dem Buchungstext; die Differenz zum gebuchten Betrag als Gebühr',
+                'Käufe und Verkäufe in Fremdwährung; die Umrechnung wird als interne Umbuchung zwischen Konto- und Instrumentwährung gebucht',
+                'Dividenden (Nettobetrag wie gebucht) und Quellensteuer, wenn sie als eigene Zeile im Export steht',
+                'Ein- und Auszahlungen, Depot- und andere Gebühren, Zinsen'
+            ],
+            unsupported: [
+                'Kapitalmaßnahmen außer Dividenden (Splits, Spin-offs, Fusionen), Depotüberträge und unbekannte Buchungstexte: erscheinen als nicht übernommen.',
+                'Optionen, Futures und CFDs (Spalte „From Derivative“ = Yes) erscheinen als nicht übernommen.',
+                'Zeilen ohne ISIN werden nicht über das Symbol einem Wertpapier zugeordnet.'
+            ],
+            limits: [
+                'Bei Käufen in Fremdwährung stecken Gebühren und Umrechnungskosten im umgerechneten Betrag und werden nicht getrennt ausgewiesen.',
+                'Quellensteuer wird nicht geschätzt. Niederländische Texte für Kontobewegungen, Zinsen und Steuern sind nicht durch öffentliche Beispiele belegt.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
             ]
         }
     } as Record<string, ImportGuide>

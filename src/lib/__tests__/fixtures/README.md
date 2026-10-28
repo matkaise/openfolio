@@ -21,3 +21,9 @@ Never copy rows from a real export into this folder.
   currency conversion. Covers a deposit, a market buy with conversion fee, a GBX limit buy with stamp duty in
   GBP, a dividend with withholding tax, interest, a sell, a currency conversion, a withdrawal, plus a stock
   split and a card payment (both not supported, must be reported).
+- `saxo.csv`: Saxo transactions export as Excel saves it as CSV (comma separated, amounts with decimal comma in
+  quotes), 15-column variant with "Booked Amount", newest row first. EUR account: a deposit, EUR buys and a sell
+  whose booked amount includes costs, a USD and a GBX buy converted into EUR (conversion rate ≠ 1), dividends
+  (one converted), a withholding tax row, custody fee, interest, a withdrawal, two identical buys without order
+  id, a Dutch buy ("Koop", month "mei") and a stock split (not supported, must be reported). Cash ends at
+  EUR 2404.73, USD 0 and GBX 0.
