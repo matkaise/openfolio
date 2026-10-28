@@ -17,3 +17,10 @@ Never copy rows from a real export into this folder.
   split (not supported, must be reported).
 - `swissquote-de.csv`: Swissquote export in German, 15 columns, CHF account buying a USD security: net amount
   in USD and in the account currency. Ends at CHF 807.84 and USD 0.
+- `traderepublic.csv`: Trade Republic transaction export (Transaktionsexport), comma separated and quoted, one EUR
+  account. Generated row by row; `amount + fee + tax` of all booked rows ends at EUR 2143.79 (the crypto buy is not
+  booked). Holdings at the end: 6 DE0000000001, 1.234567 IE0000000002, 20 US0000000003, 0 of the matured bond.
+  Covers a card top-up with fee, a transfer in, partial fills, a savings plan buy, a crypto buy (not supported),
+  Vorabpauschale with tax and one without (ignored), interest with tax, a USD dividend with tax, its reversal and
+  re-booking, a card payment, Saveback, a sale with fee and tax, a bond coupon, redemption (ignored) and final
+  maturity, a withdrawal, a split (not supported) and a tax optimisation refund. Names, IBANs and ids are made up.
