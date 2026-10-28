@@ -1,0 +1,9 @@
+ID;Type;Time;Symbol;Comment;Amount
+2001;Deposit;02.01.2025 09:00:00;;Deposit, id=1;1000
+2002;Stocks/ETF purchase;03.01.2025 10:00:00;ACME.DE;OPEN BUY 4 @ 50.00;-200
+2003;Stocks/ETF purchase;03.01.2025 10:00:00;ACME.DE;OPEN BUY 4 @ 50.00;-200
+2004;Free funds interests;03.02.2025 18:00:00;;Free-funds Interest 2025-01;0.75
+2005;Free funds interests tax;03.02.2025 18:00:00;;Free-funds Interest Tax 2025-01;-0.14
+2006;Dividend;14.03.2025 11:00:00;ACME.DE;ACME.DE EUR 0.5000/ SHR;4
+2007;Withholding tax;14.03.2025 11:00:00;ACME.DE;ACME.DE EUR WHT 26.375%;-1.06
+2008;Profit/Loss (FX/CFD);20.03.2025 01:00:00;EURUSD;Profit of position #700;0.13
