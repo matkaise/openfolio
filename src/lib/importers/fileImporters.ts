@@ -3,6 +3,7 @@ import { revolutFileImporter } from './revolut';
 import { saxoFileImporter } from './saxo';
 import { schwabFileImporter } from './schwab';
 import { swissquoteFileImporter } from './swissquote';
+import { tradeRepublicFileImporter } from './traderepublic';
 import { trading212FileImporter } from './trading212Csv';
 import { FileImportError, mergeFileImports, type FileImporter, type FileImportResult } from './fileImport';
 
@@ -10,6 +11,7 @@ import { FileImportError, mergeFileImports, type FileImporter, type FileImportRe
 export const FILE_IMPORTERS: FileImporter[] = [
     degiroFileImporter,
     swissquoteFileImporter,
+    tradeRepublicFileImporter,
     trading212FileImporter,
     saxoFileImporter,
     schwabFileImporter,

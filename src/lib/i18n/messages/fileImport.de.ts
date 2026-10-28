@@ -54,7 +54,8 @@ export const fileImportDe = {
         unknownFormat: 'Das Dateiformat wurde nicht erkannt. Bitte den Export gemäß Anleitung erstellen; bei mehreren Dateien müssen alle vom selben Broker stammen.',
         noRows: 'Die Datei enthält keine Buchungszeilen.',
         invalidNumber: (line?: number) => `Zahl in unerwartetem Format${line ? ` (Zeile ${line})` : ''}. Bitte Export und Spracheinstellung prüfen.`,
-        invalidDate: (line?: number) => `Datum in unerwartetem Format${line ? ` (Zeile ${line})` : ''}. Bitte Export und Spracheinstellung prüfen.`
+        invalidDate: (line?: number) => `Datum in unerwartetem Format${line ? ` (Zeile ${line})` : ''}. Bitte Export und Spracheinstellung prüfen.`,
+        severalAccounts: 'Die Datei enthält Buchungen mehrerer Konten (z. B. Hauptkonto und Junior-Depot). Bitte je Konto einen eigenen Export erstellen und in ein eigenes Depot importieren.'
     },
     variants: {
         degiro: {
@@ -70,6 +71,10 @@ export const fileImportDe = {
             'en-15': 'CSV, Englisch (15 Spalten, mit Nettobetrag in Kontowährung)',
             'de-15': 'CSV, Deutsch (15 Spalten, mit Nettobetrag in Kontowährung)',
             'de-13': 'CSV, Deutsch (13 Spalten)'
+        },
+        traderepublic: {
+            comma: 'Transaktionsexport CSV (Komma)',
+            semicolon: 'Transaktionsexport CSV (Semikolon)'
         },
         saxo: {
             booked: 'Transaktionsexport (aus Excel als CSV gespeichert, Spalte „Booked Amount“)',
@@ -170,6 +175,37 @@ export const fileImportDe = {
             ],
             limits: [
                 'Dividenden werden mit dem Nettobetrag gebucht, da der Export keinen Bruttobetrag mit Steuer enthält.',
+                'Das Format ist nur mit synthetischen Dateien nach öffentlichen Beispielen getestet, nicht mit aktuellen Original-Exporten.'
+            ]
+        },
+        traderepublic: {
+            scope: 'Trade-Republic-Konten (Depot und Verrechnungskonto); der native Transaktionsexport, den es seit April 2026 gibt. Nicht für CSV-Dateien des Tools pytr oder für PDF-Abrechnungen.',
+            steps: [
+                'In der Trade-Republic-App auf das Profilbild tippen (je nach App-Version „Profil“ oder „Service“).',
+                'Kontoauszüge → Transaktionsexport öffnen.',
+                'Den Zeitraum wählen, möglichst ab Kontoeröffnung, und Erstellen bzw. Teilen tippen.',
+                'Die CSV-Datei unverändert hier ablegen.'
+            ],
+            settings: [
+                'Möglichst den vollständigen Zeitraum exportieren: Bestände und Kassenstand ergeben sich nur aus der vollständigen Historie.',
+                'Datei nicht in Excel öffnen und neu speichern: Trennzeichen und Zahlenformat könnten sich ändern.'
+            ],
+            accounts: 'Hauptkonto und Junior-Depot getrennt exportieren und in getrennte Depots importieren; eine Datei mit mehreren Konten wird abgelehnt. Wiederholte oder überlappende Exporte werden anhand der Transaktions-ID nicht doppelt gebucht.',
+            supported: [
+                'Käufe und Verkäufe (auch Sparpläne und Bruchstücke) mit Gebühr; Steuern auf Verkäufe als eigene Steuerbuchung',
+                'Dividenden und Ausschüttungen brutto mit einbehaltener Steuer; Stornos und Neuabrechnungen von Dividenden',
+                'Zinsen auf das Guthaben mit Steuer, Anleihekupons, Rückzahlung fälliger Anleihen und Optionsscheine',
+                'Vorabpauschale, Steueroptimierung und Steuererstattungen',
+                'Ein- und Auszahlungen, Überweisungen, Kartenzahlungen und -erstattungen, Geschenke, Saveback und Prämien; Gebühren für Karten-Aufladungen als eigene Gebühr'
+            ],
+            unsupported: [
+                'Kryptowährungen: Der Export enthält dafür keine ISIN; die Zeilen erscheinen als nicht übernommen.',
+                'Private-Markets-Vorauszahlungen, Splits, Fusionen, Umtausch und andere Kapitalmaßnahmen sowie unbekannte Buchungstypen: erscheinen in der Vorschau als nicht übernommen.'
+            ],
+            limits: [
+                'Saveback und Prämien werden als Einzahlung gebucht, nicht als Ertrag.',
+                'Die Steuer auf Dividenden ist im Export eine Summe aus Quellen- und Abgeltungsteuer und wird nicht aufgeteilt.',
+                'Der Export enthält keine Kontostände; der Kassenstand wird aus den Buchungen berechnet.',
                 'Das Format ist nur mit synthetischen Dateien nach öffentlichen Beispielen getestet, nicht mit aktuellen Original-Exporten.'
             ]
         },
