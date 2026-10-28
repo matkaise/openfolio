@@ -1,11 +1,13 @@
 import { degiroFileImporter } from './degiroFile';
 import { swissquoteFileImporter } from './swissquote';
+import { trading212FileImporter } from './trading212Csv';
 import { FileImportError, mergeFileImports, type FileImporter, type FileImportResult } from './fileImport';
 
 /** Every broker file importer, in the order the import dialog lists them. */
 export const FILE_IMPORTERS: FileImporter[] = [
     degiroFileImporter,
-    swissquoteFileImporter
+    swissquoteFileImporter,
+    trading212FileImporter
 ];
 
 export const findFileImporter = (id: string): FileImporter | undefined => (

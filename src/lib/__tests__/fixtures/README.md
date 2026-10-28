@@ -17,3 +17,7 @@ Never copy rows from a real export into this folder.
   split (not supported, must be reported).
 - `swissquote-de.csv`: Swissquote export in German, 15 columns, CHF account buying a USD security: net amount
   in USD and in the account currency. Ends at CHF 807.84 and USD 0.
+- `trading212.csv`: Trading 212 history export with the optional columns for withholding tax, stamp duty and
+  currency conversion. Covers a deposit, a market buy with conversion fee, a GBX limit buy with stamp duty in
+  GBP, a dividend with withholding tax, interest, a sell, a currency conversion, a withdrawal, plus a stock
+  split and a card payment (both not supported, must be reported).
