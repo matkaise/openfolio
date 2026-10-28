@@ -76,6 +76,10 @@ export const fileImportEn: typeof fileImportDe = {
         saxo: {
             booked: 'Transactions export (saved from Excel as CSV, column "Booked Amount")',
             amount: 'Transactions export (saved from Excel as CSV, older column "Amount")'
+        },
+        schwab: {
+            standard: 'CSV history export',
+            titled: 'CSV history export (older form with title row)'
         }
     },
     guides: {
@@ -260,6 +264,36 @@ export const fileImportEn: typeof fileImportDe = {
             limits: [
                 'For buys in a foreign currency, fees and conversion costs are part of the converted amount and not shown separately.',
                 'Withholding tax is not estimated. Dutch texts for cash movements, interest and taxes are not backed by public samples.',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        schwab: {
+            scope: 'Charles Schwab brokerage accounts in the US (account history as CSV). Not the positions export.',
+            steps: [
+                'Log in at schwab.com and open Accounts → History.',
+                'Select the account at the top.',
+                'Choose the period under Date Range (as far back as possible).',
+                'Click Export and choose CSV; save the file and drop it here unchanged.'
+            ],
+            settings: [
+                'Keep all transaction types in the export.',
+                'Do not open and re-save the file in Excel: date and number formats would change.'
+            ],
+            accounts: 'Use one portfolio and one export per Schwab account. The file has no account number. According to a user report the history goes back about four years; older bookings are only in the PDF statements. Overlapping exports are not booked twice.',
+            supported: [
+                'Buys, sells and reinvestments (Reinvest Shares) with fees and commissions (Fees & Comm)',
+                'Dividends and distributions (Cash Dividend, Qualified/Non-Qualified Div, Reinvest Dividend, Pr Yr …, Cap Gain …)',
+                'Foreign Tax Paid as withholding tax, ADR and advisor fees, interest (including margin interest)',
+                'Deposits and withdrawals (Wire, MoneyLink, Journal, Internal Transfer) with the sign of the export'
+            ],
+            unsupported: [
+                'Splits, reverse splits, Stock Div Dist, spin-offs, mergers, name changes, conversions and Cash In Lieu: shown as not imported.',
+                'Security transfers (Journaled Shares, Security Transfer) and options (Buy to Open, Sell to Close, …).',
+                'Rows without symbol are not matched to a security.'
+            ],
+            limits: [
+                'The export has tickers or CUSIPs, no ISIN. The security is looked up by ticker at the next price update; CUSIPs can usually not be matched automatically.',
+                'All amounts in USD. For "as of" dates the booking date is used; the "as of" date stays in the raw data.',
                 'Only tested with synthetic files based on public samples.'
             ]
         }

@@ -87,6 +87,10 @@ export const fileImportDe = {
         saxo: {
             booked: 'Transaktionsexport (aus Excel als CSV gespeichert, Spalte „Booked Amount“)',
             amount: 'Transaktionsexport (aus Excel als CSV gespeichert, ältere Spalte „Amount“)'
+        },
+        schwab: {
+            standard: 'CSV-Verlaufsexport',
+            titled: 'CSV-Verlaufsexport (ältere Form mit Titelzeile)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -271,6 +275,36 @@ export const fileImportDe = {
             limits: [
                 'Bei Käufen in Fremdwährung stecken Gebühren und Umrechnungskosten im umgerechneten Betrag und werden nicht getrennt ausgewiesen.',
                 'Quellensteuer wird nicht geschätzt. Niederländische Texte für Kontobewegungen, Zinsen und Steuern sind nicht durch öffentliche Beispiele belegt.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        schwab: {
+            scope: 'Charles-Schwab-Brokerage-Konten in den USA (Kontoverlauf als CSV). Kein Positionsexport (Positions).',
+            steps: [
+                'Bei schwab.com anmelden und Accounts → History öffnen.',
+                'Oben das Konto auswählen.',
+                'Unter Date Range den Zeitraum wählen (möglichst weit zurück).',
+                'Auf Export klicken und CSV wählen; die Datei speichern und unverändert hier ablegen.'
+            ],
+            settings: [
+                'Alle Transaktionstypen im Export lassen.',
+                'Datei nicht in Excel öffnen und neu speichern: Datums- und Zahlenformat würden sich ändern.'
+            ],
+            accounts: 'Je Schwab-Konto ein eigenes Depot und ein eigener Export. Die Datei enthält keine Kontonummer. Laut einem Nutzerbericht reicht der Verlauf etwa vier Jahre zurück; ältere Buchungen gibt es nur in den PDF-Kontoauszügen. Überlappende Exporte werden nicht doppelt gebucht.',
+            supported: [
+                'Käufe, Verkäufe und Wiederanlage (Reinvest Shares) mit Gebühren und Kommissionen (Fees & Comm)',
+                'Dividenden und Ausschüttungen (Cash Dividend, Qualified/Non-Qualified Div, Reinvest Dividend, Pr Yr …, Cap Gain …)',
+                'Foreign Tax Paid als Quellensteuer, ADR- und Beratergebühren, Zinsen (auch Margin Interest)',
+                'Ein- und Auszahlungen (Wire, MoneyLink, Journal, Internal Transfer) mit dem Vorzeichen des Exports'
+            ],
+            unsupported: [
+                'Splits, Reverse Splits, Stock Div Dist, Spin-offs, Fusionen, Namensänderungen, Conversions und Cash In Lieu: erscheinen als nicht übernommen.',
+                'Depotüberträge von Wertpapieren (Journaled Shares, Security Transfer) sowie Optionen (Buy to Open, Sell to Close, …).',
+                'Zeilen ohne Symbol werden keinem Wertpapier zugeordnet.'
+            ],
+            limits: [
+                'Der Export enthält Ticker oder CUSIP, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über den Ticker gesucht; CUSIPs lassen sich meist nicht automatisch zuordnen.',
+                'Alle Beträge in USD. Bei „as of“-Datum wird das Buchungsdatum verwendet, das „as of“-Datum bleibt in den Rohdaten.',
                 'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
             ]
         }

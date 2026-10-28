@@ -43,3 +43,9 @@ Never copy rows from a real export into this folder.
   (one converted), a withholding tax row, custody fee, interest, a withdrawal, two identical buys without order
   id, a Dutch buy ("Koop", month "mei") and a stock split (not supported, must be reported). Cash ends at
   EUR 2404.73, USD 0 and GBX 0.
+- `schwab.csv`: Charles Schwab account history export (all cells quoted, US number format with `$`, thousands
+  commas and a parenthesized negative), newest row first, closing "Transactions Total" row. Covers a MoneyLink
+  deposit, buys with and without commission (one with "as of" date, one with a thousands quantity), reinvested
+  dividend plus Reinvest Shares, a cash dividend with Foreign Tax Paid and ADR fee, two identical advisor fees,
+  credit and margin interest, a sell with commission, a wire withdrawal, plus a stock split and journaled shares
+  (both not supported, must be reported). The bookings sum to the total row: USD 1682.85.
