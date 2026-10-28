@@ -24,3 +24,12 @@ Never copy rows from a real export into this folder.
   Vorabpauschale with tax and one without (ignored), interest with tax, a USD dividend with tax, its reversal and
   re-booking, a card payment, Saveback, a sale with fee and tax, a bond coupon, redemption (ignored) and final
   maturity, a withdrawal, a split (not supported) and a tax optimisation refund. Names, IBANs and ids are made up.
+- `xtb-cash-operations.csv`: XTB "Cash Operations" sheet saved as CSV (`;`, decimal comma), 8-column layout with the
+  four metadata rows and the closing Total row (1009.11 = sum of all amounts). Account currency EUR comes from the
+  file name the tests pass (`EUR_account_….csv`). Booked rows add up to EUR 971.61; holdings 6 ACME.DE, 5 EXMP.US,
+  0.5 WRLD.DE. Covers a deposit, partial fills, financial transaction tax, interest with its tax, a sale with
+  commission, a dividend with withholding tax, a withdrawal, a paired sub-account transfer (ignored), and CFD rows
+  (Close trade, Swap, index dividend), a spin-off and a transfer to another account (all not supported).
+- `xtb-legacy.csv`: the former direct XTB CSV export (`ID;Type;Time;Symbol;Comment;Amount`, decimal point) with two
+  identical buys of different operation ids, interest with tax, a dividend with withholding tax and a CFD result.
+  Booked rows add up to EUR 603.55.

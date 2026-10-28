@@ -1,13 +1,15 @@
 import { degiroFileImporter } from './degiroFile';
 import { swissquoteFileImporter } from './swissquote';
 import { tradeRepublicFileImporter } from './traderepublic';
+import { xtbFileImporter } from './xtb';
 import { FileImportError, mergeFileImports, type FileImporter, type FileImportResult } from './fileImport';
 
 /** Every broker file importer, in the order the import dialog lists them. */
 export const FILE_IMPORTERS: FileImporter[] = [
     degiroFileImporter,
     swissquoteFileImporter,
-    tradeRepublicFileImporter
+    tradeRepublicFileImporter,
+    xtbFileImporter
 ];
 
 export const findFileImporter = (id: string): FileImporter | undefined => (
@@ -29,7 +31,7 @@ export const readImportFiles = (files: { name: string; text: string }[]): { impo
     const importer = importers[0];
     if (!importer || importers.some((candidate) => candidate !== importer)) throw new FileImportError('unknownFormat');
     const results = files.map((file) => {
-        const result = importer.parse(file.text);
+        const result = importer.parse(file.text, file.name);
         if (files.length === 1) return result;
         const withFile = (notes: FileImportResult['report']['ignored']) => notes.map((note) => ({ ...note, file: file.name }));
         return { ...result, report: { ...result.report, ignored: withFile(result.report.ignored), unsupported: withFile(result.report.unsupported) } };

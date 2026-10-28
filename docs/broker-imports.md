@@ -24,6 +24,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | DEGIRO | CSV, deutsch: `Transactions.csv`, `Account.csv` | Käufe/Verkäufe mit Gebühren, Dividenden, Steuern, Zinsen, Gebühren, Ein-/Auszahlungen, Währungswechsel, Salden | Kapitalmaßnahmen; englische Exporte werden nicht erkannt |
 | Swissquote | CSV `;`: `en-13`, `en-15`, `de-15`, `de-13` | Käufe/Verkäufe (Kosten als Gebühr), Dividenden (netto), Depotgebühren, Zinsen, Steuerauszugskosten, Payment/Credit/Debit, Forex credit/debit, Umrechnung bei abweichender Kontowährung, Tagessalden | Transfer in/out, Splits, Bezugsrechte und andere unbekannte Typen; Zeilen ohne ISIN |
 | Trade Republic | CSV „Transaktionsexport“: `comma` (Komma, gequotet), `semicolon` | Käufe/Verkäufe mit Gebühr (Sparpläne markiert), Steuer auf Verkäufe, Dividenden/Ausschüttungen brutto mit Steuer, Dividendenstornos, Zinsen mit Steuer, Anleihekupons, Endfälligkeit/Tilgung als Verkauf, Vorabpauschale, Steueroptimierung, Ein-/Auszahlungen, Überweisungen, Kartenzahlungen, Geschenke, Saveback/Prämien, Gebühren | Krypto (keine ISIN), Private-Markets-Vorauszahlungen, Splits, Fusionen, Umtausch, CFD, unbekannte Typen; Dateien mit mehreren Konten (`account_type`) werden abgelehnt |
+| XTB | CSV aus dem Blatt „Cash Operations“ des XLSX-Exports: `cash-8`, `cash-10` (`;`, Dezimalkomma), `cash-8-comma`, `cash-10-comma` (`,`, Dezimalpunkt); früherer CSV-Export `legacy` | Käufe/Verkäufe von Aktien/ETFs (Stückzahl aus dem Kommentar, Wertpapier unter XTB-Kürzel), Dividenden, Quellensteuer als Steuer, Finanztransaktionssteuer, Kommission/SEC-Gebühr, Zinsen und Zinssteuer, Ein-/Auszahlungen; Umbuchungen zwischen Unterkonten derselben Datei heben sich auf | CFD (Close trade, Profit/Loss, Swap/Rollover, CFD-Dividendenausgleich), Spin-offs, Überträge zu anderen Konten, unbekannte/nicht englische Typen; ohne Währung im Dateinamen wird die Datei abgelehnt |
 
 ## Quellen und Lizenzen
 
@@ -36,6 +37,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | Swissquote | [Parqet FAQ](https://faq.parqet.com/de/articles/714176-swissquote-csv-import) | 28.10.2026 | – (Dokumentation) | Exportweg, Hinweis auf fehlende Steuerausweisung, Typ „Transfer in“ |
 | Trade Republic | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/traderepublic/TradeRepublicCSVExtractor.java`, `CashDividendCorrectionMatcher.java`, Testdateien `TransactionExport01–06.csv` | Commit `2a0ef52a93882c0845596b2c6b834e54f592b7ec` (geprüft 28.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Spaltennamen, Trennzeichen, Kategorien und Buchungstypen, Vorzeichen von `amount`/`fee`/`tax`, Bedeutung der Typen (z. B. Vorabpauschale, Endfälligkeit). Kein Code und keine Testzeilen übernommen; die Fixture ist neu erzeugt. |
 | Trade Republic | [Parqet FAQ](https://faq.parqet.com/de/articles/651186-trade-republic-csv-import), [PP-Forum „Import Trade Republic CSV (Transaktionsexport)“](https://forum.portfolio-performance.info/t/import-trade-republic-csv-transaktionsexport/39126) | 28.10.2026 | – (Dokumentation) | Exportweg Profil/Service → Kontoauszüge → Transaktionsexport, verfügbar seit April 2026 |
+| XTB | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/xtb/XTBCSVExtractor.java`, Test `XTBCSVExtractorTest.java`, Beispiel `EUR_account_sample.csv`, PR #6085, Issue #4938 | Commit `2a0ef52a93882c0845596b2c6b834e54f592b7ec` (geprüft 28.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Metadatenzeilen, 8- und 10-Spalten-Kopf, Buchungstypen, Mengenangabe im Kommentar, Kontowährung im Dateinamen, XLSX-Export und Speichern als CSV. Kein Code übernommen. |
+| XTB | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `src/converters/xtbConverter.ts`, `samples/xtb-export.csv`, README | Commit `9e35bd602f054f563b8c728bcb36dc5eb2bbcaa5` (geprüft 28.10.2026) | Apache-2.0 | Früheres 6-Spalten-Format, ältere Typnamen (auch portugiesisch), Exportweg Account history → Cash operations → Export |
 | DEGIRO | [Export-To-Ghostfolio README](https://github.com/dickwolff/Export-To-Ghostfolio#degiro) | Commit `9e35bd6` | Apache-2.0 | Exportweg Kontoübersicht |
 
 ### Abweichungen von der Vorlage (Swissquote)
@@ -70,3 +73,31 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 - Eine wiederholte `transaction_id` innerhalb der Datei wird als dieselbe Buchung erkannt und übersprungen
   (im Bericht als ignoriert).
 - Saveback und Prämien werden wie bei PP als Einzahlung gebucht, nicht als Ertrag.
+
+### Vergleich der Vorlagen und Abweichungen (XTB)
+
+- Die beiden Vorlagen lesen verschiedene Formate: PP das Blatt „Cash Operations“ des heutigen XLSX-Exports als CSV
+  (Metadatenzeilen, 8 oder 10 Spalten, Dezimalkomma, ISO-Zeit in UTC), Export-To-Ghostfolio den früheren direkten
+  CSV-Export (6 Spalten, Dezimalpunkt, Zeit `TT.MM.JJJJ`). Openfolio liest beide; zusätzlich das CSV, das ein
+  englisch eingestelltes Excel mit Komma und Dezimalpunkt speichert.
+- Quellensteuer: Export-To-Ghostfolio legt sie im Gebührenfeld der Dividende ab; Openfolio bucht sie wie PP als
+  Steuer der Position (`withholding_tax`). Zinssteuer und Finanztransaktionssteuer als Steuer, Kommission und
+  SEC-Gebühr als Gebühr (Export-To-Ghostfolio führt alle als Gebühr).
+- CFD: PP bucht `Close trade` und `Swap` als Zins bzw. Zinsbelastung, Export-To-Ghostfolio `Profit/Loss` und `Swap`
+  als Zins oder Gebühr und negative CFD-Dividenden als Gebühr. Openfolio trennt Aktien/ETF von CFD und meldet alle
+  CFD-Zeilen als nicht übernommen; Dividenden auf Kürzel ohne Börsensuffix oder mit negativem Betrag gelten als
+  CFD-Dividendenausgleich.
+- Spin-offs bucht PP als Dividende; Openfolio meldet sie als Kapitalmaßnahme.
+- Überträge: Wie PP heben sich Umbuchungen zwischen Unterkonten derselben Datei auf (im Bericht als ignoriert);
+  Überträge ohne Gegenbuchung werden gemeldet statt als Ein- oder Auszahlung gebucht.
+- Wertpapiere: Die Exporte enthalten keine ISIN. Openfolio legt das Wertpapier unter dem XTB-Kürzel an (wie der
+  generische CSV-Import ein Kürzel als Kennung nutzt) und überlässt die Auflösung der Kursaktualisierung; es wird
+  keine ISIN erfunden und keine Kürzelumsetzung (`.UK` → `.L`) geraten. Export-To-Ghostfolio sucht stattdessen
+  über Yahoo.
+- Kontowährung aus dem Dateinamen wie bei PP; die Formaterkennung selbst bleibt inhaltsbasiert. Ohne Währung im
+  Namen bricht der Import mit einer Erklärung ab statt EUR anzunehmen (Export-To-Ghostfolio: Umgebungsvariable,
+  Standard EUR).
+- Wiederholte Operations-IDs innerhalb einer Datei werden übersprungen; die Kontonummer aus der Kopfzeile ist Teil
+  des Schlüssels, damit gleiche IDs verschiedener Konten nicht zusammenfallen.
+- PP liest Windows-1250-kodierte Dateien; Openfolio liest UTF-8. Nicht englische Typen (z. B. tschechisch) werden
+  ohnehin als nicht übernommen gemeldet.
