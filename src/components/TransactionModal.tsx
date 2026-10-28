@@ -8,8 +8,10 @@ import { Transaction, type Security, type Portfolio } from '@/types/domain';
 import { applyManualCashEntryToExplicitHistory } from '@/lib/cashAccountUtils';
 import { getCurrencyOptions } from '@/lib/fxUtils';
 import { buildManualPriceHistory } from '@/lib/marketDataService';
-import { applyImportBatch, emptyImportBatch, isEmptyImportBatch, parseDegiroFiles, type ImportBatch } from '@/lib/importers/importBatch';
-import { isTradeEntry } from '@/lib/importers/entries';
+import { applyImportBatch, emptyImportBatch, isEmptyImportBatch, type ImportBatch } from '@/lib/importers/importBatch';
+import { FileImportError, type FileImportResult } from '@/lib/importers/fileImport';
+import { FILE_IMPORTERS, readImportFiles } from '@/lib/importers/fileImporters';
+import { BrokerFileImport } from '@/components/import/BrokerFileImport';
 import { searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
 import { createLogger } from '@/lib/logger';
 import { useT } from '@/lib/i18n';
@@ -80,9 +82,9 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
     // Import Form State
     const [importMode, setImportMode] = useState<'generic' | 'template'>('generic');
-    const [selectedBroker, setSelectedBroker] = useState('');
+    const [fileImporterId, setFileImporterId] = useState(FILE_IMPORTERS[0].id);
     const [isDragging, setIsDragging] = useState(false);
-    const [parsedBatch, setParsedBatch] = useState<ImportBatch>(() => emptyImportBatch('Flatex'));
+    const [fileImport, setFileImport] = useState<{ result: FileImportResult; fileNames: string[] } | null>(null);
     const [importStatus, setImportStatus] = useState<'idle' | 'processing' | 'ready' | 'success'>('idle');
     const [genericHeaders, setGenericHeaders] = useState<string[]>([]);
     const [genericRows, setGenericRows] = useState<string[][]>([]);
@@ -107,25 +109,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         setIsDragging(false);
     };
 
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            processFile(e.dataTransfer.files[0]);
-        }
-    };
-
     const handleGenericDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
             processGenericFile(e.dataTransfer.files[0]);
-        }
-    };
-
-    const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            processFile(e.target.files[0]);
         }
     };
 
@@ -135,25 +123,30 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         }
     };
 
-    const processFile = async (file: File) => {
+    const processFiles = async (files: File[]) => {
         setImportStatus('processing');
         try {
-            const text = await file.text();
-            // In future: Switch parser based on selectedBroker
-            const batch = parseDegiroFiles([text]);
-
-            if (!isEmptyImportBatch(batch)) {
-                setParsedBatch(batch);
-                setImportStatus('ready');
-            } else {
-                notify({ tone: 'error', title: t.txModal.noData, message: t.txModal.noDataText });
-                setParsedBatch(emptyImportBatch('Flatex'));
-                setImportStatus('idle');
+            const texts = await Promise.all(files.map(async (file) => ({ name: file.name, text: await file.text() })));
+            const { importer, result } = readImportFiles(texts);
+            const { report } = result;
+            if (isEmptyImportBatch(result.batch) && report.unsupported.length === 0 && report.ignored.length === 0) {
+                throw new FileImportError('noRows');
             }
+            if (importer.id !== fileImporterId) {
+                setFileImporterId(importer.id);
+                notify({ tone: 'info', title: t.fileImport.switched(importer.broker) });
+            }
+            setFileImport({ result, fileNames: files.length > 1 ? files.map((file) => file.name) : [] });
+            setImportStatus('ready');
         } catch (err) {
             log.error(err);
-            notify({ tone: 'error', title: t.txModal.unreadable });
-            setParsedBatch(emptyImportBatch('Flatex'));
+            const message = !(err instanceof FileImportError)
+                ? t.txModal.unreadable
+                : err.code === 'invalidNumber' || err.code === 'invalidDate'
+                    ? t.fileImport.errors[err.code](err.line)
+                    : t.fileImport.errors[err.code];
+            notify({ tone: 'error', title: t.fileImport.errors.title, message });
+            setFileImport(null);
             setImportStatus('idle');
         }
     };
@@ -210,11 +203,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         return { id: targetPortfolio.id, name: targetPortfolio.name, isNew: false };
     };
 
-    const buildFlatexBatch = (): ImportBatch => parsedBatch;
+    const buildFileBatch = (): ImportBatch => fileImport?.result.batch || emptyImportBatch('File');
 
     const commitImport = () => {
         if (!project) return;
-        const batch = buildFlatexBatch();
+        const batch = buildFileBatch();
         if (isEmptyImportBatch(batch)) return;
 
         // Resolve the target once so every run of the updater below uses the same portfolio id.
@@ -317,11 +310,10 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
     if (!isOpen) return null;
 
-    // Preview of the Flatex import: how many trades are already in the target portfolio.
+    // Preview of the broker file import: what the files add to the target portfolio.
     const importPreview = importStatus === 'ready' && project && targetPortfolio
-        ? applyImportBatch(project, buildFlatexBatch(), targetPortfolio).summary
+        ? applyImportBatch(project, buildFileBatch(), targetPortfolio).summary
         : null;
-    const importPreviewDuplicates = importPreview ? importPreview.duplicateTransactions + importPreview.duplicateMovements : 0;
 
     const normalizeIdentifier = (value: string) => value.trim().toUpperCase();
     const isIsin = (value: string) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value);
@@ -964,63 +956,19 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                                 )}
                             </div>
                         ) : (
-                            <div className="space-y-5">
-                                <div className="space-y-2">
-                                    <label className="ui-field-label">{t.txModal.broker}</label>
-                                    <select
-                                        value={selectedBroker}
-                                        onChange={(e) => setSelectedBroker(e.target.value)}
-                                        className="ui-input w-full"
-                                    >
-                                        <option value="" disabled>{t.txModal.choose}</option>
-                                        <option value="Flatex">Flatex</option>
-                                        <option value="TR">{t.txModal.comingSoon('Trade Republic')}</option>
-                                    </select>
-                                    <p className="text-xs md3-text-muted">{t.txModal.flatexOnly}</p>
-                                </div>
-
-                                <div
-                                    onDragOver={handleDragOver}
-                                    onDragLeave={handleDragLeave}
-                                    onDrop={handleDrop}
-                                    className="relative rounded-2xl border border-dashed p-6 text-center transition cursor-pointer"
-                                    style={isDragging
-                                        ? { borderColor: 'var(--md3-primary)', background: 'color-mix(in srgb, var(--md3-primary-container) 55%, transparent 45%)' }
-                                        : { borderColor: 'color-mix(in srgb, var(--md3-outline) 45%, transparent 55%)', background: 'var(--md3-surface-container-high)' }}
-                                >
-                                    <input
-                                        type="file"
-                                        className="absolute inset-0 opacity-0 cursor-pointer"
-                                        accept=".csv"
-                                        onChange={handleFileInput}
-                                    />
-                                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: 'var(--md3-surface-container-highest)' }}>
-                                        <Upload size={22} className={importStatus === 'ready' ? 'md3-accent' : 'md3-text-muted'} />
-                                    </div>
-                                    <h3 className="text-sm font-semibold md3-text-main">
-                                        {importStatus === 'ready'
-                                            ? t.txModal.detected(
-                                                parsedBatch.entries.filter(isTradeEntry).length,
-                                                importPreviewDuplicates,
-                                                parsedBatch.cashBalances.length,
-                                                parsedBatch.entries.filter((entry) => !isTradeEntry(entry)).length
-                                            )
-                                            : t.txModal.dropFile}
-                                    </h3>
-                                    <p className="text-xs md3-text-muted mt-1">
-                                        {importStatus === 'ready' ? t.txModal.clickToChange : t.txModal.orClick}
-                                    </p>
-                                </div>
-
-                                <div className="ui-info-card flex gap-3 p-4">
-                                    <div className="mt-0.5 md3-text-muted">
-                                        <Search size={18} />
-                                    </div>
-                                    <div className="text-xs md3-text-muted">
-                                        {t.txModal.flatexHint}
-                                    </div>
-                                </div>
-                            </div>
+                            <BrokerFileImport
+                                importerId={fileImporterId}
+                                onImporterChange={(id) => {
+                                    setFileImporterId(id);
+                                    setFileImport(null);
+                                    setImportStatus('idle');
+                                }}
+                                status={importStatus}
+                                result={fileImport?.result || null}
+                                fileNames={fileImport?.fileNames || []}
+                                preview={importPreview}
+                                onFiles={(files) => { void processFiles(files); }}
+                            />
                         )}
                     </div>
                 ) : (
@@ -1254,7 +1202,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                         <button
                             type="button"
                             onClick={commitImport}
-                            disabled={importStatus !== 'ready'}
+                            disabled={importStatus !== 'ready' || isEmptyImportBatch(buildFileBatch())}
                             className="ui-btn is-primary is-md"
                         >
                             {importStatus === 'success'

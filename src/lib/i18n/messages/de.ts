@@ -1,6 +1,8 @@
 // German UI texts: the source for all languages. en.ts must provide the same keys
 // (and the same parameters for functions).
 
+import { fileImportDe } from './fileImport.de';
+
 export const de = {
     common: {
         cancel: 'Abbrechen',
@@ -468,7 +470,7 @@ export const de = {
         tabs: { import: 'Datei importieren', manual: 'Manuell erfassen' },
         tabsLabel: 'Art der Erfassung',
         importMode: 'Importart',
-        modes: { generic: 'CSV mit Spaltenzuordnung', template: 'Broker Templates' },
+        modes: { generic: 'CSV mit Spaltenzuordnung', template: 'Broker-Export' },
         steps: { upload: '1 Upload', mapping: '2 Zuordnung', preview: '3 Vorschau' },
         startMapping: 'Zuordnung starten',
         rowsDetected: (count: number, fileName: string) => `${count} Zeilen erkannt (${fileName})`,
@@ -510,17 +512,6 @@ export const de = {
             + (duplicates ? ` (davon ${duplicates} Duplikate)` : '')
         ),
         noValidRows: 'Keine gültigen Zeilen gefunden.',
-        broker: 'Broker',
-        comingSoon: (name: string) => `${name} (folgt)`,
-        flatexOnly: 'Aktuell wird nur der Flatex CSV Export (Account & Transactions) unterstützt.',
-        detected: (trades: number, duplicates: number, balances: number, movements: number) => (
-            `${trades} Transaktionen${duplicates > 0 ? ` (${duplicates} bereits vorhanden)` : ''}, ${balances} Kontostände, ${movements} Kontobewegungen erkannt`
-        ),
-        dropFile: 'Datei hier ablegen',
-        clickToChange: 'Klicken zum Ändern oder Import starten',
-        flatexHint: 'Lade deine Account.csv (Kontobewegungen, Dividenden, Salden) oder Transactions.csv (Käufe/Verkäufe) hoch.',
-        noData: 'Keine Daten gefunden',
-        noDataText: 'Die Datei enthält keine erkennbaren Buchungen. Bitte den Export prüfen.',
         unreadable: 'Die Datei konnte nicht gelesen werden.',
         bookingKind: 'Art der Buchung',
         kinds: { security: 'Wertpapier', cash: 'Kontobewegung (Einzahlung, Dividende, Gebühr …)' },
@@ -811,6 +802,8 @@ export const de = {
         demoPortfolio: 'Demo-Depot',
         numberedPortfolio: (index: number) => `Depot ${index}`
     },
+
+    fileImport: fileImportDe,
 
     errors: {
         title: 'Etwas ist schiefgelaufen',
