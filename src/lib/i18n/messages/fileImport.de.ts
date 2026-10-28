@@ -60,7 +60,13 @@ export const fileImportDe = {
         degiro: {
             transactions: 'Transactions.csv (Käufe/Verkäufe)',
             account: 'Account.csv (Kontoübersicht)'
-        } as Record<string, string>
+        } as Record<string, string>,
+        swissquote: {
+            'en-13': 'CSV, Englisch (13 Spalten)',
+            'en-15': 'CSV, Englisch (15 Spalten, mit Nettobetrag in Kontowährung)',
+            'de-15': 'CSV, Deutsch (15 Spalten, mit Nettobetrag in Kontowährung)',
+            'de-13': 'CSV, Deutsch (13 Spalten)'
+        }
     } as Record<string, Record<string, string>>,
     guides: {
         degiro: {
@@ -87,6 +93,37 @@ export const fileImportDe = {
             limits: [
                 'Unbekannte Buchungstexte der Account.csv werden als Korrektur gebucht.',
                 'Englischsprachige DEGIRO-Exporte werden noch nicht erkannt.'
+            ]
+        },
+        swissquote: {
+            scope: 'Swissquote-Handelskonten (eTrading). Nicht für Yuh, Swissquote-Krypto oder PDF-Abrechnungen.',
+            steps: [
+                'Im eTrading unter Portfolio → Transaktionen öffnen.',
+                'Unter Periode den Zeitraum wählen (möglichst ab Kontoeröffnung) und Anwenden klicken.',
+                'Oben rechts auf Download klicken und CSV-Bericht wählen.',
+                'Die Datei unverändert hier ablegen.'
+            ],
+            settings: [
+                'Anzeigesprache möglichst Englisch (Mein Konto → Einstellungen → Displaysprache). Deutsche Exporte werden gelesen, aber nur die belegten Buchungstypen (Kauf, Verkauf, Dividende, Depotgebühren, Zinsen, Zahlung) erkannt.',
+                'Alle Transaktionstypen im Filter eingeschlossen lassen.',
+                'Datei nicht in Excel öffnen und neu speichern: Trennzeichen und Zahlenformat würden sich ändern.'
+            ],
+            accounts: 'Pro Swissquote-Konto ein eigenes Depot verwenden; der Export enthält keine Kontonummer. Fremdwährungen desselben Kontos stehen in derselben Datei. Überlappende Exporte werden nicht doppelt gebucht.',
+            supported: [
+                'Käufe und Verkäufe; Kosten werden als Gebühr übernommen',
+                'Dividenden (Nettobetrag laut Export)',
+                'Depotgebühren, Zinsen (auch negative) und Kosten des Steuerauszugs',
+                'Einzahlungen (Payment, Credit) und Auszahlungen (Debit), Überweisungskosten als Gebühr',
+                'Devisengeschäfte (Forex credit/debit) als interne Umbuchung zwischen Währungen',
+                'Buchungen in einer anderen Währung als der Kontowährung mit Umrechnung (15-Spalten-Export)'
+            ],
+            unsupported: [
+                'Depotüberträge (Transfer in/out), Bezugsrechte, Splits und andere Kapitalmaßnahmen: erscheinen in der Vorschau als nicht übernommen.',
+                'Quellensteuer: Swissquote weist sie im Export nicht separat aus; sie wird nicht geschätzt.'
+            ],
+            limits: [
+                'Dividenden werden mit dem Nettobetrag gebucht, da der Export keinen Bruttobetrag mit Steuer enthält.',
+                'Das Format ist nur mit synthetischen Dateien nach öffentlichen Beispielen getestet, nicht mit aktuellen Original-Exporten.'
             ]
         }
     } as Record<string, ImportGuide>

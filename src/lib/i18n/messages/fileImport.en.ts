@@ -49,6 +49,12 @@ export const fileImportEn: typeof fileImportDe = {
         degiro: {
             transactions: 'Transactions.csv (buys/sells)',
             account: 'Account.csv (account statement)'
+        },
+        swissquote: {
+            'en-13': 'CSV, English (13 columns)',
+            'en-15': 'CSV, English (15 columns, with net amount in account currency)',
+            'de-15': 'CSV, German (15 columns, with net amount in account currency)',
+            'de-13': 'CSV, German (13 columns)'
         }
     },
     guides: {
@@ -76,6 +82,37 @@ export const fileImportEn: typeof fileImportDe = {
             limits: [
                 'Unknown booking texts in Account.csv are booked as adjustments.',
                 'DEGIRO exports in English are not recognised yet.'
+            ]
+        },
+        swissquote: {
+            scope: 'Swissquote trading accounts (eTrading). Not for Yuh, Swissquote crypto or PDF statements.',
+            steps: [
+                'In eTrading open Portfolio → Transactions.',
+                'Under Period choose the date range (ideally from account opening) and click Apply.',
+                'Click Download at the top right and choose CSV report.',
+                'Drop the file here unchanged.'
+            ],
+            settings: [
+                'Display language preferably English (My Account → Settings → Display language). German exports are read, but only the confirmed booking types (Kauf, Verkauf, Dividende, Depotgebühren, Zinsen, Zahlung) are recognised.',
+                'Keep all transaction types included in the filter.',
+                'Do not open and re-save the file in Excel: separators and number format would change.'
+            ],
+            accounts: 'Use one portfolio per Swissquote account; the export has no account number. Foreign currencies of the same account are in the same file. Overlapping exports are not booked twice.',
+            supported: [
+                'Buys and sells; costs are imported as fees',
+                'Dividends (net amount as exported)',
+                'Custody fees, interest (also negative) and tax statement costs',
+                'Deposits (Payment, Credit) and withdrawals (Debit), transfer costs as fees',
+                'Currency exchanges (Forex credit/debit) as internal transfers between currencies',
+                'Bookings in a currency other than the account currency, with conversion (15-column export)'
+            ],
+            unsupported: [
+                'Security transfers (Transfer in/out), subscription rights, splits and other corporate actions: shown as not imported in the preview.',
+                'Withholding tax: Swissquote does not show it separately in the export; it is not estimated.'
+            ],
+            limits: [
+                'Dividends are booked with the net amount, because the export has no gross amount with tax.',
+                'The format is only tested with synthetic files based on public samples, not with current original exports.'
             ]
         }
     } satisfies Record<string, ImportGuide>

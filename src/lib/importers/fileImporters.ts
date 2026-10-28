@@ -1,9 +1,11 @@
 import { degiroFileImporter } from './degiroFile';
+import { swissquoteFileImporter } from './swissquote';
 import { FileImportError, mergeFileImports, type FileImporter, type FileImportResult } from './fileImport';
 
 /** Every broker file importer, in the order the import dialog lists them. */
 export const FILE_IMPORTERS: FileImporter[] = [
-    degiroFileImporter
+    degiroFileImporter,
+    swissquoteFileImporter
 ];
 
 export const findFileImporter = (id: string): FileImporter | undefined => (

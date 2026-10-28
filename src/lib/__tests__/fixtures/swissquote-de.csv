@@ -1,0 +1,5 @@
+Datum;Auftrag #;Transaktionen;Symbol;Name;ISIN;Anzahl;Stückpreis;Kosten;Aufgelaufene Zinsen;Nettobetrag;Währung Nettobetrag;Nettobetrag in der Währung des Kontos;Saldo;Währung
+30-06-2024 18:00:00;00000000;Depotgebühren;;;;1.0;10.00;0.81;0.00;-10.81;CHF;-10.81;807.84;CHF
+30-04-2024 16:00:00;00000000;Dividende;ACME;ACME CORP;US0000000001;1.0;1.50;0.00;0.00;1.50;USD;1.35;818.65;CHF
+10-04-2024 09:00:00;300000001;Kauf;ACME;ACME CORP;US0000000001;2.0;100.00;3.00;0.00;-203.00;USD;-182.70;817.30;CHF
+05-04-2024 08:00:00;00000000;Zahlung;;;;1.0;1000.00;0.00;0.00;1000.00;CHF;1000.00;1000.00;CHF
