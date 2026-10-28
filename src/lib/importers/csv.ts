@@ -71,3 +71,18 @@ export const parseDotDecimal = (value: string | undefined): number => {
     if (!/^[-+]?\d+(\.\d+)?$/.test(raw)) return Number.NaN;
     return Number(raw);
 };
+
+/**
+ * A number in US format: "." as decimal separator, optional "," thousands separators,
+ * an optional "$" and negatives as "-" or in parentheses ("-$1,259.59", "($0.40)", "500,135").
+ * Anything else is NaN.
+ */
+export const parseUsNumber = (value: string | undefined): number => {
+    let raw = (value || '').trim();
+    const parenthesized = /^\((.*)\)$/.exec(raw);
+    if (parenthesized) raw = parenthesized[1].trim();
+    const match = /^([-+]?)\$?([-+]?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?$/.exec(raw);
+    if (!match || (match[1] && match[2])) return Number.NaN;
+    const number = Number(`${match[3].replace(/,/g, '')}${match[4] || ''}`);
+    return (parenthesized || match[1] === '-' || match[2] === '-') ? -number : number;
+};

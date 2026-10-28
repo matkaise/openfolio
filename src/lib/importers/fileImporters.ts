@@ -1,5 +1,6 @@
 import { degiroFileImporter } from './degiroFile';
 import { saxoFileImporter } from './saxo';
+import { schwabFileImporter } from './schwab';
 import { swissquoteFileImporter } from './swissquote';
 import { trading212FileImporter } from './trading212Csv';
 import { FileImportError, mergeFileImports, type FileImporter, type FileImportResult } from './fileImport';
@@ -9,7 +10,8 @@ export const FILE_IMPORTERS: FileImporter[] = [
     degiroFileImporter,
     swissquoteFileImporter,
     trading212FileImporter,
-    saxoFileImporter
+    saxoFileImporter,
+    schwabFileImporter
 ];
 
 export const findFileImporter = (id: string): FileImporter | undefined => (

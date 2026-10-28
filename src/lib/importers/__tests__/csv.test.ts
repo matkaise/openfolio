@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { columnIndex, findHeaderRow, locateHeader, normalizeHeader, parseDotDecimal, readCsv } from '../csv';
+import { columnIndex, findHeaderRow, locateHeader, normalizeHeader, parseDotDecimal, parseUsNumber, readCsv } from '../csv';
 
 describe('readCsv', () => {
   it('drops the BOM, reads CRLF and LF and skips empty lines', () => {
@@ -52,5 +52,23 @@ describe('parseDotDecimal', () => {
     expect(parseDotDecimal('1,5')).toBeNaN();
     expect(parseDotDecimal("1'234.50")).toBeNaN();
     expect(parseDotDecimal('')).toBeNaN();
+  });
+});
+
+describe('parseUsNumber', () => {
+  it('reads dollar amounts with thousands separators, signs and parentheses', () => {
+    expect(parseUsNumber('-$1,259.59')).toBe(-1259.59);
+    expect(parseUsNumber('$500135.00')).toBe(500135);
+    expect(parseUsNumber('500,135')).toBe(500135);
+    expect(parseUsNumber('($0.40)')).toBe(-0.4);
+    expect(parseUsNumber('$-3.00')).toBe(-3);
+    expect(parseUsNumber('1.6531')).toBe(1.6531);
+  });
+
+  it('rejects other formats instead of guessing', () => {
+    expect(parseUsNumber('1.259,59')).toBeNaN();
+    expect(parseUsNumber('12,34')).toBeNaN();
+    expect(parseUsNumber('--1')).toBeNaN();
+    expect(parseUsNumber('')).toBeNaN();
   });
 });

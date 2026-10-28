@@ -25,6 +25,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | Trading 212 | CSV-Verlaufsexport (`standard`, `utc`), Spalten nach Namen | Käufe/Verkäufe (Market/Limit/Stop) in Instrumentwährung, Kostenspalten als Gebühr, Dividenden (netto), Zinsen, Ein-/Auszahlungen, Currency conversion | Splits, Stock distribution, Transfer in/out, Kartenzahlungen; Zeilen ohne ISIN |
 | Swissquote | CSV `;`: `en-13`, `en-15`, `de-15`, `de-13` | Käufe/Verkäufe (Kosten als Gebühr), Dividenden (netto), Depotgebühren, Zinsen, Steuerauszugskosten, Payment/Credit/Debit, Forex credit/debit, Umrechnung bei abweichender Kontowährung, Tagessalden | Transfer in/out, Splits, Bezugsrechte und andere unbekannte Typen; Zeilen ohne ISIN |
 | Saxo | Transaktionsexport, aus Excel als CSV gespeichert (`,` oder `;`): `booked` (Booked Amount, 15 Spalten), `amount` (Amount, 13 Spalten) | Käufe/Verkäufe aus dem Buchungstext (Buy/Sell, Koop/Verkoop), Differenz zum gebuchten Betrag als Gebühr, Fremdwährungskäufe mit Umrechnung als interne FX-Buchungen, Dividenden (netto), Quellensteuer als eigene Zeile, Ein-/Auszahlungen, Gebühren, Zinsen | Kapitalmaßnahmen außer Dividenden, Derivate (`From Derivative` = Yes), unbekannte Texte, Zeilen ohne ISIN, umgerechnete Zeilen ohne bestimmbare Kontowährung; XLSX nicht direkt |
+| Charles Schwab | CSV-Kontoverlauf (`standard`, `titled` mit Titelzeile), US-Zahlenformat, Summenzeile wird übersprungen | Buy/Sell/Reinvest Shares mit Fees & Comm, Dividenden und Ausschüttungen, Foreign Tax Paid (Quellensteuer), Gebühren, Zinsen, Wire/MoneyLink/Journal/Internal Transfer als Ein-/Auszahlung | Splits, Stock Div Dist, Spin-off, Merger, Name Change, Conversion, Cash In Lieu, Journaled Shares, Security Transfer, Optionen; Zeilen ohne Symbol |
 
 ## Quellen und Lizenzen
 
@@ -39,6 +40,7 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | Trading 212 | [Parqet FAQ](https://faq.parqet.com/de/articles/765626-trading-212-csv-import) | 28.10.2026 | – (Dokumentation) | Exportweg und Datenarten |
 | Saxo | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `saxoConverter.ts`, `models/saxoRecord.ts`, `samples/saxo-export.csv`, Issues #155, #319 | Commit `9e35bd6` | Apache-2.0 | Spaltennamen beider Varianten, Ereignistexte, Datums- und Betragsformat des Beispiels, Exportweg |
 | Saxo | [Saxo Help: Monitoring your Portfolio](https://www.help.saxo/hc/en-us/articles/360039762472-Monitoring-your-Portfolio) | 28.10.2026 | – (Dokumentation) | Bereich Transactions mit Filtern (Trades, Corporate actions, Cash transfers) und Export als PDF oder Excel |
+| Charles Schwab | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `schwabConverter.ts`, `models/schwabRecord.ts`, `samples/schwab-export.csv`, Issues #8, #75, #121, #191, #287 | Commit `9e35bd6` | Apache-2.0 | Spalten, Aktionsnamen, Zahlen- und Datumsformat, Titel- und Summenzeile, Exportweg |
 | DEGIRO | [Export-To-Ghostfolio README](https://github.com/dickwolff/Export-To-Ghostfolio#degiro) | Commit `9e35bd6` | Apache-2.0 | Exportweg Kontoübersicht |
 
 ### Abweichungen von der Vorlage (Swissquote)
@@ -83,3 +85,20 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
   niederländischen Datumsangaben; diese werden gelesen.
 - GBX bleibt GBX (die Vorlage schreibt GBp); Zeilen ohne ISIN werden nicht per Symbolsuche zugeordnet.
 - Derivate (`From Derivative` = Yes, Spalte seit 2026 laut Issue #319) werden gemeldet, nicht als Wertpapierkauf gebucht.
+
+### Abweichungen von der Vorlage (Charles Schwab)
+
+- Kapitalmaßnahmen werden nicht als Kauf/Verkauf zum Preis 0 gebucht (Vorlage: Stock Split, Stock Div Dist, Spin-off als
+  Kauf; Reverse Split, Merger, Name Change, Conversion als Verkauf), sondern gemeldet. Cash In Lieu ist der Barausgleich
+  eines Bruchteils und wird ebenfalls gemeldet statt als Dividende gebucht.
+- Ein- und Auszahlungen (Wire, MoneyLink, Journal, Internal Transfer) werden gebucht statt übersprungen; Überträge von
+  Wertpapieren (Journaled Shares, Security Transfer) werden gemeldet.
+- Foreign Tax Paid wird als Quellensteuer gebucht, nicht als Gebühr. Margin Interest wird als (negativer) Zins gebucht.
+- „Fees & Comm“ wird als Gebühr des Handels übernommen; der Handelsbetrag ergibt sich aus Amount plus Gebühr.
+- Zahlen mit Klammern („($0.40)“) gelten als negativ; andere Formate führen zu einem Fehler mit Zeilennummer statt zu 0.
+- Das Datum vor „as of“ ist das Buchungsdatum; das „as of“-Datum bleibt in den Rohdaten der Buchung.
+- Die Summenzeile „Transactions Total“ wird überall erkannt, nicht nur als letzte Zeile; eine Titelzeile davor wird übersprungen.
+- Ticker werden wie beim IBKR-Import als Wertpapierkennung verwendet und später über den Kursabruf zugeordnet; die
+  Vorlage sucht CUSIPs über den Namen. Openfolio gleicht Ticker, CUSIP und ISIN nicht gleich.
+- Abgleich: In der Fixture ergibt die Summe aller Buchungen den Betrag der Summenzeile; enthält ein Export gemeldete
+  Zeilen mit Betrag (z. B. Cash In Lieu), weicht die Summe um diese Beträge ab.
