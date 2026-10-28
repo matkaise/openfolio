@@ -63,6 +63,10 @@ export const fileImportDe = {
             transactions: 'Transactions.csv (Käufe/Verkäufe)',
             account: 'Account.csv (Kontoübersicht)'
         } as Record<string, string>,
+        trading212: {
+            standard: 'CSV-Verlaufsexport',
+            utc: 'CSV-Verlaufsexport (Zeit in UTC)'
+        },
         swissquote: {
             'en-13': 'CSV, Englisch (13 Spalten)',
             'en-15': 'CSV, Englisch (15 Spalten, mit Nettobetrag in Kontowährung)',
@@ -106,6 +110,36 @@ export const fileImportDe = {
             limits: [
                 'Unbekannte Buchungstexte der Account.csv werden als Korrektur gebucht.',
                 'Englischsprachige DEGIRO-Exporte werden noch nicht erkannt.'
+            ]
+        },
+        trading212: {
+            scope: 'Trading 212 Invest- und ISA-Konten (Verlaufsexport als CSV). Nicht für CFD-Konten.',
+            steps: [
+                'Menü (drei Striche) → Chronik öffnen; im Web genauso.',
+                'Oben rechts auf das Datei-Symbol tippen (Export Verlauf).',
+                'Zeitraum ab Kontoeröffnung wählen und Aufträge, Dividenden, Transaktionen und Zins anhaken.',
+                'Export CSV wählen und die Datei über Herunterladen speichern, sobald sie bereit ist.'
+            ],
+            settings: [
+                'Alle vier Datenarten auswählen, sonst fehlen Buchungen.',
+                'Datei nicht in Excel öffnen und neu speichern.'
+            ],
+            accounts: 'Je Trading-212-Konto (Invest, ISA) ein eigenes Depot und ein eigener Export. Nicht zusätzlich zur Trading-212-API-Verbindung im selben Depot verwenden: CSV und API haben unterschiedliche Kennungen, Buchungen würden doppelt erscheinen. Überlappende CSV-Exporte werden nicht doppelt gebucht.',
+            supported: [
+                'Market-, Limit- und Stop-Käufe/-Verkäufe in Instrumentwährung; Stempelsteuer, Umrechnungsgebühr und andere Kostenspalten als Gebühr',
+                'Dividenden (netto, wie gutgeschrieben; Quellensteuer steht im Buchungstext)',
+                'Zinsen auf Guthaben und aus Wertpapierleihe',
+                'Ein- und Auszahlungen',
+                'Währungsumtausch (Currency conversion), sofern die Umtauschspalten im Export stehen'
+            ],
+            unsupported: [
+                'Aktiensplits, Stock distributions, Depotüberträge (Transfer in/out) und andere Kapitalmaßnahmen: erscheinen als nicht übernommen.',
+                'Kartenzahlungen, Cashback und sonstige Kontotypen.'
+            ],
+            limits: [
+                'Käufe und Verkäufe werden wie beim API-Import in der Instrumentwährung gebucht; das Kontoguthaben in Kontowährung wird über das Cash-Modell ausgeglichen.',
+                'Das Datum stammt aus der Exportzeit (UTC); Buchungen kurz nach Mitternacht können einen Tag abweichen.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
             ]
         },
         swissquote: {

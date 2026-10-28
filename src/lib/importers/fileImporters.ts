@@ -1,6 +1,7 @@
 import { degiroFileImporter } from './degiroFile';
 import { swissquoteFileImporter } from './swissquote';
 import { tradeRepublicFileImporter } from './traderepublic';
+import { trading212FileImporter } from './trading212Csv';
 import { xtbFileImporter } from './xtb';
 import { FileImportError, mergeFileImports, type FileImporter, type FileImportResult } from './fileImport';
 
@@ -9,6 +10,7 @@ export const FILE_IMPORTERS: FileImporter[] = [
     degiroFileImporter,
     swissquoteFileImporter,
     tradeRepublicFileImporter,
+    trading212FileImporter,
     xtbFileImporter
 ];
 

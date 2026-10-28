@@ -52,6 +52,10 @@ export const fileImportEn: typeof fileImportDe = {
             transactions: 'Transactions.csv (buys/sells)',
             account: 'Account.csv (account statement)'
         },
+        trading212: {
+            standard: 'CSV history export',
+            utc: 'CSV history export (time in UTC)'
+        },
         swissquote: {
             'en-13': 'CSV, English (13 columns)',
             'en-15': 'CSV, English (15 columns, with net amount in account currency)',
@@ -95,6 +99,36 @@ export const fileImportEn: typeof fileImportDe = {
             limits: [
                 'Unknown booking texts in Account.csv are booked as adjustments.',
                 'DEGIRO exports in English are not recognised yet.'
+            ]
+        },
+        trading212: {
+            scope: 'Trading 212 Invest and ISA accounts (history export as CSV). Not for CFD accounts.',
+            steps: [
+                'Open the menu (three lines) → History; the web app works the same way.',
+                'Tap the file icon at the top right (Export history).',
+                'Choose the period from account opening and tick orders, dividends, transactions and interest.',
+                'Choose Export CSV and save the file via Download once it is ready.'
+            ],
+            settings: [
+                'Select all four data types, otherwise bookings are missing.',
+                'Do not open and re-save the file in Excel.'
+            ],
+            accounts: 'Use one portfolio and one export per Trading 212 account (Invest, ISA). Do not use it in addition to the Trading 212 API connection in the same portfolio: CSV and API use different ids, bookings would appear twice. Overlapping CSV exports are not booked twice.',
+            supported: [
+                'Market, limit and stop buys/sells in the instrument currency; stamp duty, conversion fee and other cost columns as fees',
+                'Dividends (net, as credited; withholding tax is in the booking text)',
+                'Interest on cash and from share lending',
+                'Deposits and withdrawals',
+                'Currency conversions, if the conversion columns are in the export'
+            ],
+            unsupported: [
+                'Stock splits, stock distributions, security transfers (Transfer in/out) and other corporate actions: shown as not imported.',
+                'Card payments, cashback and other account types.'
+            ],
+            limits: [
+                'Buys and sells are booked in the instrument currency, as with the API import; the account currency balance is settled by the cash model.',
+                'The date comes from the export time (UTC); bookings shortly after midnight can be one day off.',
+                'Only tested with synthetic files based on public samples.'
             ]
         },
         swissquote: {
