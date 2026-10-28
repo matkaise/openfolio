@@ -26,7 +26,7 @@ export interface FileImportResult {
     report: FileImportReport;
 }
 
-export type ImportErrorCode = 'unknownFormat' | 'noRows' | 'invalidNumber' | 'invalidDate';
+export type ImportErrorCode = 'unknownFormat' | 'noRows' | 'invalidNumber' | 'invalidDate' | 'severalAccounts';
 
 /** A file that cannot be imported; the UI shows a message for `code`. */
 export class FileImportError extends Error {
