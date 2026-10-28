@@ -1,4 +1,5 @@
 import type { Messages } from './de';
+import { fileImportEn } from './fileImport.en';
 
 export const en: Messages = {
     common: {
@@ -467,7 +468,7 @@ export const en: Messages = {
         tabs: { import: 'Import file', manual: 'Enter manually' },
         tabsLabel: 'Entry method',
         importMode: 'Import type',
-        modes: { generic: 'CSV with column mapping', template: 'Broker templates' },
+        modes: { generic: 'CSV with column mapping', template: 'Broker export' },
         steps: { upload: '1 Upload', mapping: '2 Mapping', preview: '3 Preview' },
         startMapping: 'Start mapping',
         rowsDetected: (count: number, fileName: string) => `${count} rows detected (${fileName})`,
@@ -509,17 +510,6 @@ export const en: Messages = {
             + (duplicates ? ` (${duplicates} of them duplicates)` : '')
         ),
         noValidRows: 'No valid rows found.',
-        broker: 'Broker',
-        comingSoon: (name: string) => `${name} (coming soon)`,
-        flatexOnly: 'Currently only the Flatex CSV export (Account & Transactions) is supported.',
-        detected: (trades: number, duplicates: number, balances: number, movements: number) => (
-            `${trades} transactions${duplicates > 0 ? ` (${duplicates} already present)` : ''}, ${balances} balances, ${movements} cash movements detected`
-        ),
-        dropFile: 'Drop the file here',
-        clickToChange: 'Click to change or start the import',
-        flatexHint: 'Upload your Account.csv (cash movements, dividends, balances) or Transactions.csv (buys/sells).',
-        noData: 'No data found',
-        noDataText: 'The file contains no recognizable bookings. Please check the export.',
         unreadable: 'The file could not be read.',
         bookingKind: 'Booking type',
         kinds: { security: 'Security', cash: 'Cash movement (deposit, dividend, fee …)' },
@@ -810,6 +800,8 @@ export const en: Messages = {
         demoPortfolio: 'Demo portfolio',
         numberedPortfolio: (index: number) => `Portfolio ${index}`
     },
+
+    fileImport: fileImportEn,
 
     errors: {
         title: 'Something went wrong',
