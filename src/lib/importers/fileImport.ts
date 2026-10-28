@@ -26,7 +26,7 @@ export interface FileImportResult {
     report: FileImportReport;
 }
 
-export type ImportErrorCode = 'unknownFormat' | 'noRows' | 'invalidNumber' | 'invalidDate' | 'severalAccounts';
+export type ImportErrorCode = 'unknownFormat' | 'noRows' | 'invalidNumber' | 'invalidDate' | 'severalAccounts' | 'missingCurrency';
 
 /** A file that cannot be imported; the UI shows a message for `code`. */
 export class FileImportError extends Error {
@@ -46,7 +46,8 @@ export interface FileImporter {
     verified: string; // YYYY-MM-DD of the last check of guide and format
     /** The format variant this file is in, or null if it is not a file of this importer. */
     detect: (text: string) => string | null;
-    parse: (text: string) => FileImportResult;
+    /** `fileName` only for data the file itself lacks (XTB: account currency), never for detection. */
+    parse: (text: string, fileName?: string) => FileImportResult;
 }
 
 /** First and last booking date of a batch. */

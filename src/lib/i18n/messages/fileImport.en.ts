@@ -44,7 +44,8 @@ export const fileImportEn: typeof fileImportDe = {
         noRows: 'The file contains no booking rows.',
         invalidNumber: (line?: number) => `Number in an unexpected format${line ? ` (line ${line})` : ''}. Please check the export and its language setting.`,
         invalidDate: (line?: number) => `Date in an unexpected format${line ? ` (line ${line})` : ''}. Please check the export and its language setting.`,
-        severalAccounts: 'The file contains bookings of several accounts (e.g. main account and junior depot). Please create one export per account and import each into its own portfolio.'
+        severalAccounts: 'The file contains bookings of several accounts (e.g. main account and junior depot). Please create one export per account and import each into its own portfolio.',
+        missingCurrency: 'The account currency cannot be determined. XTB only puts it in the file name (e.g. EUR_account_….csv); please keep the file name when saving as CSV.'
     },
     variants: {
         degiro: {
@@ -60,6 +61,13 @@ export const fileImportEn: typeof fileImportDe = {
         traderepublic: {
             comma: 'Transaction export CSV (comma)',
             semicolon: 'Transaction export CSV (semicolon)'
+        },
+        xtb: {
+            'cash-8': 'Cash Operations as CSV (8 columns, semicolon)',
+            'cash-8-comma': 'Cash Operations as CSV (8 columns, comma)',
+            'cash-10': 'Cash Operations as CSV (10 columns, semicolon)',
+            'cash-10-comma': 'Cash Operations as CSV (10 columns, comma)',
+            legacy: 'Former CSV export (6 columns)'
         }
     },
     guides: {
@@ -147,6 +155,39 @@ export const fileImportEn: typeof fileImportDe = {
             limits: [
                 'Saveback and bonuses are booked as deposits, not as income.',
                 'The tax on dividends is one sum of withholding and German capital gains tax in the export and is not split.',
+                'The export has no balances; cash is calculated from the bookings.',
+                'The format is only tested with synthetic files based on public samples, not with current original exports.'
+            ]
+        },
+        xtb: {
+            scope: 'XTB trading accounts (xStation), stocks and ETFs. One export per account or account currency. CFD positions are not imported.',
+            steps: [
+                'In xStation click "Account history" at the top, then "Cash operations".',
+                'Choose Export, set the period (ideally from account opening) and the report "Cash Operations", and export it. XTB delivers an Excel file (XLSX), e.g. EUR_account_2025-01-01_2025-06-30.xlsx.',
+                'Open the file in Excel or LibreOffice, select the sheet "Cash Operations" and use "Save as → CSV UTF-8 (comma delimited)". Keep the file name with the currency at the start.',
+                'Drop the CSV file here. The XLSX file itself is not read, nor is an XLSX file that was only renamed.'
+            ],
+            settings: [
+                'The account currency is only in the file name (EUR_, USD_, PLN_ …). Without it the file is refused.',
+                'Separator and decimal mark depend on the spreadsheet program: semicolon with decimal comma (e.g. German settings) and comma with decimal point (English settings) are both read.',
+                'Older direct CSV exports (columns ID;Type;Time;Symbol;Comment;Amount) are read as well.'
+            ],
+            accounts: 'Export each XTB account (e.g. EUR and USD account) separately; the account number in the file keeps the bookings apart. Transfers between sub-accounts in the same file (My Trades, Investment Plans) cancel out. Repeated or overlapping exports are not booked twice, thanks to the operation ID.',
+            supported: [
+                'Buys and sells of stocks and ETFs; quantity and price from the comment (OPEN BUY … @ …), partial fills kept apart',
+                'Dividends and withholding tax (as tax of the position, not as a fee)',
+                'Financial transaction tax (Tax IFTT), commissions and SEC fees',
+                'Interest on free funds and its tax, including corrections',
+                'Deposits and withdrawals'
+            ],
+            unsupported: [
+                'CFD bookings: results of closed positions (Close trade, Profit/Loss), swap/rollover and dividend adjustments on CFDs.',
+                'Spin-offs and transfers to other XTB accounts.',
+                'Unknown or non-English booking types (e.g. Czech texts) are shown as not imported in the preview.'
+            ],
+            limits: [
+                'The export has no ISIN. Securities are created under the XTB ticker (e.g. SPYL.DE, FB.US) and resolved by the quote update; please correct tickers that cannot be resolved in the security details. The same security held with ISIN in another portfolio is not merged.',
+                'CFD and stock are told apart by booking type and ticker (stocks and ETFs have an exchange suffix such as .DE or .US). A CFD with an exchange suffix is only recognised by its type.',
                 'The export has no balances; cash is calculated from the bookings.',
                 'The format is only tested with synthetic files based on public samples, not with current original exports.'
             ]
