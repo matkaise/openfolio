@@ -1,6 +1,6 @@
 # Openfolio
 
-Lokaler Portfolio-Tracker: Depots, Dividenden und Performance aus Broker-Exporten (DEGIRO/flatex, Swissquote, generische CSV), ohne Cloud. Projekte werden als `.openfolio`-Datei auf dem eigenen Rechner gespeichert, auf Wunsch mit Passwort verschlüsselt (AES-256-GCM).
+Lokaler Portfolio-Tracker: Depots, Dividenden und Performance aus Broker-Exporten (DEGIRO/flatex, Swissquote, Trade Republic, generische CSV), ohne Cloud. Projekte werden als `.openfolio`-Datei auf dem eigenen Rechner gespeichert, auf Wunsch mit Passwort verschlüsselt (AES-256-GCM).
 
 ## Entwicklung
 
