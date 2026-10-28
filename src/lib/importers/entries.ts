@@ -1,5 +1,5 @@
 import { cashMovementKind } from '@/lib/domain/ledger/ledger';
-import type { CashMovement, LedgerEntry } from '@/types/domain';
+import type { CashMovement, LedgerEntry, LedgerKind } from '@/types/domain';
 
 // What importers (CSV files, broker APIs) produce: ledger entries without id and portfolio.
 // Both are assigned when the batch is merged into a project (applyImportBatch).
@@ -60,6 +60,7 @@ export const statementEntry = (input: {
     orderId?: string;
     date: string;
     type: StatementType;
+    kind?: LedgerKind; // overrides the kind derived from `type` (e.g. 'fx' for currency exchange legs)
     amount: number;
     currency: string;
     description?: string;
@@ -72,7 +73,7 @@ export const statementEntry = (input: {
     ...optional('externalId', input.externalId),
     ...optional('orderId', input.orderId),
     date: input.date.slice(0, 10),
-    kind: cashMovementKind({ type: input.type, description: input.description, isin: input.isin }),
+    kind: input.kind ?? cashMovementKind({ type: input.type, description: input.description, isin: input.isin }),
     ...optional('isin', input.isin),
     ...optional('name', input.name),
     amount: input.amount,

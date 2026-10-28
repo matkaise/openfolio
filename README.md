@@ -1,6 +1,6 @@
 # Openfolio
 
-Lokaler Portfolio-Tracker: Depots, Dividenden und Performance aus Broker-Exporten (DEGIRO/flatex, generische CSV), ohne Cloud. Projekte werden als `.openfolio`-Datei auf dem eigenen Rechner gespeichert, auf Wunsch mit Passwort verschlüsselt (AES-256-GCM).
+Lokaler Portfolio-Tracker: Depots, Dividenden und Performance aus Broker-Exporten (DEGIRO/flatex, Swissquote, generische CSV), ohne Cloud. Projekte werden als `.openfolio`-Datei auf dem eigenen Rechner gespeichert, auf Wunsch mit Passwort verschlüsselt (AES-256-GCM).
 
 ## Entwicklung
 
@@ -21,6 +21,7 @@ npm run lint && npx tsc --noEmit && npm test && npm run build
 
 - `src/lib/domain/` – reine Rechenlogik ohne React (Wechselkurse, Ledger). Berechnungen gehören hierher, nicht in Komponenten.
 - `src/lib/csvParser.ts`, `src/lib/importMerge.ts` – Import und Deduplizierung.
+- `src/lib/importers/` – Broker-Dateiimporte (Registry, Formaterkennung, Importbericht); Stand und Quellen in `docs/broker-imports.md`.
 - `src/lib/projectPersistence.ts`, `src/lib/projectCrypto.ts` – Projektdatei (SQLite) und Verschlüsselung.
 - `src/app/api/` – lokale API-Routen (ECB-Kurse, Yahoo Finance, Ticker-Suche).
 - `src/lib/i18n/` – Oberfläche auf Deutsch und Englisch. Texte stehen in `messages/de.ts` (Quelle) und `messages/en.ts`; Komponenten lesen sie mit `useT()`, Code außerhalb von React mit `getT()`. Die Sprache folgt dem Browser und lässt sich unter Einstellungen → Darstellung festlegen. Ein Test schlägt fehl, wenn deutscher Text direkt in Komponenten steht.
