@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { columnIndex, findHeaderRow, normalizeHeader, parseDotDecimal, readCsv } from '../csv';
+import { columnIndex, findHeaderRow, locateHeader, normalizeHeader, parseDotDecimal, readCsv } from '../csv';
 
 describe('readCsv', () => {
   it('drops the BOM, reads CRLF and LF and skips empty lines', () => {
@@ -26,6 +26,12 @@ describe('header helpers', () => {
     const rows = [['Account', '123'], ['Period', '2024'], ['Date', 'Amount', 'Currency'], ['01-01-2024', '1', 'EUR']];
     expect(findHeaderRow(rows, ['date', 'AMOUNT'])).toBe(2);
     expect(findHeaderRow(rows, ['date', 'ISIN'])).toBe(-1);
+  });
+
+  it('finds delimiter and header row of a converted file', () => {
+    expect(locateHeader('\uFEFFTitle\n\nDate;Amount\n01.01.2024;1,5\n', ['date', 'amount'])).toEqual({ delimiter: ';', row: 1, header: ['Date', 'Amount'] });
+    expect(locateHeader('Date\tAmount\n', ['Date', 'Amount'])).toEqual({ delimiter: '\t', row: 0, header: ['Date', 'Amount'] });
+    expect(locateHeader('Date,Amount\n', ['Date', 'ISIN'])).toBeNull();
   });
 
   it('looks up columns by any alias', () => {

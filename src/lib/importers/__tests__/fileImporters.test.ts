@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { FileImportError } from '../fileImport';
 import { detectFileImporter, FILE_IMPORTERS, readImportFiles } from '../fileImporters';
 import { parseDegiroFiles } from '../importBatch';
+import { fileImportDe } from '@/lib/i18n/messages/fileImport.de';
+import { fileImportEn } from '@/lib/i18n/messages/fileImport.en';
 
 const fixtureDir = path.join(__dirname, '..', '..', '__tests__', 'fixtures');
 const accountCsv = readFileSync(path.join(fixtureDir, 'degiro-account.csv'), 'utf-8');
@@ -24,6 +26,24 @@ describe('file importer registry', () => {
     FILE_IMPORTERS.forEach((importer) => {
       expect(importer.sources.length).toBeGreaterThan(0);
       expect(importer.verified).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+  });
+
+  it('has an export guide and variant names in German and English for every importer', () => {
+    FILE_IMPORTERS.forEach((importer) => {
+      expect(fileImportDe.guides[importer.id]?.steps.length, importer.id).toBeGreaterThan(0);
+      expect(fileImportEn.guides[importer.id]?.steps.length, importer.id).toBeGreaterThan(0);
+      expect(Object.keys(fileImportEn.variants[importer.id] || {}), importer.id).toEqual(Object.keys(fileImportDe.variants[importer.id] || {}));
+    });
+  });
+
+  it('gives every CSV fixture to exactly one importer, with a named variant', () => {
+    const fixtures = ['degiro-account.csv', 'degiro-transactions.csv', 'swissquote-en.csv', 'swissquote-de.csv', 'trading212.csv', 'traderepublic.csv', 'xtb-cash-operations.csv', 'xtb-legacy.csv', 'saxo.csv'];
+    fixtures.forEach((file) => {
+      const text = readFileSync(path.join(fixtureDir, file), 'utf-8');
+      const matches = FILE_IMPORTERS.filter((importer) => importer.detect(text) !== null);
+      expect(matches.map((importer) => importer.id), file).toHaveLength(1);
+      expect(fileImportDe.variants[matches[0].id]?.[matches[0].detect(text) as string], file).toBeTruthy();
     });
   });
 

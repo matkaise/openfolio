@@ -30,6 +30,21 @@ export const findHeaderRow = (rows: string[][], required: string[], maxRow = 20)
     return -1;
 };
 
+/**
+ * Delimiter and header row of a file whose header holds all `required` names, or null.
+ * For exports users convert from Excel themselves: the delimiter then depends on their
+ * Excel locale. Only the first lines are read, so detection stays cheap on large files.
+ */
+export const locateHeader = (text: string, required: string[], delimiters = [',', ';', '\t']): { delimiter: string; row: number; header: string[] } | null => {
+    const head = text.replace(/^\uFEFF/, '').split(/\r?\n/, 20).join('\n');
+    for (const delimiter of delimiters) {
+        const rows = readCsv(head, delimiter);
+        const row = findHeaderRow(rows, required);
+        if (row >= 0) return { delimiter, row, header: rows[row] };
+    }
+    return null;
+};
+
 /** Column lookup by header name; the first matching alias wins. */
 export const columnIndex = (header: string[]) => {
     const positions = new Map<string, number>();

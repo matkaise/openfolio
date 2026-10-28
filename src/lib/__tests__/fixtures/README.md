@@ -37,3 +37,9 @@ Never copy rows from a real export into this folder.
 - `xtb-legacy.csv`: the former direct XTB CSV export (`ID;Type;Time;Symbol;Comment;Amount`, decimal point) with two
   identical buys of different operation ids, interest with tax, a dividend with withholding tax and a CFD result.
   Booked rows add up to EUR 603.55.
+- `saxo.csv`: Saxo transactions export as Excel saves it as CSV (comma separated, amounts with decimal comma in
+  quotes), 15-column variant with "Booked Amount", newest row first. EUR account: a deposit, EUR buys and a sell
+  whose booked amount includes costs, a USD and a GBX buy converted into EUR (conversion rate ≠ 1), dividends
+  (one converted), a withholding tax row, custody fee, interest, a withdrawal, two identical buys without order
+  id, a Dutch buy ("Koop", month "mei") and a stock split (not supported, must be reported). Cash ends at
+  EUR 2404.73, USD 0 and GBX 0.

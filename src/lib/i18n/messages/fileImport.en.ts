@@ -72,6 +72,10 @@ export const fileImportEn: typeof fileImportDe = {
             'cash-10': 'Cash Operations as CSV (10 columns, semicolon)',
             'cash-10-comma': 'Cash Operations as CSV (10 columns, comma)',
             legacy: 'Former CSV export (6 columns)'
+        },
+        saxo: {
+            booked: 'Transactions export (saved from Excel as CSV, column "Booked Amount")',
+            amount: 'Transactions export (saved from Excel as CSV, older column "Amount")'
         }
     },
     guides: {
@@ -224,6 +228,39 @@ export const fileImportEn: typeof fileImportDe = {
                 'CFD and stock are told apart by booking type and ticker (stocks and ETFs have an exchange suffix such as .DE or .US). A CFD with an exchange suffix is only recognised by its type.',
                 'The export has no balances; cash is calculated from the bookings.',
                 'The format is only tested with synthetic files based on public samples, not with current original exports.'
+            ]
+        },
+        saxo: {
+            scope: 'Saxo trading accounts (Saxo Bank and other Saxo entities): export of the transaction overview. Not a portfolio or positions report.',
+            steps: [
+                'Log in to Saxo (SaxoTrader or SaxoInvestor) and open Transactions in the account section; alternatively via your profile at the top right → Transaction overview.',
+                'Set the period, ideally from account opening, and keep the filters trades, corporate actions and cash transfers switched on.',
+                'Click Export and choose Excel. Saxo delivers an XLSX file.',
+                'Open the XLSX file in Excel or LibreOffice and save it as CSV via File → Save as (comma or semicolon as separator).',
+                'Drop the CSV file here.'
+            ],
+            settings: [
+                'XLSX files are not read directly. When saving as CSV, do not delete columns or change number or date formats.',
+                'Dates as in the export (e.g. 02-Apr-2025) or as 2025-04-02 or 02.04.2025. Dates with slashes are ambiguous and rejected.',
+                'Amounts with decimal comma or decimal point, but the same throughout the file.',
+                'English interface recommended. Dutch exports are read for buys (Koop).'
+            ],
+            accounts: 'Use one portfolio per Saxo account. The account currency is taken from the cash movements in the file; if they are in several currencies, converted bookings are shown as not imported. Overlapping exports are not booked twice.',
+            supported: [
+                'Buys and sells (Buy/Sell, Koop/Verkoop) with quantity and price from the booking text; the difference to the booked amount as fee',
+                'Buys and sells in a foreign currency; the conversion is booked as an internal transfer between account and instrument currency',
+                'Dividends (net amount as booked) and withholding tax if the export has it as a row of its own',
+                'Deposits and withdrawals, custody and other fees, interest'
+            ],
+            unsupported: [
+                'Corporate actions other than dividends (splits, spin-offs, mergers), security transfers and unknown booking texts: shown as not imported.',
+                'Options, futures and CFDs (column "From Derivative" = Yes) are shown as not imported.',
+                'Rows without ISIN are not matched to a security by their symbol.'
+            ],
+            limits: [
+                'For buys in a foreign currency, fees and conversion costs are part of the converted amount and not shown separately.',
+                'Withholding tax is not estimated. Dutch texts for cash movements, interest and taxes are not backed by public samples.',
+                'Only tested with synthetic files based on public samples.'
             ]
         }
     } satisfies Record<string, ImportGuide>
