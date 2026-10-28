@@ -28,6 +28,15 @@ Never copy rows from a real export into this folder.
   currency conversion. Covers a deposit, a market buy with conversion fee, a GBX limit buy with stamp duty in
   GBP, a dividend with withholding tax, interest, a sell, a currency conversion, a withdrawal, plus a stock
   split and a card payment (both not supported, must be reported).
+- `xtb-cash-operations.csv`: XTB "Cash Operations" sheet saved as CSV (`;`, decimal comma), 8-column layout with the
+  four metadata rows and the closing Total row (1009.11 = sum of all amounts). Account currency EUR comes from the
+  file name the tests pass (`EUR_account_….csv`). Booked rows add up to EUR 971.61; holdings 6 ACME.DE, 5 EXMP.US,
+  0.5 WRLD.DE. Covers a deposit, partial fills, financial transaction tax, interest with its tax, a sale with
+  commission, a dividend with withholding tax, a withdrawal, a paired sub-account transfer (ignored), and CFD rows
+  (Close trade, Swap, index dividend), a spin-off and a transfer to another account (all not supported).
+- `xtb-legacy.csv`: the former direct XTB CSV export (`ID;Type;Time;Symbol;Comment;Amount`, decimal point) with two
+  identical buys of different operation ids, interest with tax, a dividend with withholding tax and a CFD result.
+  Booked rows add up to EUR 603.55.
 - `saxo.csv`: Saxo transactions export as Excel saves it as CSV (comma separated, amounts with decimal comma in
   quotes), 15-column variant with "Booked Amount", newest row first. EUR account: a deposit, EUR buys and a sell
   whose booked amount includes costs, a USD and a GBX buy converted into EUR (conversion rate ≠ 1), dividends

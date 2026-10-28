@@ -1,0 +1,26 @@
+Account number;00000000;;;;;;
+Cash Operations;;;;;;;
+Date from (UTC);2025-01-01 00:00:00;;;;;;
+Date to (UTC);2025-06-30 23:59:59;;;;;;
+Type;Ticker;Instrument;Time;Amount;ID;Comment;Product
+Deposit;;;2025-01-02 09:00:00;2000;1001;Deposit;My Trades
+Stock purchase;ACME.DE;Acme Corp;2025-01-03 10:00:00;-500,00;1002;OPEN BUY 10 @ 50.00;My Trades
+Stock purchase;ACME.DE;Acme Corp;2025-01-03 10:00:01;-100,40;1003;OPEN BUY 2/12 @ 50.20;My Trades
+Tax IFTT;ACME.DE;Acme Corp;2025-01-03 10:00:01;-0,60;1004;Financial transaction tax;My Trades
+Stock purchase;EXMP.US;Example Inc;2025-01-06 15:30:00;-460,00;1005;OPEN BUY 5 @ 92.00;My Trades
+Free funds interest;;;2025-02-03 18:00:00;1,50;1006;Free-funds Interest 2025-01;My Trades
+Free funds interest tax;;;2025-02-03 18:00:00;-0,28;1007;Free-funds Interest Tax 2025-01;My Trades
+Stock sale;ACME.DE;Acme Corp;2025-02-10 11:00:00;330,00;1008;CLOSE BUY 6/12 @ 55.00;My Trades
+Commission;ACME.DE;Acme Corp;2025-02-10 11:00:00;-0,66;1009;Commission;My Trades
+Dividend;EXMP.US;Example Inc;2025-03-14 11:00:00;2,30;1010;EXMP.US USD 0.5000/ SHR;My Trades
+Withholding tax;EXMP.US;Example Inc;2025-03-14 11:00:00;-0,35;1011;EXMP.US USD WHT 15%;My Trades
+Withdrawal;;;2025-04-01 09:00:00;-200;1012;Withdrawal;My Trades
+Subaccount transfer;;;2025-04-02 08:00:00;100;1013;Transfer between accounts;Investment Plans
+Subaccount transfer;;;2025-04-02 08:00:00;-100;1014;Transfer between accounts;My Trades
+Stock purchase;WRLD.DE;World Equity ETF;2025-04-02 09:00:00;-99,90;1015;OPEN BUY 0.5 @ 199.80;Investment Plans
+Close trade;US500;US500;2025-04-10 17:00:00;-12,50;1016;Profit of position #500;My Trades
+Swap;US500;US500;2025-04-10 17:00:00;-0,40;1017;Swap of position #500;My Trades
+Dividend;US500;US500;2025-04-11 10:00:00;-0,80;1018;US500 USD 1.6000/ Indices;My Trades
+Spinoff;EXMP.US;Example Inc;2025-05-02 14:30:00;1,20;1019;EXMP.US USD 0.2400/ SHR;My Trades
+Transfer;;;2025-05-05 08:00:00;50;1020;Transfer from 99999999 to 00000000;My Trades
+Total;;;;1009,11;;;
