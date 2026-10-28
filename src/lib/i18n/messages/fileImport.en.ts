@@ -67,6 +67,11 @@ export const fileImportEn: typeof fileImportDe = {
         schwab: {
             standard: 'CSV history export',
             titled: 'CSV history export (older form with title row)'
+        },
+        revolut: {
+            comma: 'Investment account statement (CSV, comma)',
+            semicolon: 'Investment account statement (CSV, semicolon)',
+            tab: 'Investment account statement (TSV, tab)'
         }
     },
     guides: {
@@ -217,6 +222,38 @@ export const fileImportEn: typeof fileImportDe = {
             limits: [
                 'The export has tickers or CUSIPs, no ISIN. The security is looked up by ticker at the next price update; CUSIPs can usually not be matched automatically.',
                 'All amounts in USD. For "as of" dates the booking date is used; the "as of" date stays in the raw data.',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        revolut: {
+            scope: 'Revolut investment account (stocks/ETFs): account statement as a spreadsheet. Not for crypto, commodities or the profit & loss statement.',
+            steps: [
+                'Open Invest at the bottom of the Revolut app.',
+                'Tap More (…) and choose Documents.',
+                'Choose Stocks or the brokerage account and tap Account statement.',
+                'Choose the period from account opening and the spreadsheet format (CSV or Excel), not PDF.',
+                'Open an Excel file in Excel or LibreOffice and save it as CSV. Drop CSV or TSV files here unchanged.'
+            ],
+            settings: [
+                'Do not use the Profit & Loss statement or the Cost & Charges report: they have no individual bookings.',
+                'Crypto is a separate export with other columns and is not read here.',
+                'When saving as CSV, do not delete columns or change date or number formats. Dates with slashes are rejected.'
+            ],
+            accounts: 'Use one portfolio per Revolut investment account. Several currencies of the same account are in one file. Overlapping exports are not booked twice.',
+            supported: [
+                'Buys and sells (market, limit, stop) with the total amount as cash amount',
+                'Dividends (net, as credited) and tax corrections shown as a row of their own',
+                'Custody fees, deposits (cash top-up) and withdrawals (cash withdrawal)'
+            ],
+            unsupported: [
+                'Stock splits: shown as not imported and never booked as a buy.',
+                'Transfers between Revolut entities (Transfer from … to …) with quantity or amount: shown as not imported. They usually do not change holdings, please check.',
+                'Rows without ticker are not matched to a security.'
+            ],
+            limits: [
+                'Revolut does not show trading fees separately; they are part of the total amount.',
+                'The export has tickers, no ISIN. The security is looked up by ticker at the next price update.',
+                'The date comes from the export time (UTC); bookings shortly after midnight can be one day off. Withholding tax is not estimated.',
                 'Only tested with synthetic files based on public samples.'
             ]
         }
