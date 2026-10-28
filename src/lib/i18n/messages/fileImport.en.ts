@@ -43,7 +43,8 @@ export const fileImportEn: typeof fileImportDe = {
         unknownFormat: 'The file format was not recognised. Please create the export as described in the guide; several files must all come from the same broker.',
         noRows: 'The file contains no booking rows.',
         invalidNumber: (line?: number) => `Number in an unexpected format${line ? ` (line ${line})` : ''}. Please check the export and its language setting.`,
-        invalidDate: (line?: number) => `Date in an unexpected format${line ? ` (line ${line})` : ''}. Please check the export and its language setting.`
+        invalidDate: (line?: number) => `Date in an unexpected format${line ? ` (line ${line})` : ''}. Please check the export and its language setting.`,
+        severalAccounts: 'The file contains bookings of several accounts (e.g. main account and junior depot). Please create one export per account and import each into its own portfolio.'
     },
     variants: {
         degiro: {
@@ -59,6 +60,10 @@ export const fileImportEn: typeof fileImportDe = {
             'en-15': 'CSV, English (15 columns, with net amount in account currency)',
             'de-15': 'CSV, German (15 columns, with net amount in account currency)',
             'de-13': 'CSV, German (13 columns)'
+        },
+        traderepublic: {
+            comma: 'Transaction export CSV (comma)',
+            semicolon: 'Transaction export CSV (semicolon)'
         }
     },
     guides: {
@@ -146,6 +151,37 @@ export const fileImportEn: typeof fileImportDe = {
             ],
             limits: [
                 'Dividends are booked with the net amount, because the export has no gross amount with tax.',
+                'The format is only tested with synthetic files based on public samples, not with current original exports.'
+            ]
+        },
+        traderepublic: {
+            scope: 'Trade Republic accounts (securities and cash account); the native transaction export available since April 2026. Not for CSV files of the pytr tool or for PDF statements.',
+            steps: [
+                'In the Trade Republic app tap your profile picture ("Profile" or "Service", depending on the app version).',
+                'Open Statements (Kontoauszüge) → Transaction export (Transaktionsexport).',
+                'Choose the period, ideally from account opening, and tap Create or Share.',
+                'Drop the CSV file here unchanged.'
+            ],
+            settings: [
+                'Export the full period if possible: holdings and cash only add up from the complete history.',
+                'Do not open and re-save the file in Excel: separators and number format could change.'
+            ],
+            accounts: 'Export the main account and a junior depot separately and import them into separate portfolios; a file with several accounts is refused. Repeated or overlapping exports are not booked twice, thanks to the transaction ID.',
+            supported: [
+                'Buys and sells (including savings plans and fractional shares) with fee; tax on sales as a tax booking of its own',
+                'Dividends and distributions gross with the tax withheld; reversals and re-bookings of dividends',
+                'Interest on cash with tax, bond coupons, repayment of matured bonds and warrants',
+                'Advance lump-sum tax (Vorabpauschale), tax optimisation and tax refunds',
+                'Deposits and withdrawals, transfers, card payments and refunds, gifts, Saveback and bonuses; card top-up fees as a fee of their own'
+            ],
+            unsupported: [
+                'Crypto: the export has no ISIN for it; the rows are shown as not imported.',
+                'Private markets pre-payments, splits, mergers, exchanges and other corporate actions as well as unknown booking types: shown as not imported in the preview.'
+            ],
+            limits: [
+                'Saveback and bonuses are booked as deposits, not as income.',
+                'The tax on dividends is one sum of withholding and German capital gains tax in the export and is not split.',
+                'The export has no balances; cash is calculated from the bookings.',
                 'The format is only tested with synthetic files based on public samples, not with current original exports.'
             ]
         }
