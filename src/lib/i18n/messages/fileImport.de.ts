@@ -96,6 +96,10 @@ export const fileImportDe = {
             comma: 'Kontoauszug Investmentkonto (CSV, Komma)',
             semicolon: 'Kontoauszug Investmentkonto (CSV, Semikolon)',
             tab: 'Kontoauszug Investmentkonto (TSV, Tabulator)'
+        },
+        etoro: {
+            contracts: 'Kontoauszug, Blatt Account Activity (CSV, Spalte „Units / Contracts“)',
+            units: 'Kontoauszug, Blatt Account Activity (CSV, ältere Spalte „Units“)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -342,6 +346,39 @@ export const fileImportDe = {
                 'Revolut weist Handelsgebühren nicht getrennt aus; sie stecken im Gesamtbetrag.',
                 'Der Export enthält Ticker, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über den Ticker gesucht.',
                 'Das Datum stammt aus der Exportzeit (UTC); Buchungen kurz nach Mitternacht können einen Tag abweichen. Quellensteuer wird nicht geschätzt.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        etoro: {
+            scope: 'eToro-Investmentkonto (Aktien und ETFs, USD-Konto): Kontoauszug (Account statement) als Excel, Blatt „Account Activity“. CFDs, Krypto und Copy-Trading-Überträge werden nicht als Wertpapierbuchungen übernommen.',
+            steps: [
+                'Im Browser auf etoro.com anmelden und Portfolio öffnen.',
+                'Oben History wählen, dann ganz rechts das Symbol anklicken und Account statement wählen. Alternativ: Einstellungen → Konto → Dokumente → Account Statement → Ansehen.',
+                'Den Zeitraum ab Kontoeröffnung wählen und Create anklicken.',
+                'Oben rechts das Excel-Symbol anklicken und die Datei herunterladen.',
+                'Die Datei in Excel oder LibreOffice öffnen, das Blatt „Account Activity“ wählen und dieses Blatt als CSV speichern (Trennzeichen Komma oder Semikolon). Die CSV-Datei hier ablegen.'
+            ],
+            settings: [
+                'Sprache der eToro-Website: Englisch. Die Spalten und Buchungstypen werden englisch erwartet.',
+                'Nur das Blatt „Account Activity“ speichern, nicht „Closed Positions“, „Dividends“ oder „Account Summary“.',
+                'Beim Speichern keine Spalten löschen und keine Datums- oder Zahlenformate ändern. Das Datum muss im eToro-Format TT/MM/JJJJ bleiben.'
+            ],
+            accounts: 'Ein eToro-Konto je Depot. Alle Beträge des Blatts sind USD, auch bei Einzahlungen aus einem EUR- oder GBP-Konto (eToro rechnet beim Eingang um). Überlappende Exporte werden nicht doppelt gebucht.',
+            supported: [
+                'Eröffnete und geschlossene Positionen in Aktien und ETFs als Kauf und Verkauf (investierter bzw. ausgezahlter USD-Betrag, Stückzahl aus „Units“)',
+                'Dividenden (netto, wie gutgeschrieben), Zinsen (Interest Payment)',
+                'Einzahlungen, Auszahlungen (Withdraw Request), Auszahlungsgebühr und britische Stempelsteuer (SDRT) als Gebühr'
+            ],
+            unsupported: [
+                'CFD-Positionen, Übernachtgebühren und -erstattungen sowie CFD-Dividenden: erscheinen als nicht übernommen.',
+                'Krypto und andere Anlagearten außer Aktien und ETFs: erscheinen als nicht übernommen.',
+                'Copy-Trading: Die Positionen des kopierten Traders werden wie eigene gebucht; „Start Copy“ ohne Betrag wird übersprungen, „Stop Copy“ und andere Typen mit Betrag erscheinen als nicht übernommen.',
+                'Zeilen ohne Symbol und negative Aktiendividenden werden keinem Wertpapier zugeordnet und erscheinen als nicht übernommen.'
+            ],
+            limits: [
+                'Der Export enthält eToro-Symbole (z. B. „BRIT.L“), keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über das Symbol gesucht.',
+                'Käufe und Verkäufe werden in USD gebucht, auch bei Wertpapieren in EUR oder GBX; den Kurs in Handelswährung enthält das Blatt nicht. Umrechnungsgebühren (Conversion Fee) sind im umgerechneten Betrag enthalten und werden nur angezeigt.',
+                'Quellensteuer steht nur im Blatt „Dividends“ und wird nicht geschätzt. Der Kontostand (Balance) wird nicht übernommen: bei CFDs, Krypto und Copy-Trading weicht er vom gebuchten Geld ab.',
                 'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
             ]
         }

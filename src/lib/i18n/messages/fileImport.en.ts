@@ -85,6 +85,10 @@ export const fileImportEn: typeof fileImportDe = {
             comma: 'Investment account statement (CSV, comma)',
             semicolon: 'Investment account statement (CSV, semicolon)',
             tab: 'Investment account statement (TSV, tab)'
+        },
+        etoro: {
+            contracts: 'Account statement, Account Activity sheet (CSV, column "Units / Contracts")',
+            units: 'Account statement, Account Activity sheet (CSV, older column "Units")'
         }
     },
     guides: {
@@ -331,6 +335,39 @@ export const fileImportEn: typeof fileImportDe = {
                 'Revolut does not show trading fees separately; they are part of the total amount.',
                 'The export has tickers, no ISIN. The security is looked up by ticker at the next price update.',
                 'The date comes from the export time (UTC); bookings shortly after midnight can be one day off. Withholding tax is not estimated.',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        etoro: {
+            scope: 'eToro investment account (stocks and ETFs, USD account): account statement as Excel, sheet "Account Activity". CFDs, crypto and copy trading transfers are not imported as security bookings.',
+            steps: [
+                'Log in on etoro.com in a browser and open Portfolio.',
+                'Choose History at the top, click the icon on the far right and choose Account statement. Alternatively: Settings → Account → Documents → Account Statement → View.',
+                'Choose the period from account opening and click Create.',
+                'Click the Excel icon at the top right and download the file.',
+                'Open the file in Excel or LibreOffice, select the "Account Activity" sheet and save this sheet as CSV (comma or semicolon separated). Drop the CSV file here.'
+            ],
+            settings: [
+                'eToro website language: English. Columns and booking types are expected in English.',
+                'Save only the "Account Activity" sheet, not "Closed Positions", "Dividends" or "Account Summary".',
+                'Do not delete columns or change date or number formats when saving. Dates must stay in the eToro format DD/MM/YYYY.'
+            ],
+            accounts: 'One eToro account per portfolio. All amounts of the sheet are USD, also for deposits from a EUR or GBP account (eToro converts them on arrival). Overlapping exports are not booked twice.',
+            supported: [
+                'Opened and closed stock and ETF positions as buys and sells (USD amount invested or paid out, quantity from "Units")',
+                'Dividends (net, as credited), interest (Interest Payment)',
+                'Deposits, withdrawals (Withdraw Request), the withdrawal fee and UK stamp duty (SDRT) as fees'
+            ],
+            unsupported: [
+                'CFD positions, overnight fees and refunds and CFD dividends: shown as not imported.',
+                'Crypto and asset types other than stocks and ETFs: shown as not imported.',
+                'Copy trading: positions of the copied trader are booked like your own; "Start Copy" without amount is skipped, "Stop Copy" and other types with an amount are shown as not imported.',
+                'Rows without symbol and negative stock dividends are not matched to a security and are shown as not imported.'
+            ],
+            limits: [
+                'The export has eToro symbols (e.g. "BRIT.L"), no ISIN. The security is looked up by symbol at the next price update.',
+                'Buys and sells are booked in USD, also for securities in EUR or GBX; the sheet has no price in the trading currency. Conversion fees are part of the converted amount and are only shown.',
+                'Withholding tax is only in the "Dividends" sheet and is not estimated. The balance column is not imported: with CFDs, crypto or copy trading it differs from the booked cash.',
                 'Only tested with synthetic files based on public samples.'
             ]
         }
