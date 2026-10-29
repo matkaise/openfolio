@@ -34,6 +34,8 @@ export const fileImportEn: typeof fileImportDe = {
         unsupported: 'Not imported',
         unsupportedHint: 'These rows have a financial effect that Openfolio does not import for this format yet. Add them manually if needed.',
         ignoredHint: 'Administrative rows without cash or position effect.',
+        unsupportedHintPdf: 'These documents or bookings have a financial effect that Openfolio does not import yet. Add them manually if needed.',
+        ignoredHintPdf: 'Documents without cash or position effect, e.g. cost information or order confirmations.',
         note: (line: number, label: string, file?: string, page?: number) => `${file ? `${file}, ` : ''}${page ? `page ${page}` : `line ${line}`}: ${label || '(no type)'}`,
         more: (count: number) => `… and ${count} more`,
         nothingNew: 'Every booking in this file is already in the portfolio.'
