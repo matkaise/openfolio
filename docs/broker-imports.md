@@ -54,6 +54,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | Saxo | Transaktionsexport, aus Excel als CSV gespeichert (`,` oder `;`): `booked` (Booked Amount, 15 Spalten), `amount` (Amount, 13 Spalten) | Käufe/Verkäufe aus dem Buchungstext (Buy/Sell, Koop/Verkoop), Differenz zum gebuchten Betrag als Gebühr, Fremdwährungskäufe mit Umrechnung als interne FX-Buchungen, Dividenden (netto), Quellensteuer als eigene Zeile, Ein-/Auszahlungen, Gebühren, Zinsen | Kapitalmaßnahmen außer Dividenden, Derivate (`From Derivative` = Yes), unbekannte Texte, Zeilen ohne ISIN, umgerechnete Zeilen ohne bestimmbare Kontowährung; XLSX nicht direkt |
 | Charles Schwab | CSV-Kontoverlauf (`standard`, `titled` mit Titelzeile), US-Zahlenformat, Summenzeile wird übersprungen | Buy/Sell/Reinvest Shares mit Fees & Comm, Dividenden und Ausschüttungen, Foreign Tax Paid (Quellensteuer), Gebühren, Zinsen, Wire/MoneyLink/Journal/Internal Transfer als Ein-/Auszahlung | Splits, Stock Div Dist, Spin-off, Merger, Name Change, Conversion, Cash In Lieu, Journaled Shares, Security Transfer, Optionen; Zeilen ohne Symbol |
 | Revolut | Kontoauszug Investmentkonto (`comma`, `semicolon`, `tab`); Krypto-Export wird nicht erkannt | Käufe/Verkäufe (Market/Limit/Stop) mit Gesamtbetrag, Dividenden (netto), Steuerkorrekturen, Custody fee, Cash top-up/withdrawal | Stock split, Transfers zwischen Revolut-Gesellschaften mit Stückzahl oder Betrag, unbekannte Typen; Zeilen ohne Ticker |
+| Scalable Capital | PDF, je Dokument eine Datei: `de`, `en` (Scalable Capital GmbH/Bank GmbH), `baader` (Baader Bank für Scalable-Kunden bis 2024) | Wertpapierabrechnung Kauf/Verkauf/Sparplan mit Ordergebühren, Steuern und Finanztransaktionssteuer als Steuerbuchung; Dividenden brutto mit Quellensteuer und deutschen Steuern; Vorabpauschale; Steuerneuberechnung; Baader: Kauf/Verkauf mit Provision und Steuern, Fondsausschüttung/Ausschüttung/Dividende(nabrechnung) | Verrechnungskonto/Kontoauszug, Rechnungsabschluss, Reklassifizierung (Belastung), Kapitalrückzahlung, Zinszahlung, Laufzeitende/Knock-out, Stornos; Baader: Thesaurierung, Vorabpauschale, Steuerausgleich, Kontoauszüge, englische Dokumente; Niederländisch/Italienisch/Französisch. Kosteninformation und Auftragsbestätigung werden ohne Buchung übersprungen |
 
 ## Quellen und Lizenzen
 
@@ -76,6 +77,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | Revolut | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `revolutConverter.ts`, `models/revolutRecord.ts`, `samples/revolut-invest-export.csv`, Issues #107, #163 | Commit `9e35bd6` | Apache-2.0 | Spalten, Typnamen, Betrags- und Mengenformat, Exportweg, TSV aus der App |
 | Revolut | [Revolut Help: trading statements and reports](https://help.revolut.com/help/profile-and-plan/managing-my-account/trading-statements-and-reports/) | 28.10.2026 | – (Dokumentation) | Menüweg Invest → Mehr → Dokumente → Stocks → Account statement; Abgrenzung zu P&L und Cost & Charges |
 | DEGIRO | [Export-To-Ghostfolio README](https://github.com/dickwolff/Export-To-Ghostfolio#degiro) | Commit `9e35bd6` | Apache-2.0 | Exportweg Kontoübersicht |
+| Scalable Capital | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/ScalableCapitalPDFExtractor.java` und `BaaderBankPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/scalablecapital/` und `…/pdf/baaderbank/` | Commit `85c2088f28dfb26e711edf20494dca3e64ae9858` (geprüft 29.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Bankkennungen, Dokumenttitel und -arten beider Generationen, Aufbau der Buchungszeile (Typ, Name, Stück, Kurs, Betrag; ISIN in der Folgezeile), Bezeichnungen und Vorzeichen der Gebühren- und Steuerzeilen, Summenzeilen, Ausführungs- und Ordernummern, Datumsangaben, Baader-Felder (Vorgangs-Nr., „Zu Lasten/Gunsten Konto … Valuta“). Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
+| Scalable Capital | [Parqet FAQ](https://faq.parqet.com/de/articles/651200-scalable-capital-pdf-csv-import) | 29.10.2026 | – (Dokumentation) | Downloadweg im Broker (Transaktionen → Transaktion → PDF) und bei der Baader Bank (Download → Wertpapierumsätze), CSV-Export nur für Prime |
 
 ### Abweichungen von der Vorlage (Swissquote)
 
@@ -199,3 +202,23 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 - Datei mit Komma, Semikolon oder Tabulator (die App liefert laut Issue #107 TSV). Datum in UTC laut Export.
 - GBX bleibt GBX (Vorlage: GBp). Ticker werden als Wertpapierkennung verwendet und beim Kursabruf zugeordnet.
 - Der Krypto-Kontoauszug (`Symbol,Type,Quantity,Price,Value,Fees,Date`) ist nicht Teil dieses Pakets und wird nicht erkannt.
+
+### Abweichungen von der Vorlage (Scalable Capital)
+
+- Abstimmung statt Ableitung: PP setzt den Endbetrag als Buchungsbetrag und leitet Gebühren und Steuern einzeln ab.
+  Openfolio bucht eine Abrechnung nur, wenn Kurswert ± Gebühren ± Steuern genau den Endbetrag ergeben, und meldet sie
+  sonst (ebenso bei unbekannten Buchungszeilen) als nicht übernommen.
+- Steuern auf Verkäufe und die Finanztransaktionssteuer werden als eigene Steuerbuchung der Position geführt, nicht im
+  Handelsbetrag; Dividenden brutto mit Quellensteuer und deutschen Steuern als einbehaltene Steuern der Position.
+- Handelsdatum ist der Ausführungstag (PP: Ausführungszeitpunkt), Dividenden zur Wertstellung wie bei PP.
+- Kennung: Order- und Geschäftsnummer (Baader: Vorgangsnummer); Dividenden über ISIN, Buchungs- und Valutadatum und
+  Bruttobetrag. Teilausführungen einer Order haben verschiedene Geschäftsnummern und bleiben getrennt.
+- Kontoauszüge (Verrechnungskonto) bucht PP für Ein-/Auszahlungen, Zinsen und Prime-Gebühren. Openfolio meldet sie in
+  diesem Schritt als nicht übernommen; Ein- und Auszahlungen müssen vorerst manuell erfasst werden.
+- Reklassifizierungen mit Belastung lehnt PP ebenfalls ab; Openfolio meldet sie.
+- Steuererstattungen beim Verkauf („Steuern +…“) werden als positive Steuerbuchung gebucht; PP verrechnet sie mit dem
+  Verkaufserlös.
+- Baader: Nur Wertpapierabrechnungen und Ausschüttungen/Dividenden auf Deutsch. Bei Fremdwährungsausschüttungen wird der
+  Bruttobetrag in Kontowährung gebucht, der Betrag in Fondswährung bleibt in den Rohdaten. Stornos werden gemeldet.
+- Überschneidung mit CSV: Openfolio hat keinen Scalable-CSV-Import; der CSV-Export für Prime-Kunden ist eine offene Lücke.
+  Ein späterer CSV-Import müsste dieselben Kennungen verwenden, sonst darf er nicht ins selbe Depot.

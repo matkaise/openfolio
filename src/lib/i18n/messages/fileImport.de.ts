@@ -102,6 +102,11 @@ export const fileImportDe = {
             comma: 'Kontoauszug Investmentkonto (CSV, Komma)',
             semicolon: 'Kontoauszug Investmentkonto (CSV, Semikolon)',
             tab: 'Kontoauszug Investmentkonto (TSV, Tabulator)'
+        },
+        scalable: {
+            de: 'PDF-Abrechnung Scalable Capital (deutsch)',
+            en: 'PDF-Abrechnung Scalable Capital (englisch)',
+            baader: 'PDF-Abrechnung der Baader Bank (bis 2024)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -349,6 +354,37 @@ export const fileImportDe = {
                 'Der Export enthält Ticker, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über den Ticker gesucht.',
                 'Das Datum stammt aus der Exportzeit (UTC); Buchungen kurz nach Mitternacht können einen Tag abweichen. Quellensteuer wird nicht geschätzt.',
                 'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        scalable: {
+            scope: 'Scalable Capital Broker (Depot bei der Scalable Capital Bank) mit Abrechnungen auf Deutsch oder Englisch sowie ältere Abrechnungen der Baader Bank für Scalable-Kunden (Broker und Vermögensverwaltung bis 2024). Nicht für den CSV-Export (Prime) und nicht für Kontoauszüge.',
+            steps: [
+                'Bei Scalable Capital einloggen und den Broker wählen.',
+                'Im Reiter „Transaktionen“ eine Transaktion öffnen und die Abrechnung (PDF) herunterladen; für jede Transaktion gibt es ein eigenes PDF.',
+                'Ältere Abrechnungen aus der Baader-Bank-Zeit: im Login der Baader Bank unter „Download“ → „Wertpapierumsätze“ speichern.',
+                'Alle PDFs gemeinsam hier ablegen; jedes PDF ist ein Dokument.'
+            ],
+            settings: [
+                'Original-PDFs verwenden, nicht ausdrucken, scannen oder fotografieren: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Abrechnungen ab Depoteröffnung importieren, auch Sparplanausführungen.'
+            ],
+            accounts: 'Je Depot importieren. Bereits importierte Abrechnungen werden anhand von Order- und Geschäftsnummer (Baader: Vorgangsnummer) erkannt und nicht doppelt gebucht; mehrere Teilausführungen einer Order bleiben getrennt.',
+            supported: [
+                'Wertpapierabrechnung / Contract note: Kauf, Verkauf und Sparplanausführung mit Ordergebühren; Steuern und Finanztransaktionssteuer als eigene Buchung.',
+                'Dividende / Dividend: Bruttobetrag mit ausländischer Quellensteuer und deutschen Steuern, in der Kontowährung.',
+                'Vorabpauschale (Steuerabbuchung) und Steuerneuberechnung (Erstattung oder Belastung).',
+                'Baader Bank: Wertpapierabrechnung Kauf/Verkauf mit Provision und Steuern, Fondsausschüttung, Ausschüttung, Dividende und Dividendenabrechnung.'
+            ],
+            unsupported: [
+                'Verrechnungskonto/Kontoauszug (Ein- und Auszahlungen, Zinsen, Prime-Gebühren) und Rechnungsabschluss: bitte manuell erfassen.',
+                'Reklassifizierung einer Ausschüttung, Kapitalrückzahlung, Zinszahlung, Laufzeitende/Knock-out, Stornos und Kapitalmaßnahmen.',
+                'Baader Bank: Ertragsthesaurierung, Vorabpauschale, Steuerausgleichsrechnung, Kontoauszüge, Vergütung der Vermögensverwaltung, englische Abrechnungen.',
+                'Kosteninformationen und Auftragsbestätigungen werden ohne Buchung übersprungen; erst die Wertpapierabrechnung belegt eine Ausführung.'
+            ],
+            limits: [
+                'Eine Abrechnung wird nur gebucht, wenn Betrag, Gebühren und Steuern genau den abgerechneten Betrag ergeben; sonst erscheint sie als nicht übernommen.',
+                'Abrechnungen in anderen Sprachen (Niederländisch, Italienisch, Französisch) werden noch nicht gelesen.',
+                'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
             ]
         }
     } as Record<string, ImportGuide>
