@@ -1,4 +1,5 @@
 import { degiroFileImporter } from './degiroFile';
+import { revolutFileImporter } from './revolut';
 import { saxoFileImporter } from './saxo';
 import { schwabFileImporter } from './schwab';
 import { swissquoteFileImporter } from './swissquote';
@@ -15,7 +16,8 @@ export const FILE_IMPORTERS: FileImporter[] = [
     trading212FileImporter,
     xtbFileImporter,
     saxoFileImporter,
-    schwabFileImporter
+    schwabFileImporter,
+    revolutFileImporter
 ];
 
 export const findFileImporter = (id: string): FileImporter | undefined => (

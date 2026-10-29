@@ -91,6 +91,11 @@ export const fileImportDe = {
         schwab: {
             standard: 'CSV-Verlaufsexport',
             titled: 'CSV-Verlaufsexport (ältere Form mit Titelzeile)'
+        },
+        revolut: {
+            comma: 'Kontoauszug Investmentkonto (CSV, Komma)',
+            semicolon: 'Kontoauszug Investmentkonto (CSV, Semikolon)',
+            tab: 'Kontoauszug Investmentkonto (TSV, Tabulator)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -305,6 +310,38 @@ export const fileImportDe = {
             limits: [
                 'Der Export enthält Ticker oder CUSIP, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über den Ticker gesucht; CUSIPs lassen sich meist nicht automatisch zuordnen.',
                 'Alle Beträge in USD. Bei „as of“-Datum wird das Buchungsdatum verwendet, das „as of“-Datum bleibt in den Rohdaten.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        revolut: {
+            scope: 'Revolut-Investmentkonto (Aktien/ETFs): Kontoauszug als Tabelle. Nicht für Krypto, Rohstoffe oder den Gewinn- und Verlustbericht.',
+            steps: [
+                'In der Revolut-App unten Invest öffnen.',
+                'Mehr (…) antippen und Dokumente wählen.',
+                'Aktien (Stocks) bzw. das Brokerage-Konto wählen und Kontoauszug (Account statement) antippen.',
+                'Den Zeitraum ab Kontoeröffnung wählen und das Tabellenformat (CSV oder Excel) wählen, nicht PDF.',
+                'Eine Excel-Datei in Excel oder LibreOffice öffnen und als CSV speichern. CSV- oder TSV-Dateien unverändert hier ablegen.'
+            ],
+            settings: [
+                'Nicht den Profit-&-Loss-Bericht und nicht den Cost-&-Charges-Bericht verwenden: sie enthalten keine Einzelbuchungen.',
+                'Krypto ist ein eigener Export mit anderen Spalten und wird hier nicht gelesen.',
+                'Beim Speichern als CSV keine Spalten löschen und keine Datums- oder Zahlenformate ändern. Datumsangaben mit Schrägstrich werden abgelehnt.'
+            ],
+            accounts: 'Je Revolut-Investmentkonto ein eigenes Depot. Mehrere Währungen desselben Kontos stehen in einer Datei. Überlappende Exporte werden nicht doppelt gebucht.',
+            supported: [
+                'Käufe und Verkäufe (Market, Limit, Stop) mit dem Gesamtbetrag als Geldbetrag',
+                'Dividenden (netto, wie gutgeschrieben) und als eigene Zeile ausgewiesene Steuerkorrekturen',
+                'Depotgebühren (Custody fee), Einzahlungen (Cash top-up) und Auszahlungen (Cash withdrawal)'
+            ],
+            unsupported: [
+                'Aktiensplits (Stock split): erscheinen als nicht übernommen und werden nicht als Kauf gebucht.',
+                'Überträge zwischen Revolut-Gesellschaften (Transfer from … to …) mit Stückzahl oder Betrag: erscheinen als nicht übernommen. Sie ändern den Bestand meist nicht, bitte prüfen.',
+                'Zeilen ohne Ticker werden keinem Wertpapier zugeordnet.'
+            ],
+            limits: [
+                'Revolut weist Handelsgebühren nicht getrennt aus; sie stecken im Gesamtbetrag.',
+                'Der Export enthält Ticker, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über den Ticker gesucht.',
+                'Das Datum stammt aus der Exportzeit (UTC); Buchungen kurz nach Mitternacht können einen Tag abweichen. Quellensteuer wird nicht geschätzt.',
                 'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
             ]
         }

@@ -28,6 +28,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | XTB | CSV aus dem Blatt „Cash Operations“ des XLSX-Exports: `cash-8`, `cash-10` (`;`, Dezimalkomma), `cash-8-comma`, `cash-10-comma` (`,`, Dezimalpunkt); früherer CSV-Export `legacy` | Käufe/Verkäufe von Aktien/ETFs (Stückzahl aus dem Kommentar, Wertpapier unter XTB-Kürzel), Dividenden, Quellensteuer als Steuer, Finanztransaktionssteuer, Kommission/SEC-Gebühr, Zinsen und Zinssteuer, Ein-/Auszahlungen; Umbuchungen zwischen Unterkonten derselben Datei heben sich auf | CFD (Close trade, Profit/Loss, Swap/Rollover, CFD-Dividendenausgleich), Spin-offs, Überträge zu anderen Konten, unbekannte/nicht englische Typen; ohne Währung im Dateinamen wird die Datei abgelehnt |
 | Saxo | Transaktionsexport, aus Excel als CSV gespeichert (`,` oder `;`): `booked` (Booked Amount, 15 Spalten), `amount` (Amount, 13 Spalten) | Käufe/Verkäufe aus dem Buchungstext (Buy/Sell, Koop/Verkoop), Differenz zum gebuchten Betrag als Gebühr, Fremdwährungskäufe mit Umrechnung als interne FX-Buchungen, Dividenden (netto), Quellensteuer als eigene Zeile, Ein-/Auszahlungen, Gebühren, Zinsen | Kapitalmaßnahmen außer Dividenden, Derivate (`From Derivative` = Yes), unbekannte Texte, Zeilen ohne ISIN, umgerechnete Zeilen ohne bestimmbare Kontowährung; XLSX nicht direkt |
 | Charles Schwab | CSV-Kontoverlauf (`standard`, `titled` mit Titelzeile), US-Zahlenformat, Summenzeile wird übersprungen | Buy/Sell/Reinvest Shares mit Fees & Comm, Dividenden und Ausschüttungen, Foreign Tax Paid (Quellensteuer), Gebühren, Zinsen, Wire/MoneyLink/Journal/Internal Transfer als Ein-/Auszahlung | Splits, Stock Div Dist, Spin-off, Merger, Name Change, Conversion, Cash In Lieu, Journaled Shares, Security Transfer, Optionen; Zeilen ohne Symbol |
+| Revolut | Kontoauszug Investmentkonto (`comma`, `semicolon`, `tab`); Krypto-Export wird nicht erkannt | Käufe/Verkäufe (Market/Limit/Stop) mit Gesamtbetrag, Dividenden (netto), Steuerkorrekturen, Custody fee, Cash top-up/withdrawal | Stock split, Transfers zwischen Revolut-Gesellschaften mit Stückzahl oder Betrag, unbekannte Typen; Zeilen ohne Ticker |
 
 ## Quellen und Lizenzen
 
@@ -47,6 +48,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | Saxo | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `saxoConverter.ts`, `models/saxoRecord.ts`, `samples/saxo-export.csv`, Issues #155, #319 | Commit `9e35bd6` | Apache-2.0 | Spaltennamen beider Varianten, Ereignistexte, Datums- und Betragsformat des Beispiels, Exportweg |
 | Saxo | [Saxo Help: Monitoring your Portfolio](https://www.help.saxo/hc/en-us/articles/360039762472-Monitoring-your-Portfolio) | 28.10.2026 | – (Dokumentation) | Bereich Transactions mit Filtern (Trades, Corporate actions, Cash transfers) und Export als PDF oder Excel |
 | Charles Schwab | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `schwabConverter.ts`, `models/schwabRecord.ts`, `samples/schwab-export.csv`, Issues #8, #75, #121, #191, #287 | Commit `9e35bd6` | Apache-2.0 | Spalten, Aktionsnamen, Zahlen- und Datumsformat, Titel- und Summenzeile, Exportweg |
+| Revolut | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `revolutConverter.ts`, `models/revolutRecord.ts`, `samples/revolut-invest-export.csv`, Issues #107, #163 | Commit `9e35bd6` | Apache-2.0 | Spalten, Typnamen, Betrags- und Mengenformat, Exportweg, TSV aus der App |
+| Revolut | [Revolut Help: trading statements and reports](https://help.revolut.com/help/profile-and-plan/managing-my-account/trading-statements-and-reports/) | 28.10.2026 | – (Dokumentation) | Menüweg Invest → Mehr → Dokumente → Stocks → Account statement; Abgrenzung zu P&L und Cost & Charges |
 | DEGIRO | [Export-To-Ghostfolio README](https://github.com/dickwolff/Export-To-Ghostfolio#degiro) | Commit `9e35bd6` | Apache-2.0 | Exportweg Kontoübersicht |
 
 ### Abweichungen von der Vorlage (Swissquote)
@@ -156,3 +159,18 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
   Vorlage sucht CUSIPs über den Namen. Openfolio gleicht Ticker, CUSIP und ISIN nicht gleich.
 - Abgleich: In der Fixture ergibt die Summe aller Buchungen den Betrag der Summenzeile; enthält ein Export gemeldete
   Zeilen mit Betrag (z. B. Cash In Lieu), weicht die Summe um diese Beträge ab.
+
+### Abweichungen von der Vorlage (Revolut)
+
+- `STOCK SPLIT` wird nicht als Kauf gebucht (Vorlage: Kauf), sondern gemeldet.
+- `CASH TOP-UP` und `CASH WITHDRAWAL` werden als Ein-/Auszahlung gebucht statt übersprungen.
+- `TRANSFER FROM … TO …` (Wechsel der Revolut-Gesellschaft) wird gemeldet, wenn die Zeile Stückzahl, Ticker oder Betrag hat,
+  sonst als Verwaltungszeile übersprungen. Die Vorlage überspringt alle Transfers still.
+- Käufe/Verkäufe werden mit dem Gesamtbetrag gebucht (Cash-Effekt), nicht mit Stückzahl × Kurs; Gebühren sind darin enthalten
+  und werden nicht geschätzt.
+- Mengen: Die Vorlage ersetzt das erste Komma durch einen Punkt. Openfolio liest „0,76672417“ ebenfalls als Dezimalzahl, prüft
+  aber „1,500“ gegen Kurs × Menge = Gesamtbetrag und lehnt ohne Kurs ab, statt zu raten.
+- Beträge: Währungszeichen (`$`, `€`, `£`) oder -codes werden entfernt; Tausenderkommas gelten wie im Beispiel („$105,058.55“).
+- Datei mit Komma, Semikolon oder Tabulator (die App liefert laut Issue #107 TSV). Datum in UTC laut Export.
+- GBX bleibt GBX (Vorlage: GBp). Ticker werden als Wertpapierkennung verwendet und beim Kursabruf zugeordnet.
+- Der Krypto-Kontoauszug (`Symbol,Type,Quantity,Price,Value,Fees,Date`) ist nicht Teil dieses Pakets und wird nicht erkannt.

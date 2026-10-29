@@ -49,3 +49,8 @@ Never copy rows from a real export into this folder.
   dividend plus Reinvest Shares, a cash dividend with Foreign Tax Paid and ADR fee, two identical advisor fees,
   credit and margin interest, a sell with commission, a wire withdrawal, plus a stock split and journaled shares
   (both not supported, must be reported). The bookings sum to the total row: USD 1682.85.
+- `revolut.csv`: Revolut investment account statement as CSV (comma), oldest row first. USD and EUR: deposits
+  (one with a thousands comma), market and limit buys, custody fee, dividend, a sell whose total includes a
+  $0.02 cost, a withdrawal, a EUR buy with a decimal-comma quantity, plus a stock split and a position transfer
+  between Revolut entities (both not supported, must be reported) and an empty cash transfer (ignored). Cash ends
+  at USD 569.58 and EUR 60.
