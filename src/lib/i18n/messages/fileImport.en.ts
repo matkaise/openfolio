@@ -89,6 +89,9 @@ export const fileImportEn: typeof fileImportDe = {
         etoro: {
             contracts: 'Account statement, Account Activity sheet (CSV, column "Units / Contracts")',
             units: 'Account statement, Account Activity sheet (CSV, older column "Units")'
+        },
+        freetrade: {
+            activity: 'Activity feed export (CSV)'
         }
     },
     guides: {
@@ -368,6 +371,37 @@ export const fileImportEn: typeof fileImportDe = {
                 'The export has eToro symbols (e.g. "BRIT.L"), no ISIN. The security is looked up by symbol at the next price update.',
                 'Buys and sells are booked in USD, also for securities in EUR or GBX; the sheet has no price in the trading currency. Conversion fees are part of the converted amount and are only shown.',
                 'Withholding tax is only in the "Dividends" sheet and is not estimated. The balance column is not imported: with CFDs, crypto or copy trading it differs from the booked cash.',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        freetrade: {
+            scope: 'Freetrade portfolios (GIA, ISA, SIPP): activity feed export as CSV.',
+            steps: [
+                'In the Freetrade app, choose the portfolio at the top left.',
+                'Open the Activity tab at the bottom.',
+                'Tap the arrow icon (export) at the top right and confirm with "All Activity".',
+                'Save or share the CSV file and drop it here unchanged.'
+            ],
+            settings: [
+                'Always export "All Activity" so deposits, dividends and interest are included.',
+                'Do not open and re-save the file in Excel: numbers and timestamps are expected in their original format.'
+            ],
+            accounts: 'One export and one Openfolio portfolio per Freetrade portfolio (GIA, ISA, SIPP). Overlapping exports are not booked twice.',
+            supported: [
+                'Buys and sells (ORDER) in the account currency, stamp duty and FX fee as fee',
+                'Free shares (FREESHARE_ORDER) as a buy paid by a bonus deposit of their value',
+                'Dividends and property income distributions: gross with the withholding tax shown in the export, otherwise net',
+                'Interest, deposits (TOP_UP) and withdrawals (WITHDRAWAL)'
+            ],
+            unsupported: [
+                'Unknown types with an amount or security (e.g. corporate actions): shown as not imported.',
+                'Orders without ISIN or without buy/sell are not matched to a security.',
+                'Transfers to and from other providers are not part of the export according to Freetrade.'
+            ],
+            limits: [
+                'Buys of foreign-currency securities are booked at the amount in the account currency; the price in the trading currency stays in the raw data.',
+                'Monthly statements and tax certificates (MONTHLY_STATEMENT) have no amount and are skipped.',
+                'The date comes from the UTC timestamp; bookings shortly after midnight British Summer Time can be one day off.',
                 'Only tested with synthetic files based on public samples.'
             ]
         }

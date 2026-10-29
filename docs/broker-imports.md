@@ -30,6 +30,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | Charles Schwab | CSV-Kontoverlauf (`standard`, `titled` mit Titelzeile), US-Zahlenformat, Summenzeile wird übersprungen | Buy/Sell/Reinvest Shares mit Fees & Comm, Dividenden und Ausschüttungen, Foreign Tax Paid (Quellensteuer), Gebühren, Zinsen, Wire/MoneyLink/Journal/Internal Transfer als Ein-/Auszahlung | Splits, Stock Div Dist, Spin-off, Merger, Name Change, Conversion, Cash In Lieu, Journaled Shares, Security Transfer, Optionen; Zeilen ohne Symbol |
 | Revolut | Kontoauszug Investmentkonto (`comma`, `semicolon`, `tab`); Krypto-Export wird nicht erkannt | Käufe/Verkäufe (Market/Limit/Stop) mit Gesamtbetrag, Dividenden (netto), Steuerkorrekturen, Custody fee, Cash top-up/withdrawal | Stock split, Transfers zwischen Revolut-Gesellschaften mit Stückzahl oder Betrag, unbekannte Typen; Zeilen ohne Ticker |
 | eToro | Kontoauszug, Blatt „Account Activity“ als CSV (`,` oder `;`, Zahlenformat je Excel-Gebietsschema): `contracts` („Units / Contracts“), `units` (ältere Spalte „Units“) | Eröffnete/geschlossene Positionen in Aktien und ETFs als Kauf/Verkauf in USD (Wertpapier unter eToro-Symbol), Dividenden (netto), Zinsen, Ein-/Auszahlungen, Auszahlungsgebühr, SDRT als Gebühr; Umrechnungsgebühren ohne Kontowirkung werden übersprungen | CFD (Positionen, Overnight fee/refund, CFD-Dividenden), Krypto und andere Anlagearten, Stop Copy und unbekannte Typen mit Betrag, Zeilen ohne Symbol, negative Aktiendividenden; XLSX nicht direkt |
+| Freetrade | Aktivitäten-Export als CSV (`activity`, 29 Spalten, Dezimalpunkt, ISO-Zeit in UTC) | Käufe/Verkäufe (ORDER) in Kontowährung mit Stempelsteuer und FX-Gebühr als Gebühr, Gratisaktien als Kauf plus Bonus-Einzahlung, Dividenden und PROPERTY-Ausschüttungen (brutto mit ausgewiesener Quellensteuer, sonst netto), Zinsen, TOP_UP/WITHDRAWAL; MONTHLY_STATEMENT übersprungen | Unbekannte Typen mit Betrag oder ISIN, Aufträge ohne ISIN oder Kauf/Verkauf; Depotüberträge fehlen im Export |
 
 ## Quellen und Lizenzen
 
@@ -53,6 +54,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | Revolut | [Revolut Help: trading statements and reports](https://help.revolut.com/help/profile-and-plan/managing-my-account/trading-statements-and-reports/) | 28.10.2026 | – (Dokumentation) | Menüweg Invest → Mehr → Dokumente → Stocks → Account statement; Abgrenzung zu P&L und Cost & Charges |
 | eToro | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `etoroConverter.ts`, `models/etoroRecord.ts`, `samples/etoro-export.csv`, README, Issues #29, #177, #188, #249 | Commit `9e35bd602f054f563b8c728bcb36dc5eb2bbcaa5` (geprüft 29.10.2026) | Apache-2.0 | Spaltennamen beider Varianten, Buchungstypen, Datums- und Zahlenformate, Exportweg (Blatt Account Activity als CSV), Semikolon-Problem aus Issue #188 |
 | eToro | [eToro: Currency accounts](https://www.etoro.com/trading/currency-accounts/), [Snowball Analytics: Import eToro](https://help.snowball-analytics.com/import-etoro/) | 29.10.2026 | – (Dokumentation) | Handel läuft immer über das USD-Investmentkonto (lokale EUR/GBP-Konten dienen nur der Finanzierung); alternativer Menüweg Einstellungen → Konto → Dokumente → Account Statement |
+| Freetrade | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `freetradeConverter.ts`, `models/freetradeRecord.ts`, `samples/freetrade-export.csv`, README, PRs #55, #220 | Commit `9e35bd602f054f563b8c728bcb36dc5eb2bbcaa5` (geprüft 29.10.2026) | Apache-2.0 | Spaltennamen, Typen (ORDER, FREESHARE_ORDER, DIVIDEND, PROPERTY, INTEREST_FROM_CASH, TOP_UP, WITHDRAWAL, MONTHLY_STATEMENT), Bedeutung von Total Amount, Stamp Duty, FX Fee und Dividendenspalten aus den Beispielzeilen |
+| Freetrade | [Freetrade Help: CSV export of the activity feed](https://help.freetrade.io/en/articles/6627908-how-do-i-download-a-csv-export-of-my-activity-feed) | 29.10.2026 (Artikel vom 30.03.2026) | – (Dokumentation) | Exportweg Activity → Exportpfeil → All Activity; Überträge zu/von anderen Anbietern nicht enthalten |
 | DEGIRO | [Export-To-Ghostfolio README](https://github.com/dickwolff/Export-To-Ghostfolio#degiro) | Commit `9e35bd6` | Apache-2.0 | Exportweg Kontoübersicht |
 
 ### Abweichungen von der Vorlage (Swissquote)
@@ -201,3 +204,18 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
   „Start Copy“ ohne Betrag wird übersprungen. Nicht investiertes Geld einer Kopie zählt daher weiter als Barbestand.
 - Quellensteuer steht nur im Blatt „Dividends“ und wird nicht geschätzt; die Spalte `Balance` wird nicht als Kontostand
   übernommen, weil sie CFD-Margin, Krypto und Kopien nicht enthält.
+
+### Abweichungen von der Vorlage (Freetrade)
+
+- Ein- und Auszahlungen (`TOP_UP`, `WITHDRAWAL`) werden gebucht statt übersprungen; `MONTHLY_STATEMENT` wird als
+  ignoriert gemeldet, unbekannte Typen mit Betrag oder ISIN als nicht übernommen.
+- Käufe/Verkäufe werden mit `Total Amount` in Kontowährung gebucht (Cash-Effekt); Stempelsteuer und FX-Gebühr sind darin
+  enthalten und werden als Gebühr des Handels ausgewiesen. Die Vorlage bucht zum Kurs in Instrumentwährung über eine
+  Yahoo-Suche und rechnet bei GBp-Kursen ×100; Openfolio braucht weder Suche noch Umrechnung (ISIN steht im Export).
+- Gratisaktien: Die Vorlage bucht einen Kauf zum Kurs ohne Gegenbuchung. Openfolio bucht den Kauf zum Wert in
+  `Total Amount` und eine gleich hohe Bonus-Einzahlung, damit der Barbestand unverändert bleibt.
+- Dividenden: Die Vorlage legt die Quellensteuer (in Instrumentwährung) im Gebührenfeld ab. Openfolio bucht den
+  Nettobetrag in Kontowährung (`Total Amount`) brutto mit Steuer, wenn Brutto- und Nettobetrag im Export stehen
+  (Brutto = Total × Brutto/Netto, Steuer = Differenz); fehlen sie (z. B. PROPERTY-Beispiel), wird netto gebucht und
+  keine Steuer geschätzt. Buchungsdatum ist der Zeitstempel (Vorlage: Dividend Pay Date).
+- Zahlen strikt mit Dezimalpunkt, Datum nur ISO; andere Formate führen zu einem Fehler mit Zeilennummer.

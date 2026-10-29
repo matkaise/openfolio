@@ -100,6 +100,9 @@ export const fileImportDe = {
         etoro: {
             contracts: 'Kontoauszug, Blatt Account Activity (CSV, Spalte „Units / Contracts“)',
             units: 'Kontoauszug, Blatt Account Activity (CSV, ältere Spalte „Units“)'
+        },
+        freetrade: {
+            activity: 'Aktivitäten-Export (CSV)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -379,6 +382,37 @@ export const fileImportDe = {
                 'Der Export enthält eToro-Symbole (z. B. „BRIT.L“), keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über das Symbol gesucht.',
                 'Käufe und Verkäufe werden in USD gebucht, auch bei Wertpapieren in EUR oder GBX; den Kurs in Handelswährung enthält das Blatt nicht. Umrechnungsgebühren (Conversion Fee) sind im umgerechneten Betrag enthalten und werden nur angezeigt.',
                 'Quellensteuer steht nur im Blatt „Dividends“ und wird nicht geschätzt. Der Kontostand (Balance) wird nicht übernommen: bei CFDs, Krypto und Copy-Trading weicht er vom gebuchten Geld ab.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        freetrade: {
+            scope: 'Freetrade-Depots (GIA, ISA, SIPP): Export des Aktivitäten-Feeds als CSV.',
+            steps: [
+                'In der Freetrade-App oben links das Depot (Portfolio) wählen.',
+                'Unten den Reiter Aktivität (Activity) öffnen.',
+                'Oben rechts das Pfeilsymbol (Export) antippen und mit „All Activity“ bestätigen.',
+                'Die CSV-Datei speichern oder teilen und hier unverändert ablegen.'
+            ],
+            settings: [
+                'Immer „All Activity“ exportieren, damit Einzahlungen, Dividenden und Zinsen enthalten sind.',
+                'Die Datei nicht in Excel öffnen und neu speichern: Zahlen und Zeitstempel werden im Originalformat erwartet.'
+            ],
+            accounts: 'Je Freetrade-Depot (GIA, ISA, SIPP) ein eigener Export und ein eigenes Openfolio-Depot. Überlappende Exporte werden nicht doppelt gebucht.',
+            supported: [
+                'Käufe und Verkäufe (ORDER) in Kontowährung, Stempelsteuer und FX-Gebühr als Gebühr',
+                'Gratisaktien (FREESHARE_ORDER) als Kauf, bezahlt durch eine Bonus-Einzahlung in Höhe ihres Werts',
+                'Dividenden und Property-Income-Ausschüttungen: brutto mit der im Export ausgewiesenen Quellensteuer, sonst netto',
+                'Zinsen, Einzahlungen (TOP_UP) und Auszahlungen (WITHDRAWAL)'
+            ],
+            unsupported: [
+                'Unbekannte Typen mit Betrag oder Wertpapier (z. B. Kapitalmaßnahmen): erscheinen als nicht übernommen.',
+                'Aufträge ohne ISIN oder ohne Kauf/Verkauf-Angabe werden keinem Wertpapier zugeordnet.',
+                'Depotüberträge zu und von anderen Anbietern sind laut Freetrade nicht im Export enthalten.'
+            ],
+            limits: [
+                'Käufe von Wertpapieren in Fremdwährung werden zum Betrag in Kontowährung gebucht; der Kurs in Handelswährung bleibt in den Rohdaten.',
+                'Monatsauszüge und Steuerbescheinigungen (MONTHLY_STATEMENT) haben keinen Betrag und werden übersprungen.',
+                'Das Datum stammt aus dem Zeitstempel in UTC; Buchungen kurz nach Mitternacht britischer Sommerzeit können einen Tag abweichen.',
                 'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
             ]
         }
