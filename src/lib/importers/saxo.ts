@@ -1,4 +1,4 @@
-import { columnIndex, locateHeader, readCsv } from './csv';
+import { columnIndex, decimalSeparatorOf, locateHeader, parseLocaleNumber, readCsv, type DecimalSeparator } from './csv';
 import { statementEntry, tradeEntry, type ImportEntry, type StatementType } from './entries';
 import { batchPeriod, FileImportError, type FileImporter, type ImportRowNote } from './fileImport';
 import { emptyImportBatch } from './importBatch';
@@ -51,48 +51,8 @@ const toIsoDate = (value: string): string | null => {
     return null;
 };
 
-type Separator = ',' | '.';
-
-/**
- * The decimal separator of the amount column. Excel writes amounts in the locale of the
- * conversion ("-405,55" or "-405.55"). A value with both separators or with one followed by
- * other than three digits decides; "1,234" alone is ambiguous. Returns the separator, or the
- * offending row when the file is inconsistent or only ambiguous.
- */
-const amountSeparator = (values: { raw: string; line: number }[]): { separator: Separator } | { line: number } => {
-    let decided: { separator: Separator; line: number } | null = null;
-    let ambiguous: number | null = null;
-    for (const { raw, line } of values) {
-        const value = raw.replace(/^[-+]/, '');
-        const comma = value.lastIndexOf(',');
-        const dot = value.lastIndexOf('.');
-        if (comma < 0 && dot < 0) continue;
-        let separator: Separator | null;
-        if (comma >= 0 && dot >= 0) separator = comma > dot ? ',' : '.';
-        else {
-            const position = Math.max(comma, dot);
-            separator = value.length - position - 1 === 3 ? null : comma >= 0 ? ',' : '.';
-        }
-        if (!separator) {
-            ambiguous ??= line;
-            continue;
-        }
-        if (decided && decided.separator !== separator) return { line };
-        decided ??= { separator, line };
-    }
-    if (decided) return { separator: decided.separator };
-    return ambiguous ? { line: ambiguous } : { separator: '.' };
-};
-
-const parseAmount = (raw: string, separator: Separator): number => {
-    const value = raw.trim();
-    if (!value) return 0;
-    const thousands = separator === ',' ? '\\.' : ',';
-    const decimal = separator === ',' ? ',' : '\\.';
-    const pattern = new RegExp(`^[-+]?(\\d{1,3}(${thousands}\\d{3})+|\\d+)(${decimal}\\d+)?$`);
-    if (!pattern.test(value)) return Number.NaN;
-    return Number(value.split(separator === ',' ? '.' : ',').join('').replace(',', '.'));
-};
+/** An amount of the file; an empty cell is 0. */
+const parseAmount = (raw: string, separator: DecimalSeparator): number => (raw.trim() ? parseLocaleNumber(raw, separator) : 0);
 
 /** Quantity and price in the event text: written by Saxo with "." as decimal separator ("Koop 1.5 @ 110.01 EUR"). */
 const parseEventNumber = (raw: string): number => (
@@ -165,7 +125,7 @@ const parse = (text: string) => {
     const lineOf = (offset: number) => located.row + offset + 2;
     const cellOf = (row: string[], index: number) => (index >= 0 ? row[index] || '' : '');
 
-    const decimal = amountSeparator(data.map((row, offset) => ({ raw: cellOf(row, at.amount).trim(), line: lineOf(offset) })));
+    const decimal = decimalSeparatorOf(data.map((row, offset) => ({ raw: cellOf(row, at.amount).trim(), line: lineOf(offset) })));
     if (!('separator' in decimal)) throw new FileImportError('invalidNumber', decimal.line);
 
     // Account currency: the currency of rows without instrument (cash rows), else of rows

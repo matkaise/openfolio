@@ -54,3 +54,9 @@ Never copy rows from a real export into this folder.
   $0.02 cost, a withdrawal, a EUR buy with a decimal-comma quantity, plus a stock split and a position transfer
   between Revolut entities (both not supported, must be reported) and an empty cash transfer (ignored). Cash ends
   at USD 569.58 and EUR 60.
+- `etoro.csv`: eToro account statement, sheet "Account Activity" saved as CSV (comma, US number format with quoted
+  thousands and parenthesized negatives), oldest row first, "Units / Contracts" header. Balance and Realized Equity are
+  consistent row by row. Covers a converted EUR deposit with its informational conversion fee, stock and ETF buys
+  (one UK stock in GBX with SDRT), two dividends of the same stock, a partial close, interest, a withdrawal with its
+  fee and conversion fee, plus a CFD position with overnight fee and close and a crypto buy (all not supported).
+  Booked cash ends at USD 310.35; eToro's balance 268.11 = 310.35 + CFD result 7.76 − crypto 50.
