@@ -1,0 +1,15 @@
+Datum;Konto;Typ av transaktion;Värdepapper/beskrivning;Antal;Kurs;Belopp;Transaktionsvaluta;Courtage (SEK);Valutakurs;Instrumentvaluta;ISIN;Resultat
+2024-06-03;9876543;Övrigt;Exempel Bank C;10;;;;;;;SE0000000041;
+2024-06-03;9876543;Övrigt;Exempel Bank B (fondbyte);-10;;;;;;;SE0000000031;
+2024-05-10;ISK;Sälj;Exempel Global Indexfond;-10,5;220;2310;SEK;0;;SEK;SE0000000011;210
+2024-05-02;ISK;Övrigt;Återbetalning Total avgift 2023 Exempel Global Indexfond;;;3,4;SEK;;;;;
+2024-04-30;9876543;Övrigt;Avkastningsskatt;;;-12;SEK;0;;;;
+2024-04-30;ISK;Ränta;;;;1,25;SEK;;;;;
+2024-03-15;ISK;Utländsk källskatt;Utdelning EXTC 0.5 USD/aktie;3;;-2,39;SEK;;10,6;;US0000000021;
+2024-03-15;ISK;Utdelning;Example Tech;3;0,5;15,9;SEK;;10,6;USD;US0000000021;
+2024-01-08;9876543;Köp;Exempel Bank B;10;95;-951;SEK;1;;SEK;SE0000000031;
+2024-01-05;9876543;Insättning;Överföring från ISK;;;1000;SEK;;;;;
+2024-01-05;ISK;Uttag;Överföring till 9876543;;;-1000;SEK;;;;;
+2024-01-04;ISK;Köp;Example Tech;3;150,5;-4867,35;SEK;6,95;10,765;USD;US0000000021;
+2024-01-03;ISK;Köp;Exempel Global Indexfond;25,5;200;-5100;SEK;0;;SEK;SE0000000011;
+2024-01-02;ISK;Insättning;Direktinsättning från Exempelbanken;;;12000;SEK;;;;;

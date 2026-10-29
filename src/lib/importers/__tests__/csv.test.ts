@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { columnIndex, decimalSeparatorOf, findHeaderRow, locateHeader, normalizeHeader, parseDotDecimal, parseLocaleNumber, parseUsNumber, readCsv } from '../csv';
+import { columnIndex, decimalSeparatorOf, findHeaderRow, locateHeader, normalizeHeader, parseDotDecimal, parseLocaleNumber, parseUsNumber, readCsv, readCsvLines } from '../csv';
 
 describe('readCsv', () => {
   it('drops the BOM, reads CRLF and LF and skips empty lines', () => {
     expect(readCsv('﻿a;b\r\n1;2\r\n\r\n3;4\n', ';')).toEqual([['a', 'b'], ['1', '2'], ['3', '4']]);
+  });
+
+  it('keeps the file line of each row when rows of delimiters only are dropped', () => {
+    expect(readCsvLines('\uFEFFmeta,\n,,\n\nh1,h2\n1, 2 \n', ',')).toEqual([
+      { cells: ['meta', ''], line: 1 },
+      { cells: ['h1', 'h2'], line: 4 },
+      { cells: ['1', '2'], line: 5 }
+    ]);
   });
 
   it('keeps delimiters, escaped quotes and line breaks inside quoted cells', () => {

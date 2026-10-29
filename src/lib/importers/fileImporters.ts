@@ -1,4 +1,6 @@
+import { avanzaFileImporter } from './avanza';
 import { degiroFileImporter } from './degiroFile';
+import { directaFileImporter } from './directa';
 import { etoroFileImporter } from './etoro';
 import { freetradeFileImporter } from './freetrade';
 import { investEngineFileImporter } from './investengine';
@@ -35,6 +37,8 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     etoroFileImporter,
     freetradeFileImporter,
     investEngineFileImporter,
+    avanzaFileImporter,
+    directaFileImporter,
     scalableFileImporter
 ];
 

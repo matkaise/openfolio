@@ -104,6 +104,12 @@ export const fileImportEn: typeof fileImportDe = {
         investengine: {
             'trading-statement': 'Trading statement (CSV)'
         },
+        avanza: {
+            sv: 'Transaction export (CSV, Swedish)'
+        },
+        directa: {
+            movimenti: 'Movimenti (CSV, Italian)'
+        },
         scalable: {
             de: 'Scalable Capital PDF settlement (German)',
             en: 'Scalable Capital PDF settlement (English)',
@@ -444,6 +450,67 @@ export const fileImportEn: typeof fileImportDe = {
             limits: [
                 'Without deposits in the report, Openfolio treats the money needed for buys as newly invested.',
                 'The trade value is the booked amount; InvestEngine charges no dealing fee per order.',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        avanza: {
+            scope: 'Avanza (Sweden): transaction export of all accounts of the login (ISK, KF, Depå, savings account) as CSV.',
+            steps: [
+                'Log in to Avanza in a browser and open "Min ekonomi".',
+                'Choose the "Transaktioner" tab.',
+                'Choose the period from account opening.',
+                'Click "Exportera transaktioner" and drop the CSV file here unchanged.'
+            ],
+            settings: [
+                'The file is Swedish, with semicolons and decimal commas; do not open and re-save it in Excel.',
+                'Do not use the holdings export (Innehav): it has no bookings.'
+            ],
+            accounts: 'The export contains all accounts; Openfolio books them together into one portfolio and keeps the account (column "Konto") in the raw data. Transfers between your own accounts appear as withdrawal and deposit and cancel out. For separate portfolios, remove the other accounts\' rows before importing. Overlapping exports are not booked twice.',
+            supported: [
+                'Köp and Sälj with courtage as fee (for SEK amounts)',
+                'Utdelning (as credited) and Utländsk källskatt as withholding tax',
+                'Ränta, Insättning and Uttag',
+                'Övrigt: Avkastningsskatt as tax, "Återbetalning … avgift" as fee refund'
+            ],
+            unsupported: [
+                'Other "Övrigt" rows with quantity or amount (e.g. fund switches, corporate actions): shown as not imported.',
+                'Unknown transaction types with an amount (e.g. Preliminärskatt): shown as not imported.',
+                'Buys and sells without ISIN are not matched to a security.'
+            ],
+            limits: [
+                'Amounts are in the transaction currency (mostly SEK). On currency accounts the courtage (in SEK) stays in the amount and is only kept in the raw data.',
+                'The export path is only described by an Avanza customer (Export-To-Ghostfolio, issue #165); no official Avanza guide was found.',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        directa: {
+            scope: 'Directa SIM (Italy): account movements "Movimenti" of one account as CSV.',
+            steps: [
+                'Open Directa in "Libera" mode and choose "Movimenti" in the Conto area.',
+                'Choose the "Tutti i movimenti" tab and the "Data operazione" ordering.',
+                'Set the period at the top right (calendar icon).',
+                'Click the Excel icon, choose "File separato da virgole (csv)" and click "Estrai".',
+                'Drop the CSV file here unchanged; the heading rows (Conto, Data estrazione, period) may stay.'
+            ],
+            settings: [
+                'Format "File separato da virgole (csv)", not xlsx or ods.',
+                'Directa exports at most 3,000 rows. With more movements, split the period (e.g. one export per year); overlapping exports are not booked twice.'
+            ],
+            accounts: 'One export per Directa account; the account from the "Conto : …" row is part of the key so bookings of different accounts never merge.',
+            supported: [
+                'Acquisto and Vendita with "Importo euro" as cash amount',
+                'Distributions and dividends, bond coupons (Cedola) and certificate coupons as interest, accrued interest (Ratei)',
+                'Withheld taxes (Rit.…) as withholding tax of the position; Ritenuta su plusvalenza, Tobin tax and Bollo as tax',
+                'Commissioni as fee, deposits (Conferimento, Bonifico) and withdrawals (Prelievo)'
+            ],
+            unsupported: [
+                'Financing (Finanziamento) and unknown movement types with an amount: shown as not imported.',
+                'Buys and sells without ISIN or with an implausible sign.'
+            ],
+            limits: [
+                'The booked currency is always EUR ("Importo euro"); the foreign amount and Divisa stay in the raw data.',
+                'Costs are not shown apart on the buy/sell row and are not estimated.',
+                'Bonds are booked with the quantity of the file (nominal value).',
                 'Only tested with synthetic files based on public samples.'
             ]
         },

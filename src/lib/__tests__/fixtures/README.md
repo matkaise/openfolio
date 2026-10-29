@@ -68,3 +68,12 @@ Never copy rows from a real export into this folder.
 - `investengine.csv`: InvestEngine "Trading statement" (comma, amounts with "£", one with a thousands comma, dates
   DD/MM/YY), two ETFs, a name containing a comma (quoted), two identical buys on the same day and a sell. Trades only:
   cash effect GBP −1255.50, holdings 11.7 IE0000000101 and 10 IE0000000202.
+- `avanza.csv`: Avanza transaction export (`;`, decimal comma, ISO dates), newest row first, two accounts ("ISK" and
+  "9876543") with a transfer between them. Covers a deposit, SEK buys with and without courtage, a USD stock bought in
+  SEK with courtage, a dividend with foreign withholding tax, interest, yield tax (Avkastningsskatt), a fund fee refund,
+  a sale with result and a fund switch as two "Övrigt" rows (not supported). Cash ends at SEK 3397.81 (ISK 3360.81,
+  9876543 37.00).
+- `directa.csv`: Directa "Movimenti" CSV with BOM and the nine metadata rows (some of only commas), newest row first,
+  EUR. Covers a deposit, an ETF buy, a bond buy with accrued interest (Ratei), an Italian stock buy with Tobin tax, an
+  ETF distribution and a bond coupon with withheld tax, stamp duty (Bollo), a sale with capital gains tax, a withdrawal
+  and the empty trailing row. Cash ends at EUR 1064.10.
