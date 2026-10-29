@@ -103,6 +103,9 @@ export const fileImportDe = {
         },
         freetrade: {
             activity: 'Aktivitäten-Export (CSV)'
+        },
+        investengine: {
+            'trading-statement': 'Trading statement (CSV)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -413,6 +416,32 @@ export const fileImportDe = {
                 'Käufe von Wertpapieren in Fremdwährung werden zum Betrag in Kontowährung gebucht; der Kurs in Handelswährung bleibt in den Rohdaten.',
                 'Monatsauszüge und Steuerbescheinigungen (MONTHLY_STATEMENT) haben keinen Betrag und werden übersprungen.',
                 'Das Datum stammt aus dem Zeitstempel in UTC; Buchungen kurz nach Mitternacht britischer Sommerzeit können einen Tag abweichen.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        investengine: {
+            scope: 'InvestEngine-Depots (GIA, ISA, SIPP, Business): Bericht „Trading statement“ als CSV, nur Käufe und Verkäufe.',
+            steps: [
+                'Im Browser bei InvestEngine anmelden und oben rechts Reports wählen.',
+                'Create report anklicken und als Berichtstyp „Trading statement“ wählen.',
+                'Den Zeitraum ab Depoteröffnung und das Depot (Portfolio) wählen, CSV als Format wählen und Generate report anklicken.',
+                'Sobald die Benachrichtigung bzw. E-Mail kommt, den Bericht oben auf der Reports-Seite herunterladen (Dateiname z. B. GIA_Trading_statement_….csv) und hier ablegen.'
+            ],
+            settings: [
+                'Berichtstyp „Trading statement“, nicht Cash Statement, Valuation Statement oder CGT Report.',
+                'Die Datei unverändert ablegen; Beträge werden mit „£“ und Datumsangaben als TT/MM/JJ erwartet.'
+            ],
+            accounts: 'Je InvestEngine-Depot ein eigener Bericht und ein eigenes Openfolio-Depot. Überlappende Berichte werden nicht doppelt gebucht.',
+            supported: [
+                'Käufe und Verkäufe (Buy, Sell) mit Stückzahl und Handelswert in GBP; Wertpapier über die ISIN'
+            ],
+            unsupported: [
+                'Dividenden, Plattform- und Fondsgebühren, Ein- und Auszahlungen: stehen nicht im Trading statement, sondern im Cash Statement, das noch nicht gelesen wird. Bitte bei Bedarf manuell erfassen.',
+                'Andere Transaktionstypen (z. B. Überträge) und Zeilen ohne ISIN: erscheinen als nicht übernommen.'
+            ],
+            limits: [
+                'Ohne Einzahlungen im Bericht behandelt Openfolio das für Käufe nötige Geld als neu investiert.',
+                'Der Handelswert ist der gebuchte Betrag; InvestEngine erhebt keine Handelsgebühr je Auftrag.',
                 'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
             ]
         }
