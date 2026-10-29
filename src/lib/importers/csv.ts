@@ -13,6 +13,17 @@ export const readCsv = (text: string, delimiter: string): string[][] => {
     return parsed.data.map((row) => row.map((cell) => cell.trim()));
 };
 
+/**
+ * Rows of a CSV file with the line each starts on. Rows that are empty or hold only delimiters
+ * are dropped, but still counted, so reported line numbers match the file (quoted line breaks aside).
+ */
+export const readCsvLines = (text: string, delimiter: string): { cells: string[]; line: number }[] => {
+    const parsed = Papa.parse<string[]>(text.replace(/^\uFEFF/, ''), { delimiter, skipEmptyLines: false });
+    return parsed.data
+        .map((row, index) => ({ cells: row.map((cell) => cell.trim()), line: index + 1 }))
+        .filter((row) => row.cells.some(Boolean));
+};
+
 /** Header names compared without case, accents, spaces and punctuation ("Stückpreis" -> "stuckpreis"). */
 export const normalizeHeader = (value: string): string => value
     .normalize('NFKD')

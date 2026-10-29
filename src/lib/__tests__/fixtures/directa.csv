@@ -1,0 +1,25 @@
+﻿Conto : C0000 ESEMPIO CONTO ,,,,,,,,,,,
+Data estrazione : 2-1-2025 11:58:30,,,,,,,,,,,
+,,,,,,,,,,,
+Tutti i movimenti ordinati per Data Operazione,,,,,,,,,,,
+Dal : 01-01-2024,,,,,,,,,,,
+al : 31-12-2024,,,,,,,,,,,
+,,,,,,,,,,,
+Il file include i primi 3000 movimenti,,,,,,,,,,,
+,,,,,,,,,,,
+Data operazione,Data valuta,Tipo operazione,Ticker,Isin,Protocollo,Descrizione,Quantità,Importo euro,Importo Divisa,Divisa,Riferimento ordine
+31-07-2024,31-07-2024,Prelievo,,,P000014,,0,-1000,0,EUR,
+10-07-2024,12-07-2024,Ritenuta su plusvalenza,,,P000013,,0,-15.6,0,EUR,              
+10-07-2024,12-07-2024,Vendita,ESP,IT0000000333,,ESEMPIO SPA,50,560,0,EUR,R0000000005
+30-06-2024,30-06-2024,Bollo,,,P000011,,0,-2.5,0,EUR,
+01-04-2024,01-04-2024,Rit.cedola obb.,M.000222,IT0000000222,P000010,BTP ESEMPIO 3% 2030,0,-1.88,0,EUR,              
+01-04-2024,01-04-2024,Cedola obb.,M.000222,IT0000000222,P000009,BTP ESEMPIO 3% 2030,0,15,0,EUR,              
+15-03-2024,15-03-2024,Rit.provento etf,ETFW,IE0000000111,P000008,ESEMPIO MSCI WORLD ETF,0,-3.12,0,EUR,              
+15-03-2024,15-03-2024,Provento etf,ETFW,IE0000000111,P000007,ESEMPIO MSCI WORLD ETF,0,12,0,EUR,              
+05-01-2024,09-01-2024,Tobin tax,ESP,IT0000000333,P000006,ESEMPIO SPA,0,-1,0,EUR,
+05-01-2024,09-01-2024,Acquisto,ESP,IT0000000333,,ESEMPIO SPA,50,-500,0,EUR,R0000000004
+05-01-2024,09-01-2024,Ratei,M.000222,IT0000000222,P000004,BTP ESEMPIO 3% 2030,0,-12.3,0,EUR,
+05-01-2024,09-01-2024,Acquisto,M.000222,IT0000000222,,BTP ESEMPIO 3% 2030,1000,-985,0,EUR,R0000000003
+03-01-2024,05-01-2024,Acquisto,ETFW,IE0000000111,,ESEMPIO MSCI WORLD ETF,20,-2001.5,0,EUR,R0000000002
+02-01-2024,02-01-2024,Conferimento con bonifico,,,P000001,,0,5000,0,EUR,
+02-01-2024,02-01-2024,,,,,,,,0,,

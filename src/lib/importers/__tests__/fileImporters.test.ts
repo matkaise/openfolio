@@ -38,7 +38,7 @@ describe('file importer registry', () => {
   });
 
   it('gives every CSV fixture to exactly one importer, with a named variant', () => {
-    const fixtures = ['degiro-account.csv', 'degiro-transactions.csv', 'swissquote-en.csv', 'swissquote-de.csv', 'trading212.csv', 'traderepublic.csv', 'xtb-cash-operations.csv', 'xtb-legacy.csv', 'saxo.csv', 'schwab.csv', 'revolut.csv', 'etoro.csv', 'freetrade.csv', 'investengine.csv', 'avanza.csv'];
+    const fixtures = ['degiro-account.csv', 'degiro-transactions.csv', 'swissquote-en.csv', 'swissquote-de.csv', 'trading212.csv', 'traderepublic.csv', 'xtb-cash-operations.csv', 'xtb-legacy.csv', 'saxo.csv', 'schwab.csv', 'revolut.csv', 'etoro.csv', 'freetrade.csv', 'investengine.csv', 'avanza.csv', 'directa.csv'];
     fixtures.forEach((file) => {
       const text = readFileSync(path.join(fixtureDir, file), 'utf-8');
       const matches = FILE_IMPORTERS.filter((importer) => importer.detect(text) !== null);
