@@ -86,3 +86,56 @@ export const parseUsNumber = (value: string | undefined): number => {
     const number = Number(`${match[3].replace(/,/g, '')}${match[4] || ''}`);
     return (parenthesized || match[1] === '-' || match[2] === '-') ? -number : number;
 };
+
+export type DecimalSeparator = ',' | '.';
+
+/** Spaces Excel uses as thousands separator in some locales: space, no-break space, narrow no-break space. */
+const SPACES = /[\s  ]/g;
+
+/**
+ * The decimal separator of numbers an Excel conversion wrote in its own locale ("-405,55",
+ * "1 757,95", "(6.97)", "11,316.06"). A value with both separators or with one followed by other
+ * than three digits decides; "1,234" alone is ambiguous. Returns the separator, or the line of
+ * the first value that contradicts it, or of an ambiguous value when nothing decides.
+ */
+export const decimalSeparatorOf = (values: { raw: string; line: number }[]): { separator: DecimalSeparator } | { line: number } => {
+    let decided: DecimalSeparator | null = null;
+    let ambiguous: number | null = null;
+    for (const { raw, line } of values) {
+        const value = raw.replace(SPACES, '').replace(/^\((.*)\)$/, '$1').replace(/^[-+]/, '');
+        const comma = value.lastIndexOf(',');
+        const dot = value.lastIndexOf('.');
+        if (comma < 0 && dot < 0) continue;
+        let separator: DecimalSeparator | null;
+        if (comma >= 0 && dot >= 0) separator = comma > dot ? ',' : '.';
+        else {
+            const position = Math.max(comma, dot);
+            separator = value.length - position - 1 === 3 ? null : comma >= 0 ? ',' : '.';
+        }
+        if (!separator) {
+            ambiguous ??= line;
+            continue;
+        }
+        if (decided && decided !== separator) return { line };
+        decided ??= separator;
+    }
+    if (decided) return { separator: decided };
+    return ambiguous ? { line: ambiguous } : { separator: '.' };
+};
+
+/**
+ * A number with the given decimal separator; the other one or spaces may group thousands, and
+ * negatives are written with "-" or in parentheses ("(0,10)"). Anything else, and an empty
+ * cell, is NaN.
+ */
+export const parseLocaleNumber = (value: string, separator: DecimalSeparator): number => {
+    let raw = value.trim();
+    const parenthesized = /^\((.*)\)$/.exec(raw);
+    if (parenthesized) raw = parenthesized[1].trim();
+    const thousands = separator === ',' ? '[.\\s\\u00a0\\u202f]' : '[,\\s\\u00a0\\u202f]';
+    const decimal = separator === ',' ? ',' : '\\.';
+    const match = new RegExp(`^([-+]?)(\\d{1,3}(?:${thousands}\\d{3})+|\\d+)(?:${decimal}(\\d+))?$`).exec(raw);
+    if (!match || (parenthesized && match[1])) return Number.NaN;
+    const number = Number(`${match[2].replace(/\D/g, '')}.${match[3] || '0'}`);
+    return parenthesized || match[1] === '-' ? -number : number;
+};

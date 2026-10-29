@@ -91,6 +91,16 @@ export const fileImportEn: typeof fileImportDe = {
             comma: 'Investment account statement (CSV, comma)',
             semicolon: 'Investment account statement (CSV, semicolon)',
             tab: 'Investment account statement (TSV, tab)'
+        },
+        etoro: {
+            contracts: 'Account statement, Account Activity sheet (CSV, column "Units / Contracts")',
+            units: 'Account statement, Account Activity sheet (CSV, older column "Units")'
+        },
+        freetrade: {
+            activity: 'Activity feed export (CSV)'
+        },
+        investengine: {
+            'trading-statement': 'Trading statement (CSV)'
         }
     },
     guides: {
@@ -337,6 +347,96 @@ export const fileImportEn: typeof fileImportDe = {
                 'Revolut does not show trading fees separately; they are part of the total amount.',
                 'The export has tickers, no ISIN. The security is looked up by ticker at the next price update.',
                 'The date comes from the export time (UTC); bookings shortly after midnight can be one day off. Withholding tax is not estimated.',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        etoro: {
+            scope: 'eToro investment account (stocks and ETFs, USD account): account statement as Excel, sheet "Account Activity". CFDs, crypto and copy trading transfers are not imported as security bookings.',
+            steps: [
+                'Log in on etoro.com in a browser and open Portfolio.',
+                'Choose History at the top, click the icon on the far right and choose Account statement. Alternatively: Settings → Account → Documents → Account Statement → View.',
+                'Choose the period from account opening and click Create.',
+                'Click the Excel icon at the top right and download the file.',
+                'Open the file in Excel or LibreOffice, select the "Account Activity" sheet and save this sheet as CSV (comma or semicolon separated). Drop the CSV file here.'
+            ],
+            settings: [
+                'eToro website language: English. Columns and booking types are expected in English.',
+                'Save only the "Account Activity" sheet, not "Closed Positions", "Dividends" or "Account Summary".',
+                'Do not delete columns or change date or number formats when saving. Dates must stay in the eToro format DD/MM/YYYY.'
+            ],
+            accounts: 'One eToro account per portfolio. All amounts of the sheet are USD, also for deposits from a EUR or GBP account (eToro converts them on arrival). Overlapping exports are not booked twice.',
+            supported: [
+                'Opened and closed stock and ETF positions as buys and sells (USD amount invested or paid out, quantity from "Units")',
+                'Dividends (net, as credited), interest (Interest Payment)',
+                'Deposits, withdrawals (Withdraw Request), the withdrawal fee and UK stamp duty (SDRT) as fees'
+            ],
+            unsupported: [
+                'CFD positions, overnight fees and refunds and CFD dividends: shown as not imported.',
+                'Crypto and asset types other than stocks and ETFs: shown as not imported.',
+                'Copy trading: positions of the copied trader are booked like your own; "Start Copy" without amount is skipped, "Stop Copy" and other types with an amount are shown as not imported.',
+                'Rows without symbol and negative stock dividends are not matched to a security and are shown as not imported.'
+            ],
+            limits: [
+                'The export has eToro symbols (e.g. "BRIT.L"), no ISIN. The security is looked up by symbol at the next price update.',
+                'Buys and sells are booked in USD, also for securities in EUR or GBX; the sheet has no price in the trading currency. Conversion fees are part of the converted amount and are only shown.',
+                'Withholding tax is only in the "Dividends" sheet and is not estimated. The balance column is not imported: with CFDs, crypto or copy trading it differs from the booked cash.',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        freetrade: {
+            scope: 'Freetrade portfolios (GIA, ISA, SIPP): activity feed export as CSV.',
+            steps: [
+                'In the Freetrade app, choose the portfolio at the top left.',
+                'Open the Activity tab at the bottom.',
+                'Tap the arrow icon (export) at the top right and confirm with "All Activity".',
+                'Save or share the CSV file and drop it here unchanged.'
+            ],
+            settings: [
+                'Always export "All Activity" so deposits, dividends and interest are included.',
+                'Do not open and re-save the file in Excel: numbers and timestamps are expected in their original format.'
+            ],
+            accounts: 'One export and one Openfolio portfolio per Freetrade portfolio (GIA, ISA, SIPP). Overlapping exports are not booked twice.',
+            supported: [
+                'Buys and sells (ORDER) in the account currency, stamp duty and FX fee as fee',
+                'Free shares (FREESHARE_ORDER) as a buy paid by a bonus deposit of their value',
+                'Dividends and property income distributions: gross with the withholding tax shown in the export, otherwise net',
+                'Interest, deposits (TOP_UP) and withdrawals (WITHDRAWAL)'
+            ],
+            unsupported: [
+                'Unknown types with an amount or security (e.g. corporate actions): shown as not imported.',
+                'Orders without ISIN or without buy/sell are not matched to a security.',
+                'Transfers to and from other providers are not part of the export according to Freetrade.'
+            ],
+            limits: [
+                'Buys of foreign-currency securities are booked at the amount in the account currency; the price in the trading currency stays in the raw data.',
+                'Monthly statements and tax certificates (MONTHLY_STATEMENT) have no amount and are skipped.',
+                'The date comes from the UTC timestamp; bookings shortly after midnight British Summer Time can be one day off.',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        investengine: {
+            scope: 'InvestEngine portfolios (GIA, ISA, SIPP, Business): "Trading statement" report as CSV, buys and sells only.',
+            steps: [
+                'Log in to InvestEngine in a browser and choose Reports at the top right.',
+                'Click Create report and choose the report type "Trading statement".',
+                'Choose the period from portfolio opening and the portfolio, choose CSV as format and click Generate report.',
+                'Once the notification or email arrives, download the report at the top of the Reports page (file name e.g. GIA_Trading_statement_….csv) and drop it here.'
+            ],
+            settings: [
+                'Report type "Trading statement", not Cash Statement, Valuation Statement or CGT Report.',
+                'Drop the file unchanged; amounts are expected with "£" and dates as DD/MM/YY.'
+            ],
+            accounts: 'One report and one Openfolio portfolio per InvestEngine portfolio. Overlapping reports are not booked twice.',
+            supported: [
+                'Buys and sells (Buy, Sell) with quantity and trade value in GBP; security by ISIN'
+            ],
+            unsupported: [
+                'Dividends, platform and fund fees, deposits and withdrawals: they are not in the trading statement but in the Cash Statement, which is not read yet. Please add them manually if needed.',
+                'Other transaction types (e.g. transfers) and rows without ISIN: shown as not imported.'
+            ],
+            limits: [
+                'Without deposits in the report, Openfolio treats the money needed for buys as newly invested.',
+                'The trade value is the booked amount; InvestEngine charges no dealing fee per order.',
                 'Only tested with synthetic files based on public samples.'
             ]
         }

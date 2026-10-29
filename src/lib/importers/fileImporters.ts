@@ -1,4 +1,7 @@
 import { degiroFileImporter } from './degiroFile';
+import { etoroFileImporter } from './etoro';
+import { freetradeFileImporter } from './freetrade';
+import { investEngineFileImporter } from './investengine';
 import { revolutFileImporter } from './revolut';
 import { saxoFileImporter } from './saxo';
 import { schwabFileImporter } from './schwab';
@@ -27,7 +30,10 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     xtbFileImporter,
     saxoFileImporter,
     schwabFileImporter,
-    revolutFileImporter
+    revolutFileImporter,
+    etoroFileImporter,
+    freetradeFileImporter,
+    investEngineFileImporter
 ];
 
 export const findFileImporter = (id: string): BrokerFileImporter | undefined => (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { columnIndex, findHeaderRow, locateHeader, normalizeHeader, parseDotDecimal, parseUsNumber, readCsv } from '../csv';
+import { columnIndex, decimalSeparatorOf, findHeaderRow, locateHeader, normalizeHeader, parseDotDecimal, parseLocaleNumber, parseUsNumber, readCsv } from '../csv';
 
 describe('readCsv', () => {
   it('drops the BOM, reads CRLF and LF and skips empty lines', () => {
@@ -70,5 +70,30 @@ describe('parseUsNumber', () => {
     expect(parseUsNumber('12,34')).toBeNaN();
     expect(parseUsNumber('--1')).toBeNaN();
     expect(parseUsNumber('')).toBeNaN();
+  });
+});
+
+describe('decimalSeparatorOf and parseLocaleNumber', () => {
+  const values = (...raws: string[]) => raws.map((raw, index) => ({ raw, line: index + 2 }));
+
+  it('takes the separator from the first deciding value and finds contradictions', () => {
+    expect(decimalSeparatorOf(values('1,000', '(0,10)', ' 1 757,95 '))).toEqual({ separator: ',' });
+    expect(decimalSeparatorOf(values('"x"', '11,316.06', '(6.97)'))).toEqual({ separator: '.' });
+    expect(decimalSeparatorOf(values('1.5', '2,25'))).toEqual({ line: 3 });
+    expect(decimalSeparatorOf(values('1,234', '-'))).toEqual({ line: 2 });
+    expect(decimalSeparatorOf(values('12', '-'))).toEqual({ separator: '.' });
+  });
+
+  it('reads thousands groups, spaces and parentheses, nothing else', () => {
+    expect(parseLocaleNumber('1 757,95', ',')).toBe(1757.95);
+    expect(parseLocaleNumber('1\u202f757,95', ',')).toBe(1757.95);
+    expect(parseLocaleNumber('1.085,00', ',')).toBe(1085);
+    expect(parseLocaleNumber('(0,10)', ',')).toBe(-0.1);
+    expect(parseLocaleNumber('11,316.06', '.')).toBe(11316.06);
+    expect(parseLocaleNumber('-6.97', '.')).toBe(-6.97);
+    expect(parseLocaleNumber('(6.97)', '.')).toBe(-6.97);
+    expect(parseLocaleNumber('1,5', '.')).toBeNaN();
+    expect(parseLocaleNumber('(-1)', '.')).toBeNaN();
+    expect(parseLocaleNumber('', '.')).toBeNaN();
   });
 });
