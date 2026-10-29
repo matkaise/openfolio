@@ -60,3 +60,8 @@ Never copy rows from a real export into this folder.
   (one UK stock in GBX with SDRT), two dividends of the same stock, a partial close, interest, a withdrawal with its
   fee and conversion fee, plus a CFD position with overnight fee and close and a crypto buy (all not supported).
   Booked cash ends at USD 310.35; eToro's balance 268.11 = 310.35 + CFD result 7.76 − crypto 50.
+- `freetrade.csv`: Freetrade activity feed export (comma, 29 columns, ISO timestamps), newest row first, one GBP
+  account. Covers a top-up, a GBP ETF buy, a UK buy with stamp duty, a free share, a USD buy with FX fee, interest,
+  a monthly statement (ignored), a USD dividend with withholding tax, a GBP dividend without tax, a sell and a
+  property income distribution with tax, and a withdrawal. Cash ends at GBP 22.41; holdings 10 IE0000000011,
+  60 GB0000000021, 1 US0000000031, 2 US0000000041.
