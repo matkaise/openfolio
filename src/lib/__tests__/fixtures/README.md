@@ -77,3 +77,8 @@ Never copy rows from a real export into this folder.
   EUR. Covers a deposit, an ETF buy, a bond buy with accrued interest (Ratei), an Italian stock buy with Tobin tax, an
   ETF distribution and a bond coupon with withheld tax, stamp duty (Bollo), a sale with capital gains tax, a withdrawal
   and the empty trailing row. Cash ends at EUR 1064.10.
+- `disnat.csv`: Disnat account history saved from XLSX as CSV (French, comma, quoted decimal commas, "-" as empty),
+  newest row first, CAD account. Covers a contribution, buys with and without commission (one "-C" symbol), a USD
+  stock bought on the CAD account, dividends with the bare symbol, withholding tax, interest, an annual fee with
+  GST/QST, a sale with commission, a cash transfer in, a security transfer (not supported) and a withdrawal. Cash ends
+  at CAD 1362.77.
