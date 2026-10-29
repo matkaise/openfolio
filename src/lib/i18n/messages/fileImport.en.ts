@@ -92,6 +92,9 @@ export const fileImportEn: typeof fileImportDe = {
         },
         freetrade: {
             activity: 'Activity feed export (CSV)'
+        },
+        investengine: {
+            'trading-statement': 'Trading statement (CSV)'
         }
     },
     guides: {
@@ -402,6 +405,32 @@ export const fileImportEn: typeof fileImportDe = {
                 'Buys of foreign-currency securities are booked at the amount in the account currency; the price in the trading currency stays in the raw data.',
                 'Monthly statements and tax certificates (MONTHLY_STATEMENT) have no amount and are skipped.',
                 'The date comes from the UTC timestamp; bookings shortly after midnight British Summer Time can be one day off.',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        investengine: {
+            scope: 'InvestEngine portfolios (GIA, ISA, SIPP, Business): "Trading statement" report as CSV, buys and sells only.',
+            steps: [
+                'Log in to InvestEngine in a browser and choose Reports at the top right.',
+                'Click Create report and choose the report type "Trading statement".',
+                'Choose the period from portfolio opening and the portfolio, choose CSV as format and click Generate report.',
+                'Once the notification or email arrives, download the report at the top of the Reports page (file name e.g. GIA_Trading_statement_….csv) and drop it here.'
+            ],
+            settings: [
+                'Report type "Trading statement", not Cash Statement, Valuation Statement or CGT Report.',
+                'Drop the file unchanged; amounts are expected with "£" and dates as DD/MM/YY.'
+            ],
+            accounts: 'One report and one Openfolio portfolio per InvestEngine portfolio. Overlapping reports are not booked twice.',
+            supported: [
+                'Buys and sells (Buy, Sell) with quantity and trade value in GBP; security by ISIN'
+            ],
+            unsupported: [
+                'Dividends, platform and fund fees, deposits and withdrawals: they are not in the trading statement but in the Cash Statement, which is not read yet. Please add them manually if needed.',
+                'Other transaction types (e.g. transfers) and rows without ISIN: shown as not imported.'
+            ],
+            limits: [
+                'Without deposits in the report, Openfolio treats the money needed for buys as newly invested.',
+                'The trade value is the booked amount; InvestEngine charges no dealing fee per order.',
                 'Only tested with synthetic files based on public samples.'
             ]
         }
