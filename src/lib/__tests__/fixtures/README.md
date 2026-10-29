@@ -65,3 +65,6 @@ Never copy rows from a real export into this folder.
   a monthly statement (ignored), a USD dividend with withholding tax, a GBP dividend without tax, a sell and a
   property income distribution with tax, and a withdrawal. Cash ends at GBP 22.41; holdings 10 IE0000000011,
   60 GB0000000021, 1 US0000000031, 2 US0000000041.
+- `investengine.csv`: InvestEngine "Trading statement" (comma, amounts with "£", one with a thousands comma, dates
+  DD/MM/YY), two ETFs, a name containing a comma (quoted), two identical buys on the same day and a sell. Trades only:
+  cash effect GBP −1255.50, holdings 11.7 IE0000000101 and 10 IE0000000202.
