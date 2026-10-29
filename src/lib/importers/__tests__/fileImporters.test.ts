@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FileImportError } from '../fileImport';
+import { FileImportError, isPdfImporter, type FileImporter } from '../fileImport';
 import { detectFileImporter, FILE_IMPORTERS, readImportFiles } from '../fileImporters';
 import { parseDegiroFiles } from '../importBatch';
 import { fileImportDe } from '@/lib/i18n/messages/fileImport.de';
@@ -41,7 +41,8 @@ describe('file importer registry', () => {
     const fixtures = ['degiro-account.csv', 'degiro-transactions.csv', 'swissquote-en.csv', 'swissquote-de.csv', 'trading212.csv', 'traderepublic.csv', 'xtb-cash-operations.csv', 'xtb-legacy.csv', 'saxo.csv', 'schwab.csv', 'revolut.csv', 'etoro.csv', 'freetrade.csv', 'investengine.csv', 'avanza.csv', 'directa.csv', 'disnat.csv', 'finpension-3a.csv', 'finpension-bvg.csv'];
     fixtures.forEach((file) => {
       const text = readFileSync(path.join(fixtureDir, file), 'utf-8');
-      const matches = FILE_IMPORTERS.filter((importer) => importer.detect(text) !== null);
+      const textImporters = FILE_IMPORTERS.filter((importer): importer is FileImporter => !isPdfImporter(importer));
+      const matches = textImporters.filter((importer) => importer.detect(text) !== null);
       expect(matches.map((importer) => importer.id), file).toHaveLength(1);
       expect(fileImportDe.variants[matches[0].id]?.[matches[0].detect(text) as string], file).toBeTruthy();
     });

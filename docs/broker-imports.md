@@ -60,6 +60,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | Avanza | Transaktionsexport (`sv`: `;`, Dezimalkomma, ISO-Datum, Spalte `Courtage (SEK)` oder `Courtage`), alle Konten in einer Datei | Köp/Sälj mit Courtage als Gebühr, Utdelning, Utländsk källskatt als Quellensteuer, Ränta, Insättning/Uttag (auch Überträge zwischen eigenen Konten), Övrigt: Avkastningsskatt (Steuer) und Gebührenerstattung | Andere Övrigt-Zeilen mit Stückzahl/Betrag (Fondsumtausch u. a.), unbekannte Typen mit Betrag, Zeilen ohne ISIN |
 | Directa | „Movimenti“ als CSV (`movimenti`: `,`, Dezimalpunkt, `TT-MM-JJJJ`, optionale Kopfzeilen „Conto“, „Data estrazione“, Zeitraum) | Acquisto/Vendita mit Importo euro, Proventi/Dividendi, Cedola und Coupon als Zins, Ratei, Rit.* als Quellensteuer, Ritenuta su plusvalenza/Tobin tax/Bollo als Steuer, Commissioni, Conferimento/Bonifico/Prelievo | Finanziamento und unbekannte Typen mit Betrag, Handel ohne ISIN; höchstens 3.000 Zeilen je Export |
 | Disnat | Kontoverlauf aus XLSX als CSV gespeichert, französische Spalten (`fr-comma`, `fr-semicolon`; Zahlenformat je Datei, `-` = leer, ISO-Datum) | ACHAT/VENTE (Actions) unter dem Symbol ohne „-C“, Kommission als Gebühr wenn sie den Betrag erklärt, Dividenden, Retenue als Quellensteuer, Zinsen, Frais mit TPS/TVQ, Cotisation/Subvention/Incitatif/Barübertrag als Einzahlung, Résiliation/Retrait als Auszahlung | Überträge mit Wertpapier, Optionen und andere Klassen, unbekannte Typen mit Betrag, Zeilen ohne Symbol; englischer Export nicht belegt |
+| Finpension | Transaktionsbericht (`;`, Dezimalpunkt, ISO-Datum): `3a`, `bvg` (Freizügigkeit), `report` (nur Zinsen/Gebühren), an den Kategorien erkannt | Buy/Sell bzw. Portfolio Transaction (Richtung aus dem Cash Flow) in CHF, Dividend und Dividend and Interest Distributions, Interests, Pauschalgebühr, Deposit, Transfer vested benefits, Withdraw…, Tagessaldo aus Balance | Unbekannte Kategorien mit Betrag oder Anteilen, Handel ohne ISIN oder mit widersprüchlichen Vorzeichen |
 
 ## Quellen und Lizenzen
 
@@ -90,6 +91,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | Avanza | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `avanzaConverter.ts`, `models/avanzaRecord.ts`, `samples/avanza-export.csv`, README, Issue #165, PR #170 | Commit `9e35bd602f054f563b8c728bcb36dc5eb2bbcaa5` (geprüft 29.10.2026) | Apache-2.0 | Spalten, Typen und ihre Bedeutung (Übersetzung durch einen Avanza-Kunden in Issue #165), Zahlen-/Datumsformat, Exportweg Min ekonomi → Transaktioner → Exportera transaktioner. Keine offizielle Avanza-Anleitung gefunden. |
 | Directa | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `directaConverter.ts`, `models/directaRecord.ts`, `samples/directa-export.csv`, `assets/directa-transactions.png`, `assets/directa-export.png`, README, PRs #141, #292, Issues #278, #294 | Commit `9e35bd602f054f563b8c728bcb36dc5eb2bbcaa5` (geprüft 29.10.2026) | Apache-2.0 | Spalten, Kopfzeilen vor der Tabelle, Typnamen, Zahlen-/Datumsformat, Exportweg und 3.000-Zeilen-Grenze aus den Screenshots. Keine offizielle Directa-Anleitung gefunden. |
 | Disnat | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `disnatConverter.ts`, `models/disnatRecord.ts`, `samples/disnat-export.csv`, README, Issue #260, PR #270 | Commit `9e35bd602f054f563b8c728bcb36dc5eb2bbcaa5` (geprüft 29.10.2026) | Apache-2.0 | Spalten, Typnamen, `-` als Leerwert, Währungskürzel CAN/US, Symbol mit und ohne „-C“, Exportweg (vom Disnat-Kunden in Issue #260 beschrieben). Keine offizielle Disnat-Anleitung gefunden; [Snowball Analytics](https://help.snowball-analytics.com/import-disnat/) bestätigt nur den Weg über History und Zeitraum. |
+| Finpension | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `finpensionConverter.ts`, `models/finpensionRecord.ts`, `samples/finpension-3a-export.csv`, `samples/finpension-bvg-export.csv`, README, PRs #10, #267, #284 | Commit `9e35bd602f054f563b8c728bcb36dc5eb2bbcaa5` (geprüft 29.10.2026) | Apache-2.0 | Spalten, Kategorien beider Varianten, Vorzeichen von Cash Flow und Anteilen, Balance, Exportweg |
+| Finpension | [PP-Forum: CSV-Import für Finpension 3a](https://forum.portfolio-performance.info/t/csv-import-fur-finpension-3a-schweiz/17051) | 29.10.2026 | – (Forum) | Bestätigt Spalten, Semikolon, UTF-8 und Datumsformat; keine offizielle Finpension-Anleitung gefunden |
 | DEGIRO | [Export-To-Ghostfolio README](https://github.com/dickwolff/Export-To-Ghostfolio#degiro) | Commit `9e35bd6` | Apache-2.0 | Exportweg Kontoübersicht |
 
 ### Abweichungen von der Vorlage (Swissquote)
@@ -307,3 +310,14 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
   `CASH` (Dividende) zusammen. Keine ISIN, kein Yahoo-Suffix wird erfunden.
 - Buchungsdatum ist die Date de transaction, sonst die Date de règlement (Vorlage: immer Date de règlement; ohne Datum
   das heutige Datum). Zahlenformat je Datei (Dezimalkomma oder -punkt), gemischte Werte führen zu einem Fehler.
+
+### Abweichungen von der Vorlage (Finpension)
+
+- 3a und BVG werden getrennt erkannt (Variante im Bericht) und getrennt getestet; beide teilen sich die Spalten.
+- Einzahlungen und Auszahlungen (Deposit, Withdraw…) werden gebucht statt übersprungen; „Transfer vested benefits“
+  (in der Vorlage nicht behandelt und damit ohne Typ ausgegeben) als Ein- oder Auszahlung nach Vorzeichen.
+- Handel mit dem Cash Flow als Betrag (Vorlage: Anteile × Kurs in CHF). Wie in der Vorlage bestimmt bei „Portfolio
+  Transaction“ das Vorzeichen des Cash Flow die Richtung; bei Buy/Sell müssen Anteile und Cash Flow zusammenpassen.
+- Die Spalte Balance wird als Tagesendsaldo übernommen (Export neueste Zeile zuerst); unbekannte Kategorien mit
+  Betrag werden gemeldet, Kategorien ohne Wirkung übersprungen.
+- Zahlen mit Dezimalpunkt (Tausenderkomma erlaubt, wie in der PP-Vorlage), Datum nur ISO; sonst Fehler mit Zeilennummer.

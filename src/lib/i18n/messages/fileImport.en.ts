@@ -113,6 +113,11 @@ export const fileImportEn: typeof fileImportDe = {
         disnat: {
             'fr-comma': 'Account history, saved from Excel as CSV (French, comma)',
             'fr-semicolon': 'Account history, saved from Excel as CSV (French, semicolon)'
+        },
+        finpension: {
+            '3a': 'Transaction report pillar 3a (CSV)',
+            bvg: 'Transaction report vested benefits/BVG (CSV)',
+            report: 'Transaction report (CSV, without buys, sells or deposits)'
         }
     },
     guides: {
@@ -539,6 +544,35 @@ export const fileImportEn: typeof fileImportDe = {
                 'The export has Disnat symbols, no ISIN. The "-C" suffix (Canadian listing) is removed so trades and dividends belong to the same security; the next price update resolves it.',
                 'For US-dollar securities on a CAD account the amount includes conversion and commission; the commission then stays in the raw data.',
                 'The export path is only described by a Disnat customer (Export-To-Ghostfolio, issue #260); no official guide was found.',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        finpension: {
+            scope: 'Finpension (Switzerland): pillar 3a portfolios and vested benefits accounts (BVG), transaction report as CSV per portfolio.',
+            steps: [
+                'Log in to Finpension and choose the portfolio on the start page.',
+                'Open "Transactions" on the right.',
+                'At "transaction report (CSV-file)" choose download (or have it sent by email).',
+                'Drop the CSV file here unchanged.'
+            ],
+            settings: [
+                'Do not open and re-save the report in Excel: semicolons, decimal points and dates as YYYY-MM-DD are expected as delivered.'
+            ],
+            accounts: 'One report and one Openfolio portfolio per Finpension portfolio (each 3a portfolio, each vested benefits account). Overlapping reports are not booked twice.',
+            supported: [
+                'Buys and sells (3a: Buy/Sell; BVG: Portfolio Transaction, direction from the cash flow) in CHF',
+                'Distributions (Dividend, Dividend and Interest Distributions), interest (Interests), flat-rate fee (Flat-rate administrative/administration fee)',
+                'Deposits (Deposit), vested benefits transfers (Transfer vested benefits) as deposit or withdrawal, withdrawals (Withdraw…)',
+                'End-of-day balance from the Balance column as cash balance'
+            ],
+            unsupported: [
+                'Unknown categories with an amount or shares: shown as not imported.',
+                'Buys/sells without ISIN or with contradicting signs of shares and cash flow.'
+            ],
+            limits: [
+                'Amounts in CHF ("Asset Price in CHF", "Cash Flow"); fund currency and rate stay in the raw data.',
+                'The variant (3a or BVG) is recognised from the categories; a report with only interest and fees is called "transaction report".',
+                'The export path is only documented by Export-To-Ghostfolio; no official Finpension guide was found.',
                 'Only tested with synthetic files based on public samples.'
             ]
         }
