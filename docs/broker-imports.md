@@ -32,6 +32,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | eToro | Kontoauszug, Blatt „Account Activity“ als CSV (`,` oder `;`, Zahlenformat je Excel-Gebietsschema): `contracts` („Units / Contracts“), `units` (ältere Spalte „Units“) | Eröffnete/geschlossene Positionen in Aktien und ETFs als Kauf/Verkauf in USD (Wertpapier unter eToro-Symbol), Dividenden (netto), Zinsen, Ein-/Auszahlungen, Auszahlungsgebühr, SDRT als Gebühr; Umrechnungsgebühren ohne Kontowirkung werden übersprungen | CFD (Positionen, Overnight fee/refund, CFD-Dividenden), Krypto und andere Anlagearten, Stop Copy und unbekannte Typen mit Betrag, Zeilen ohne Symbol, negative Aktiendividenden; XLSX nicht direkt |
 | Freetrade | Aktivitäten-Export als CSV (`activity`, 29 Spalten, Dezimalpunkt, ISO-Zeit in UTC) | Käufe/Verkäufe (ORDER) in Kontowährung mit Stempelsteuer und FX-Gebühr als Gebühr, Gratisaktien als Kauf plus Bonus-Einzahlung, Dividenden und PROPERTY-Ausschüttungen (brutto mit ausgewiesener Quellensteuer, sonst netto), Zinsen, TOP_UP/WITHDRAWAL; MONTHLY_STATEMENT übersprungen | Unbekannte Typen mit Betrag oder ISIN, Aufträge ohne ISIN oder Kauf/Verkauf; Depotüberträge fehlen im Export |
 | InvestEngine | Bericht „Trading statement“ als CSV (`trading-statement`; Pflichtspalten `Security / ISIN`, `Transaction Type`, `Quantity`, `Share Price`, `Total Trade Value`, `Trade Date/Time`; optional `Settlement Date`, `Broker`) | Käufe/Verkäufe in GBP mit Handelswert als Cash-Effekt, ISIN aus „Name / ISIN …“ | Andere Typen, Zeilen ohne ISIN; Dividenden, Gebühren und Ein-/Auszahlungen (nur im Cash Statement, dessen Format keine öffentliche Quelle hat) |
+| Avanza | Transaktionsexport (`sv`: `;`, Dezimalkomma, ISO-Datum, Spalte `Courtage (SEK)` oder `Courtage`), alle Konten in einer Datei | Köp/Sälj mit Courtage als Gebühr, Utdelning, Utländsk källskatt als Quellensteuer, Ränta, Insättning/Uttag (auch Überträge zwischen eigenen Konten), Övrigt: Avkastningsskatt (Steuer) und Gebührenerstattung | Andere Övrigt-Zeilen mit Stückzahl/Betrag (Fondsumtausch u. a.), unbekannte Typen mit Betrag, Zeilen ohne ISIN |
 
 ## Quellen und Lizenzen
 
@@ -59,6 +60,7 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | Freetrade | [Freetrade Help: CSV export of the activity feed](https://help.freetrade.io/en/articles/6627908-how-do-i-download-a-csv-export-of-my-activity-feed) | 29.10.2026 (Artikel vom 30.03.2026) | – (Dokumentation) | Exportweg Activity → Exportpfeil → All Activity; Überträge zu/von anderen Anbietern nicht enthalten |
 | InvestEngine | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `investEngineConverter.ts`, `models/investEngineRecord.ts`, `samples/investengine-export.csv`, Issue #241, PR #248 | Commit `9e35bd602f054f563b8c728bcb36dc5eb2bbcaa5` (geprüft 29.10.2026) | Apache-2.0 | Spalten des Trading statement, Dateiname `GIA_Trading_statement_<von>_to_<bis>.csv` (Issue #241), Betrags- (`£`) und Datumsformat (`TT/MM/JJ HH:mm:ss`) |
 | InvestEngine | [Help: Generate and download a custom report](https://help.investengine.com/hc/en-gb/articles/8927819031581-How-can-I-generate-and-download-a-custom-report), [Help: Choosing the right statement or report](https://help.investengine.com/hc/en-gb/articles/24811340395037-Guide-Choosing-the-Right-Statement-or-Report-for-Your-Needs) | 29.10.2026 (Seiten hinter Cloudflare, im Browser gelesen) | – (Dokumentation) | Menüweg Reports → Create report → Berichtstyp → Zeitraum → Portfolio → Generate report, PDF oder CSV; Cash Statement für Kontobewegungen |
+| Avanza | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `avanzaConverter.ts`, `models/avanzaRecord.ts`, `samples/avanza-export.csv`, README, Issue #165, PR #170 | Commit `9e35bd602f054f563b8c728bcb36dc5eb2bbcaa5` (geprüft 29.10.2026) | Apache-2.0 | Spalten, Typen und ihre Bedeutung (Übersetzung durch einen Avanza-Kunden in Issue #165), Zahlen-/Datumsformat, Exportweg Min ekonomi → Transaktioner → Exportera transaktioner. Keine offizielle Avanza-Anleitung gefunden. |
 | DEGIRO | [Export-To-Ghostfolio README](https://github.com/dickwolff/Export-To-Ghostfolio#degiro) | Commit `9e35bd6` | Apache-2.0 | Exportweg Kontoübersicht |
 
 ### Abweichungen von der Vorlage (Swissquote)
@@ -234,3 +236,18 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
   Feld, keine Yahoo-Suche; Zeilen ohne ISIN werden gemeldet. Andere Transaktionstypen werden gemeldet statt (wie in der
   Vorlage) mit undefiniertem Typ ausgegeben.
 - Beträge nur in GBP mit „£“ (Tausenderkomma erlaubt), Datum `TT/MM/JJ` (Jahr 20JJ); andere Formate führen zu einem Fehler.
+
+### Abweichungen von der Vorlage (Avanza)
+
+- Ein- und Auszahlungen (`Insättning`, `Uttag`) werden gebucht statt übersprungen; Überträge zwischen eigenen Konten
+  derselben Datei heben sich dadurch auf.
+- `Utländsk källskatt` wird als Quellensteuer der Position gebucht (Vorlage: wegen ISIN übersprungen). `Övrigt` nur nach
+  Beschreibung: Avkastningsskatt als Steuer, Rückerstattung von Fondsgebühren als positive Gebühr; andere `Övrigt`-Zeilen
+  mit Stückzahl oder Betrag (z. B. Fondsumtausch zwischen zwei ISIN) werden gemeldet statt still übersprungen.
+- Handel: `Belopp` ist der Cash-Effekt inklusive Courtage; in SEK wird das Courtage als Gebühr abgetrennt. Die Vorlage
+  bucht Kurs in Instrumentwährung plus Courtage in SEK als Gebühr der Instrumentwährung. Bei Fremdwährungskonten bleibt
+  das Courtage im Betrag (Währung nicht gleich).
+- Konten: Die Spalte `Konto` ist Teil des Schlüssels, damit gleiche Zeilen verschiedener Konten nicht zusammenfallen. Alle
+  Konten landen in einem Depot (eine Kontoauswahl beim Export ist nicht belegt).
+- Zahlen strikt mit Dezimalkomma ohne Tausendertrennzeichen; keine Standardwährung SEK für Zeilen ohne Währung
+  (Vorlage), solche Zeilen mit Betrag werden gemeldet.
