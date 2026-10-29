@@ -103,6 +103,16 @@ export const fileImportDe = {
             semicolon: 'Kontoauszug Investmentkonto (CSV, Semikolon)',
             tab: 'Kontoauszug Investmentkonto (TSV, Tabulator)'
         },
+        etoro: {
+            contracts: 'Kontoauszug, Blatt Account Activity (CSV, Spalte „Units / Contracts“)',
+            units: 'Kontoauszug, Blatt Account Activity (CSV, ältere Spalte „Units“)'
+        },
+        freetrade: {
+            activity: 'Aktivitäten-Export (CSV)'
+        },
+        investengine: {
+            'trading-statement': 'Trading statement (CSV)'
+        },
         scalable: {
             de: 'PDF-Abrechnung Scalable Capital (deutsch)',
             en: 'PDF-Abrechnung Scalable Capital (englisch)',
@@ -353,6 +363,96 @@ export const fileImportDe = {
                 'Revolut weist Handelsgebühren nicht getrennt aus; sie stecken im Gesamtbetrag.',
                 'Der Export enthält Ticker, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über den Ticker gesucht.',
                 'Das Datum stammt aus der Exportzeit (UTC); Buchungen kurz nach Mitternacht können einen Tag abweichen. Quellensteuer wird nicht geschätzt.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        etoro: {
+            scope: 'eToro-Investmentkonto (Aktien und ETFs, USD-Konto): Kontoauszug (Account statement) als Excel, Blatt „Account Activity“. CFDs, Krypto und Copy-Trading-Überträge werden nicht als Wertpapierbuchungen übernommen.',
+            steps: [
+                'Im Browser auf etoro.com anmelden und Portfolio öffnen.',
+                'Oben History wählen, dann ganz rechts das Symbol anklicken und Account statement wählen. Alternativ: Einstellungen → Konto → Dokumente → Account Statement → Ansehen.',
+                'Den Zeitraum ab Kontoeröffnung wählen und Create anklicken.',
+                'Oben rechts das Excel-Symbol anklicken und die Datei herunterladen.',
+                'Die Datei in Excel oder LibreOffice öffnen, das Blatt „Account Activity“ wählen und dieses Blatt als CSV speichern (Trennzeichen Komma oder Semikolon). Die CSV-Datei hier ablegen.'
+            ],
+            settings: [
+                'Sprache der eToro-Website: Englisch. Die Spalten und Buchungstypen werden englisch erwartet.',
+                'Nur das Blatt „Account Activity“ speichern, nicht „Closed Positions“, „Dividends“ oder „Account Summary“.',
+                'Beim Speichern keine Spalten löschen und keine Datums- oder Zahlenformate ändern. Das Datum muss im eToro-Format TT/MM/JJJJ bleiben.'
+            ],
+            accounts: 'Ein eToro-Konto je Depot. Alle Beträge des Blatts sind USD, auch bei Einzahlungen aus einem EUR- oder GBP-Konto (eToro rechnet beim Eingang um). Überlappende Exporte werden nicht doppelt gebucht.',
+            supported: [
+                'Eröffnete und geschlossene Positionen in Aktien und ETFs als Kauf und Verkauf (investierter bzw. ausgezahlter USD-Betrag, Stückzahl aus „Units“)',
+                'Dividenden (netto, wie gutgeschrieben), Zinsen (Interest Payment)',
+                'Einzahlungen, Auszahlungen (Withdraw Request), Auszahlungsgebühr und britische Stempelsteuer (SDRT) als Gebühr'
+            ],
+            unsupported: [
+                'CFD-Positionen, Übernachtgebühren und -erstattungen sowie CFD-Dividenden: erscheinen als nicht übernommen.',
+                'Krypto und andere Anlagearten außer Aktien und ETFs: erscheinen als nicht übernommen.',
+                'Copy-Trading: Die Positionen des kopierten Traders werden wie eigene gebucht; „Start Copy“ ohne Betrag wird übersprungen, „Stop Copy“ und andere Typen mit Betrag erscheinen als nicht übernommen.',
+                'Zeilen ohne Symbol und negative Aktiendividenden werden keinem Wertpapier zugeordnet und erscheinen als nicht übernommen.'
+            ],
+            limits: [
+                'Der Export enthält eToro-Symbole (z. B. „BRIT.L“), keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über das Symbol gesucht.',
+                'Käufe und Verkäufe werden in USD gebucht, auch bei Wertpapieren in EUR oder GBX; den Kurs in Handelswährung enthält das Blatt nicht. Umrechnungsgebühren (Conversion Fee) sind im umgerechneten Betrag enthalten und werden nur angezeigt.',
+                'Quellensteuer steht nur im Blatt „Dividends“ und wird nicht geschätzt. Der Kontostand (Balance) wird nicht übernommen: bei CFDs, Krypto und Copy-Trading weicht er vom gebuchten Geld ab.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        freetrade: {
+            scope: 'Freetrade-Depots (GIA, ISA, SIPP): Export des Aktivitäten-Feeds als CSV.',
+            steps: [
+                'In der Freetrade-App oben links das Depot (Portfolio) wählen.',
+                'Unten den Reiter Aktivität (Activity) öffnen.',
+                'Oben rechts das Pfeilsymbol (Export) antippen und mit „All Activity“ bestätigen.',
+                'Die CSV-Datei speichern oder teilen und hier unverändert ablegen.'
+            ],
+            settings: [
+                'Immer „All Activity“ exportieren, damit Einzahlungen, Dividenden und Zinsen enthalten sind.',
+                'Die Datei nicht in Excel öffnen und neu speichern: Zahlen und Zeitstempel werden im Originalformat erwartet.'
+            ],
+            accounts: 'Je Freetrade-Depot (GIA, ISA, SIPP) ein eigener Export und ein eigenes Openfolio-Depot. Überlappende Exporte werden nicht doppelt gebucht.',
+            supported: [
+                'Käufe und Verkäufe (ORDER) in Kontowährung, Stempelsteuer und FX-Gebühr als Gebühr',
+                'Gratisaktien (FREESHARE_ORDER) als Kauf, bezahlt durch eine Bonus-Einzahlung in Höhe ihres Werts',
+                'Dividenden und Property-Income-Ausschüttungen: brutto mit der im Export ausgewiesenen Quellensteuer, sonst netto',
+                'Zinsen, Einzahlungen (TOP_UP) und Auszahlungen (WITHDRAWAL)'
+            ],
+            unsupported: [
+                'Unbekannte Typen mit Betrag oder Wertpapier (z. B. Kapitalmaßnahmen): erscheinen als nicht übernommen.',
+                'Aufträge ohne ISIN oder ohne Kauf/Verkauf-Angabe werden keinem Wertpapier zugeordnet.',
+                'Depotüberträge zu und von anderen Anbietern sind laut Freetrade nicht im Export enthalten.'
+            ],
+            limits: [
+                'Käufe von Wertpapieren in Fremdwährung werden zum Betrag in Kontowährung gebucht; der Kurs in Handelswährung bleibt in den Rohdaten.',
+                'Monatsauszüge und Steuerbescheinigungen (MONTHLY_STATEMENT) haben keinen Betrag und werden übersprungen.',
+                'Das Datum stammt aus dem Zeitstempel in UTC; Buchungen kurz nach Mitternacht britischer Sommerzeit können einen Tag abweichen.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        investengine: {
+            scope: 'InvestEngine-Depots (GIA, ISA, SIPP, Business): Bericht „Trading statement“ als CSV, nur Käufe und Verkäufe.',
+            steps: [
+                'Im Browser bei InvestEngine anmelden und oben rechts Reports wählen.',
+                'Create report anklicken und als Berichtstyp „Trading statement“ wählen.',
+                'Den Zeitraum ab Depoteröffnung und das Depot (Portfolio) wählen, CSV als Format wählen und Generate report anklicken.',
+                'Sobald die Benachrichtigung bzw. E-Mail kommt, den Bericht oben auf der Reports-Seite herunterladen (Dateiname z. B. GIA_Trading_statement_….csv) und hier ablegen.'
+            ],
+            settings: [
+                'Berichtstyp „Trading statement“, nicht Cash Statement, Valuation Statement oder CGT Report.',
+                'Die Datei unverändert ablegen; Beträge werden mit „£“ und Datumsangaben als TT/MM/JJ erwartet.'
+            ],
+            accounts: 'Je InvestEngine-Depot ein eigener Bericht und ein eigenes Openfolio-Depot. Überlappende Berichte werden nicht doppelt gebucht.',
+            supported: [
+                'Käufe und Verkäufe (Buy, Sell) mit Stückzahl und Handelswert in GBP; Wertpapier über die ISIN'
+            ],
+            unsupported: [
+                'Dividenden, Plattform- und Fondsgebühren, Ein- und Auszahlungen: stehen nicht im Trading statement, sondern im Cash Statement, das noch nicht gelesen wird. Bitte bei Bedarf manuell erfassen.',
+                'Andere Transaktionstypen (z. B. Überträge) und Zeilen ohne ISIN: erscheinen als nicht übernommen.'
+            ],
+            limits: [
+                'Ohne Einzahlungen im Bericht behandelt Openfolio das für Käufe nötige Geld als neu investiert.',
+                'Der Handelswert ist der gebuchte Betrag; InvestEngine erhebt keine Handelsgebühr je Auftrag.',
                 'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
             ]
         },

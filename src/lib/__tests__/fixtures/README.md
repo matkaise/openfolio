@@ -54,3 +54,17 @@ Never copy rows from a real export into this folder.
   $0.02 cost, a withdrawal, a EUR buy with a decimal-comma quantity, plus a stock split and a position transfer
   between Revolut entities (both not supported, must be reported) and an empty cash transfer (ignored). Cash ends
   at USD 569.58 and EUR 60.
+- `etoro.csv`: eToro account statement, sheet "Account Activity" saved as CSV (comma, US number format with quoted
+  thousands and parenthesized negatives), oldest row first, "Units / Contracts" header. Balance and Realized Equity are
+  consistent row by row. Covers a converted EUR deposit with its informational conversion fee, stock and ETF buys
+  (one UK stock in GBX with SDRT), two dividends of the same stock, a partial close, interest, a withdrawal with its
+  fee and conversion fee, plus a CFD position with overnight fee and close and a crypto buy (all not supported).
+  Booked cash ends at USD 310.35; eToro's balance 268.11 = 310.35 + CFD result 7.76 − crypto 50.
+- `freetrade.csv`: Freetrade activity feed export (comma, 29 columns, ISO timestamps), newest row first, one GBP
+  account. Covers a top-up, a GBP ETF buy, a UK buy with stamp duty, a free share, a USD buy with FX fee, interest,
+  a monthly statement (ignored), a USD dividend with withholding tax, a GBP dividend without tax, a sell and a
+  property income distribution with tax, and a withdrawal. Cash ends at GBP 22.41; holdings 10 IE0000000011,
+  60 GB0000000021, 1 US0000000031, 2 US0000000041.
+- `investengine.csv`: InvestEngine "Trading statement" (comma, amounts with "£", one with a thousands comma, dates
+  DD/MM/YY), two ETFs, a name containing a comma (quoted), two identical buys on the same day and a sell. Trades only:
+  cash effect GBP −1255.50, holdings 11.7 IE0000000101 and 10 IE0000000202.

@@ -1,0 +1,7 @@
+Security / ISIN,Transaction Type,Quantity,Share Price,Total Trade Value,Trade Date/Time,Settlement Date,Broker
+Example Global Equity ETF / ISIN IE0000000101,Buy,12.500000,£100.00,"£1,250.00",02/01/24 15:18:12,04/01/24,None
+"Example Gilts ETF, Dist / ISIN IE0000000202",Buy,10.000000,£12.50,£125.00,02/01/24 15:18:12,04/01/24,None
+Example Global Equity ETF / ISIN IE0000000101,Buy,2.000000,£110.00,£220.00,01/02/24 15:00:08,05/02/24,None
+Example Global Equity ETF / ISIN IE0000000101,Buy,0.100000,£110.00,£11.00,01/02/24 15:00:08,05/02/24,None
+Example Global Equity ETF / ISIN IE0000000101,Buy,0.100000,£110.00,£11.00,01/02/24 15:00:08,05/02/24,None
+Example Global Equity ETF / ISIN IE0000000101,Sell,3.000000,£120.50,£361.50,30/04/24 14:13:11,02/05/24,None
