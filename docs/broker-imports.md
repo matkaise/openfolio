@@ -17,6 +17,31 @@ genannten Formate und Buchungsarten als unterstützt. Alle Tests verwenden synth
 Neue Importer: Datei unter `src/lib/importers/`, Eintrag in `FILE_IMPORTERS`, Anleitung und
 Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag, Tests.
 
+### PDF-Verarbeitung
+
+- `src/lib/importers/readImportFile.ts` – liest eine abgelegte Datei: PDF (erkannt am `%PDF-`-Kopf, nicht am
+  Dateinamen) als Textschicht, alles andere als Text.
+- `src/lib/pdf/extractPdfText.ts` – einzige Stelle, an der PDFs gelesen werden. [pdf.js](https://github.com/mozilla/pdf.js)
+  (`pdfjs-dist` 6.4.299, exakt gepinnt, Apache-2.0) parst lokal; es wird nichts hochgeladen und keine Texterkennung (OCR)
+  ausgeführt. Im Browser lädt `src/lib/pdf/loadPdfjs.ts` die Bibliothek erst beim ersten PDF-Import und parst in einem
+  eigenen Worker (`pdf.worker.ts`). Verwendet wird der Legacy-Build: der moderne Build braucht `Promise.try`
+  (Safari ab 18.2, Chrome ab 128, Node ab 23). Eval ist abgeschaltet, Schriften werden nicht geladen.
+- `src/lib/pdf/pdfText.ts` – setzt die positionierten Textstücke einer Seite zu Zeilen zusammen: gleiche Grundlinie
+  (Toleranz knapp halbe Schrifthöhe) = eine Zeile, links nach rechts, Lücken als ein Leerzeichen, Zeilen von oben nach
+  unten. Spaltenlayouts wie „Kurs : 92,25 EUR Kurswert : 1.690,00 EUR“ ergeben damit eine Zeile, wie bei PDFBox mit
+  Sortierung nach Position, auf dem die Extraktoren von Portfolio Performance aufbauen. Gedrehter Text (Randvermerke)
+  wird ausgelassen.
+- PDF-Importer (`PdfFileImporter`, `input: 'pdf'`) bekommen das Ergebnis als `{ pages: string[][] }` (Zeilen je Seite).
+  `detect` erkennt den ausstellenden Broker, `parse` bucht oder meldet das Dokument (z. B. Auftragsbestätigung,
+  Kontoauszug) als nicht übernommen mit Seite und Dokumenttitel. Mehrere PDFs (je Abrechnung eine Datei) werden
+  gemeinsam abgelegt, einzeln gelesen und zusammengeführt; ein doppelt abgelegtes Dokument wird über seine Kennung
+  nur einmal gebucht.
+- Fehler mit Dateinamen: ohne Textschicht (Scan/Foto) `noTextLayer`, Passwortschutz `pdfEncrypted`, beschädigt
+  `pdfUnreadable`, PDF eines anderen Brokers `unknownFormat`, PDF und CSV verschiedener Importer `mixedFiles`.
+- Tests erzeugen PDFs zur Laufzeit (`src/lib/pdf/__tests__/syntheticPdf.ts`: Helvetica, WinAnsi mit Umlauten und €,
+  Spalten über x-Positionen, Bildseite ohne Text, Passwortschutz) und schicken sie durch die echte Extraktion mit
+  demselben pdf.js-Build wie im Browser. Reine Text-Fixtures reichen dafür nicht.
+
 ## Importer
 
 | Importer | Formate / Varianten | Buchungsarten | Nicht übernommen (wird gemeldet) |
