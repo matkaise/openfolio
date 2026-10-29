@@ -106,6 +106,9 @@ export const fileImportDe = {
         },
         investengine: {
             'trading-statement': 'Trading statement (CSV)'
+        },
+        avanza: {
+            sv: 'Transaktionsexport (CSV, schwedisch)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -442,6 +445,36 @@ export const fileImportDe = {
             limits: [
                 'Ohne Einzahlungen im Bericht behandelt Openfolio das für Käufe nötige Geld als neu investiert.',
                 'Der Handelswert ist der gebuchte Betrag; InvestEngine erhebt keine Handelsgebühr je Auftrag.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        avanza: {
+            scope: 'Avanza (Schweden): Transaktionsexport aller Konten des Logins (ISK, KF, Depå, Sparkonto) als CSV.',
+            steps: [
+                'Im Browser bei Avanza anmelden und „Min ekonomi“ öffnen.',
+                'Den Reiter „Transaktioner“ wählen.',
+                'Den Zeitraum ab Kontoeröffnung wählen.',
+                '„Exportera transaktioner“ anklicken und die CSV-Datei unverändert hier ablegen.'
+            ],
+            settings: [
+                'Die Datei ist schwedisch, mit Semikolon und Dezimalkomma; nicht in Excel öffnen und neu speichern.',
+                'Nicht den Export der Bestände (Innehav) verwenden: er enthält keine Buchungen.'
+            ],
+            accounts: 'Der Export enthält alle Konten; Openfolio bucht sie gemeinsam in ein Depot und behält das Konto (Spalte „Konto“) in den Rohdaten. Überträge zwischen eigenen Konten erscheinen als Aus- und Einzahlung und heben sich auf. Für getrennte Depots die Zeilen der anderen Konten vor dem Import entfernen. Überlappende Exporte werden nicht doppelt gebucht.',
+            supported: [
+                'Köp und Sälj mit Courtage als Gebühr (bei SEK-Beträgen)',
+                'Utdelning (wie gutgeschrieben) und Utländsk källskatt als Quellensteuer',
+                'Ränta, Insättning und Uttag',
+                'Övrigt: Avkastningsskatt als Steuer, „Återbetalning … avgift“ als Gebührenerstattung'
+            ],
+            unsupported: [
+                'Andere „Övrigt“-Zeilen mit Stückzahl oder Betrag (z. B. Fondsumtausch, Kapitalmaßnahmen): erscheinen als nicht übernommen.',
+                'Unbekannte Transaktionstypen mit Betrag (z. B. Preliminärskatt): erscheinen als nicht übernommen.',
+                'Käufe und Verkäufe ohne ISIN werden keinem Wertpapier zugeordnet.'
+            ],
+            limits: [
+                'Beträge in der Transaktionswährung (meist SEK). Bei Fremdwährungskonten bleibt das Courtage (in SEK) im Betrag enthalten und steht nur in den Rohdaten.',
+                'Den Exportweg beschreibt nur ein Avanza-Kunde (Export-To-Ghostfolio, Issue #165); eine offizielle Avanza-Anleitung wurde nicht gefunden.',
                 'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
             ]
         }

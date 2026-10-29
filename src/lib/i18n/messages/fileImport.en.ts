@@ -95,6 +95,9 @@ export const fileImportEn: typeof fileImportDe = {
         },
         investengine: {
             'trading-statement': 'Trading statement (CSV)'
+        },
+        avanza: {
+            sv: 'Transaction export (CSV, Swedish)'
         }
     },
     guides: {
@@ -431,6 +434,36 @@ export const fileImportEn: typeof fileImportDe = {
             limits: [
                 'Without deposits in the report, Openfolio treats the money needed for buys as newly invested.',
                 'The trade value is the booked amount; InvestEngine charges no dealing fee per order.',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        avanza: {
+            scope: 'Avanza (Sweden): transaction export of all accounts of the login (ISK, KF, Depå, savings account) as CSV.',
+            steps: [
+                'Log in to Avanza in a browser and open "Min ekonomi".',
+                'Choose the "Transaktioner" tab.',
+                'Choose the period from account opening.',
+                'Click "Exportera transaktioner" and drop the CSV file here unchanged.'
+            ],
+            settings: [
+                'The file is Swedish, with semicolons and decimal commas; do not open and re-save it in Excel.',
+                'Do not use the holdings export (Innehav): it has no bookings.'
+            ],
+            accounts: 'The export contains all accounts; Openfolio books them together into one portfolio and keeps the account (column "Konto") in the raw data. Transfers between your own accounts appear as withdrawal and deposit and cancel out. For separate portfolios, remove the other accounts\' rows before importing. Overlapping exports are not booked twice.',
+            supported: [
+                'Köp and Sälj with courtage as fee (for SEK amounts)',
+                'Utdelning (as credited) and Utländsk källskatt as withholding tax',
+                'Ränta, Insättning and Uttag',
+                'Övrigt: Avkastningsskatt as tax, "Återbetalning … avgift" as fee refund'
+            ],
+            unsupported: [
+                'Other "Övrigt" rows with quantity or amount (e.g. fund switches, corporate actions): shown as not imported.',
+                'Unknown transaction types with an amount (e.g. Preliminärskatt): shown as not imported.',
+                'Buys and sells without ISIN are not matched to a security.'
+            ],
+            limits: [
+                'Amounts are in the transaction currency (mostly SEK). On currency accounts the courtage (in SEK) stays in the amount and is only kept in the raw data.',
+                'The export path is only described by an Avanza customer (Export-To-Ghostfolio, issue #165); no official Avanza guide was found.',
                 'Only tested with synthetic files based on public samples.'
             ]
         }
