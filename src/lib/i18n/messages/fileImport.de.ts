@@ -36,6 +36,7 @@ export const fileImportDe = {
         period: 'Zeitraum',
         periodValue: (from: string, to: string) => `${from} – ${to}`,
         rows: 'Gelesene Zeilen',
+        documents: 'Gelesene Dokumente',
         newTrades: 'Neue Käufe/Verkäufe',
         newMovements: 'Neue Kontobewegungen',
         balances: 'Kontostände',
@@ -44,7 +45,9 @@ export const fileImportDe = {
         unsupported: 'Nicht übernommen',
         unsupportedHint: 'Diese Zeilen haben eine finanzielle Wirkung, die Openfolio für dieses Format noch nicht übernimmt. Bitte bei Bedarf manuell erfassen.',
         ignoredHint: 'Verwaltungszeilen ohne Geld- oder Bestandswirkung.',
-        note: (line: number, label: string, file?: string) => `${file ? `${file}, ` : ''}Zeile ${line}: ${label || '(ohne Typ)'}`,
+        unsupportedHintPdf: 'Diese Dokumente oder Buchungen haben eine finanzielle Wirkung, die Openfolio noch nicht übernimmt. Bitte bei Bedarf manuell erfassen.',
+        ignoredHintPdf: 'Dokumente ohne Geld- oder Bestandswirkung, z. B. Kosteninformationen oder Auftragsbestätigungen.',
+        note: (line: number, label: string, file?: string, page?: number) => `${file ? `${file}, ` : ''}${page ? `Seite ${page}` : `Zeile ${line}`}: ${label || '(ohne Typ)'}`,
         more: (count: number) => `… und ${count} weitere`,
         nothingNew: 'Alle Buchungen dieser Datei sind bereits im Depot.'
     },
@@ -56,7 +59,12 @@ export const fileImportDe = {
         invalidNumber: (line?: number) => `Zahl in unerwartetem Format${line ? ` (Zeile ${line})` : ''}. Bitte Export und Spracheinstellung prüfen.`,
         invalidDate: (line?: number) => `Datum in unerwartetem Format${line ? ` (Zeile ${line})` : ''}. Bitte Export und Spracheinstellung prüfen.`,
         severalAccounts: 'Die Datei enthält Buchungen mehrerer Konten (z. B. Hauptkonto und Junior-Depot). Bitte je Konto einen eigenen Export erstellen und in ein eigenes Depot importieren.',
-        missingCurrency: 'Die Kontowährung ist nicht erkennbar. XTB nennt sie nur im Dateinamen (z. B. EUR_account_….csv); bitte den Dateinamen beim Speichern als CSV beibehalten.'
+        missingCurrency: 'Die Kontowährung ist nicht erkennbar. XTB nennt sie nur im Dateinamen (z. B. EUR_account_….csv); bitte den Dateinamen beim Speichern als CSV beibehalten.',
+        unknownFile: (file: string) => `${file}: Format nicht erkannt. Bitte nur Dokumente bzw. Exporte desselben Brokers gemeinsam importieren.`,
+        mixedFiles: 'Die Dateien stammen von verschiedenen Brokern oder sind verschiedene Formate. Bitte je Broker getrennt importieren.',
+        noTextLayer: (file?: string) => `${file ? `${file}: ` : ''}Das PDF enthält keinen auslesbaren Text, vermutlich ein Scan oder ein Foto. Bitte das Original-PDF beim Broker herunterladen; Texterkennung (OCR) bietet Openfolio nicht an.`,
+        pdfEncrypted: (file?: string) => `${file ? `${file}: ` : ''}Das PDF ist mit einem Passwort geschützt. Bitte eine Fassung ohne Kennwort speichern und erneut importieren.`,
+        pdfUnreadable: (file?: string) => `${file ? `${file}: ` : ''}Das PDF ist beschädigt oder kann nicht gelesen werden.`
     },
     variants: {
         degiro: {

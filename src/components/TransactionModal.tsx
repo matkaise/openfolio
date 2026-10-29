@@ -11,7 +11,8 @@ import { buildManualPriceHistory } from '@/lib/marketDataService';
 import { applyImportBatch, emptyImportBatch, isEmptyImportBatch, type ImportBatch } from '@/lib/importers/importBatch';
 import { FileImportError, type FileImportResult } from '@/lib/importers/fileImport';
 import { FILE_IMPORTERS, readImportFiles } from '@/lib/importers/fileImporters';
-import { BrokerFileImport } from '@/components/import/BrokerFileImport';
+import { readImportFile } from '@/lib/importers/readImportFile';
+import { BrokerFileImport, fileImportErrorMessage } from '@/components/import/BrokerFileImport';
 import { searchCompanyMatches, type CompanyMatch } from '@/lib/tickerSearch';
 import { createLogger } from '@/lib/logger';
 import { useT } from '@/lib/i18n';
@@ -126,8 +127,8 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     const processFiles = async (files: File[]) => {
         setImportStatus('processing');
         try {
-            const texts = await Promise.all(files.map(async (file) => ({ name: file.name, text: await file.text() })));
-            const { importer, result } = readImportFiles(texts);
+            const read = await Promise.all(files.map((file) => readImportFile(file)));
+            const { importer, result } = readImportFiles(read);
             const { report } = result;
             if (isEmptyImportBatch(result.batch) && report.unsupported.length === 0 && report.ignored.length === 0) {
                 throw new FileImportError('noRows');
@@ -140,11 +141,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             setImportStatus('ready');
         } catch (err) {
             log.error(err);
-            const message = !(err instanceof FileImportError)
-                ? t.txModal.unreadable
-                : err.code === 'invalidNumber' || err.code === 'invalidDate'
-                    ? t.fileImport.errors[err.code](err.line)
-                    : t.fileImport.errors[err.code];
+            const message = err instanceof FileImportError ? fileImportErrorMessage(t, err) : t.txModal.unreadable;
             notify({ tone: 'error', title: t.fileImport.errors.title, message });
             setFileImport(null);
             setImportStatus('idle');

@@ -25,6 +25,7 @@ export const fileImportEn: typeof fileImportDe = {
         period: 'Period',
         periodValue: (from: string, to: string) => `${from} – ${to}`,
         rows: 'Rows read',
+        documents: 'Documents read',
         newTrades: 'New buys/sells',
         newMovements: 'New account bookings',
         balances: 'Balances',
@@ -33,7 +34,9 @@ export const fileImportEn: typeof fileImportDe = {
         unsupported: 'Not imported',
         unsupportedHint: 'These rows have a financial effect that Openfolio does not import for this format yet. Add them manually if needed.',
         ignoredHint: 'Administrative rows without cash or position effect.',
-        note: (line: number, label: string, file?: string) => `${file ? `${file}, ` : ''}line ${line}: ${label || '(no type)'}`,
+        unsupportedHintPdf: 'These documents or bookings have a financial effect that Openfolio does not import yet. Add them manually if needed.',
+        ignoredHintPdf: 'Documents without cash or position effect, e.g. cost information or order confirmations.',
+        note: (line: number, label: string, file?: string, page?: number) => `${file ? `${file}, ` : ''}${page ? `page ${page}` : `line ${line}`}: ${label || '(no type)'}`,
         more: (count: number) => `… and ${count} more`,
         nothingNew: 'Every booking in this file is already in the portfolio.'
     },
@@ -45,7 +48,12 @@ export const fileImportEn: typeof fileImportDe = {
         invalidNumber: (line?: number) => `Number in an unexpected format${line ? ` (line ${line})` : ''}. Please check the export and its language setting.`,
         invalidDate: (line?: number) => `Date in an unexpected format${line ? ` (line ${line})` : ''}. Please check the export and its language setting.`,
         severalAccounts: 'The file contains bookings of several accounts (e.g. main account and junior depot). Please create one export per account and import each into its own portfolio.',
-        missingCurrency: 'The account currency cannot be determined. XTB only puts it in the file name (e.g. EUR_account_….csv); please keep the file name when saving as CSV.'
+        missingCurrency: 'The account currency cannot be determined. XTB only puts it in the file name (e.g. EUR_account_….csv); please keep the file name when saving as CSV.',
+        unknownFile: (file: string) => `${file}: format not recognised. Please import only documents or exports of the same broker together.`,
+        mixedFiles: 'The files come from different brokers or are in different formats. Please import each broker separately.',
+        noTextLayer: (file?: string) => `${file ? `${file}: ` : ''}The PDF contains no readable text, probably a scan or a photo. Please download the original PDF from the broker; Openfolio does not offer text recognition (OCR).`,
+        pdfEncrypted: (file?: string) => `${file ? `${file}: ` : ''}The PDF is password protected. Please save a copy without password and import it again.`,
+        pdfUnreadable: (file?: string) => `${file ? `${file}: ` : ''}The PDF is damaged or cannot be read.`
     },
     variants: {
         degiro: {
