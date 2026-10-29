@@ -58,6 +58,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | Freetrade | Aktivitäten-Export als CSV (`activity`, 29 Spalten, Dezimalpunkt, ISO-Zeit in UTC) | Käufe/Verkäufe (ORDER) in Kontowährung mit Stempelsteuer und FX-Gebühr als Gebühr, Gratisaktien als Kauf plus Bonus-Einzahlung, Dividenden und PROPERTY-Ausschüttungen (brutto mit ausgewiesener Quellensteuer, sonst netto), Zinsen, TOP_UP/WITHDRAWAL; MONTHLY_STATEMENT übersprungen | Unbekannte Typen mit Betrag oder ISIN, Aufträge ohne ISIN oder Kauf/Verkauf; Depotüberträge fehlen im Export |
 | InvestEngine | Bericht „Trading statement“ als CSV (`trading-statement`; Pflichtspalten `Security / ISIN`, `Transaction Type`, `Quantity`, `Share Price`, `Total Trade Value`, `Trade Date/Time`; optional `Settlement Date`, `Broker`) | Käufe/Verkäufe in GBP mit Handelswert als Cash-Effekt, ISIN aus „Name / ISIN …“ | Andere Typen, Zeilen ohne ISIN; Dividenden, Gebühren und Ein-/Auszahlungen (nur im Cash Statement, dessen Format keine öffentliche Quelle hat) |
 | Scalable Capital | PDF, je Dokument eine Datei: `de`, `en` (Scalable Capital GmbH/Bank GmbH), `baader` (Baader Bank für Scalable-Kunden bis 2024) | Wertpapierabrechnung Kauf/Verkauf/Sparplan mit Ordergebühren, Steuern und Finanztransaktionssteuer als Steuerbuchung; Dividenden brutto mit Quellensteuer und deutschen Steuern; Vorabpauschale; Steuerneuberechnung; Baader: Kauf/Verkauf mit Provision und Steuern, Fondsausschüttung/Ausschüttung/Dividende(nabrechnung) | Verrechnungskonto/Kontoauszug, Rechnungsabschluss, Reklassifizierung (Belastung), Kapitalrückzahlung, Zinszahlung, Laufzeitende/Knock-out, Stornos; Baader: Thesaurierung, Vorabpauschale, Steuerausgleich, Kontoauszüge, englische Dokumente; Niederländisch/Italienisch/Französisch. Kosteninformation und Auftragsbestätigung werden ohne Buchung übersprungen |
+| flatex | PDF, je Dokument eine Datei: `flatex` (flatex Bank AG, flatexDEGIRO Bank AG/SE, Deutschland und Österreich), `fintech` (FinTech Group Bank AG, älteres Layout „Kurswert EUR 1.050,00“) | Wertpapierabrechnung Kauf/Verkauf und Sammelabrechnung mit Provision und Spesen als Gebühr, einbehaltene Steuer/KESt als Steuerbuchung (Erstattung positiv); Dividendengutschrift und Ertragsmitteilung brutto in Kontowährung mit Quellensteuer, Steuer und Gebühren; Steuer thesaurierender Fonds; Vorabpauschale; Depotservicegebühr | Anleihen (Prozentkurs, Stückzinsen), Krypto, Devisen, Stornos, Kontoauszüge, Depotein-/-ausgänge, Kapitalmaßnahmen, Stockdividenden, Gutschrifts-/Belastungsanzeigen. Auftrags-, Änderungs- und Streichungsbestätigungen sowie Kosteninformationen werden ohne Buchung übersprungen |
 
 ## Quellen und Lizenzen
 
@@ -88,6 +89,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | DEGIRO | [Export-To-Ghostfolio README](https://github.com/dickwolff/Export-To-Ghostfolio#degiro) | Commit `9e35bd6` | Apache-2.0 | Exportweg Kontoübersicht |
 | Scalable Capital | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/ScalableCapitalPDFExtractor.java` und `BaaderBankPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/scalablecapital/` und `…/pdf/baaderbank/` | Commit `85c2088f28dfb26e711edf20494dca3e64ae9858` (geprüft 29.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Bankkennungen, Dokumenttitel und -arten beider Generationen, Aufbau der Buchungszeile (Typ, Name, Stück, Kurs, Betrag; ISIN in der Folgezeile), Bezeichnungen und Vorzeichen der Gebühren- und Steuerzeilen, Summenzeilen, Ausführungs- und Ordernummern, Datumsangaben, Baader-Felder (Vorgangs-Nr., „Zu Lasten/Gunsten Konto … Valuta“). Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
 | Scalable Capital | [Parqet FAQ](https://faq.parqet.com/de/articles/651200-scalable-capital-pdf-csv-import) | 29.10.2026 | – (Dokumentation) | Downloadweg im Broker (Transaktionen → Transaktion → PDF) und bei der Baader Bank (Download → Wertpapierumsätze), CSV-Export nur für Prime |
+| flatex | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/FinTechGroupBankPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/fintechgroupbank/` | Commit `85c2088f28dfb26e711edf20494dca3e64ae9858` (geprüft 29.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Bankkennungen, Dokumenttitel und -arten, zweispaltiges Feldlayout beider Generationen, Feldnamen (Kurswert, Provision, Eigene/Fremde Spesen, Einbeh. Steuer/KESt, Endbetrag, Devisenkurs, Gez. Quellenst., Gesamtgebühr), Blöcke der Sammelabrechnung, Auftrags- und Transaktionsnummern, Thesaurierung und Vorabpauschale. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
+| flatex | [Parqet FAQ](https://faq.parqet.com/de/articles/871917-flatex-pdf-import) | 29.10.2026 | – (Dokumentation) | Downloadweg Post → Dokumentenarchiv → Zeitraum, unterstützte und nicht importierte Dokumentarten |
 
 ### Abweichungen von der Vorlage (Swissquote)
 
@@ -282,3 +285,23 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
   Bruttobetrag in Kontowährung gebucht, der Betrag in Fondswährung bleibt in den Rohdaten. Stornos werden gemeldet.
 - Überschneidung mit CSV: Openfolio hat keinen Scalable-CSV-Import; der CSV-Export für Prime-Kunden ist eine offene Lücke.
   Ein späterer CSV-Import müsste dieselben Kennungen verwenden, sonst darf er nicht ins selbe Depot.
+
+### Abweichungen von der Vorlage (flatex)
+
+- Abstimmung: Eine Abrechnung wird nur gebucht, wenn Kurswert ∓ Provision, eigene und fremde Spesen ∓ einbehaltene Steuer
+  genau den Endbetrag ergeben. PP übernimmt die Felder einzeln; Openfolio meldet nicht abstimmbare Abrechnungen.
+- Steuern auf Verkäufe sind eine eigene Steuerbuchung; negative Werte (Erstattung aus dem Verlusttopf) werden als positive
+  Steuer gebucht statt mit dem Erlös verrechnet.
+- Anleihen (Kurs in Prozent, Nominal statt Stück, Stückzinsen) bucht PP; Openfolio meldet sie, weil Stückzahl und
+  Stückzinsen im Ledger noch kein Gegenstück haben.
+- Dividenden in Fremdwährung: Quellensteuer und Gebühren werden zum angegebenen Devisenkurs in die Kontowährung umgerechnet;
+  der Bruttobetrag ist der Rest bis zum Endbetrag und muss auf 2 Cent zum umgerechneten Bruttobetrag passen.
+- Thesaurierende Fonds: nur die einbehaltene Steuer (wie PP und Parqet). Negative Ausschüttungen und Stornos werden gemeldet.
+- Kennung: Auftragsnummer mit Teilausführung („…/1“) und Transaktionsnummer des Steuerreports. Gäbe es zu einer
+  Ausführung Sammel- und Einzelabrechnung mit denselben Nummern, würde sie nur einmal gebucht (nicht mit Originalen geprüft).
+- Quelle `flatex`: DEGIRO-CSV-Buchungen tragen die (historische) Quelle `Flatex`; beide werden nicht gegeneinander
+  dedupliziert. DEGIRO-Dokumente derselben Bank (Dutch Branch, DEGIRO B.V.) werden nicht als flatex erkannt.
+- Nicht übernommen wie bei PP: Krypto-Sammelabrechnungen, Devisen-Sammelabrechnungen, Depotein-/-ausgänge,
+  Kapitalmaßnahmen, Stockdividenden und Kontoauszüge (PP bucht aus Kontoauszügen Ein- und Auszahlungen und Zinsen).
+- Überschneidung mit CSV: flatex bietet keinen Wertpapier-CSV-Export, den Openfolio liest; der Saldo-Import aus dem
+  DEGIRO-`Account.csv` betrifft nur Kontostände, keine Buchungen.
