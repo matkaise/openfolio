@@ -1,5 +1,6 @@
 import { avanzaFileImporter } from './avanza';
 import { degiroFileImporter } from './degiroFile';
+import { directaFileImporter } from './directa';
 import { etoroFileImporter } from './etoro';
 import { freetradeFileImporter } from './freetrade';
 import { investEngineFileImporter } from './investengine';
@@ -25,7 +26,8 @@ export const FILE_IMPORTERS: FileImporter[] = [
     etoroFileImporter,
     freetradeFileImporter,
     investEngineFileImporter,
-    avanzaFileImporter
+    avanzaFileImporter,
+    directaFileImporter
 ];
 
 export const findFileImporter = (id: string): FileImporter | undefined => (
