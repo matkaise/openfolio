@@ -72,11 +72,13 @@ export const BrokerFileImport = ({ importerId, onImporterChange, status, result,
     const importer = findFileImporter(importerId) || FILE_IMPORTERS[0];
     const guide = t.fileImport.guides[importer.id];
     const report = result?.report;
+    const pdf = isPdfImporter(importer);
 
+    // All dropped files go to the import, which recognises the importer by content: a drop of
+    // several PDFs must not lose files because a single-file importer is still selected.
     const take = (list: FileList | null) => {
         if (!list || list.length === 0) return;
-        const files = Array.from(list);
-        onFiles(importer.multiple ? files : files.slice(0, 1));
+        onFiles(Array.from(list));
     };
 
     const variantLabel = (variant: string) => variant
@@ -88,7 +90,7 @@ export const BrokerFileImport = ({ importerId, onImporterChange, status, result,
         { label: t.fileImport.preview.format, value: `${importer.broker} · ${variantLabel(report.variant)}` },
         ...(fileNames.length ? [{ label: t.fileImport.preview.files, value: fileNames.join(', ') }] : []),
         ...(report.period ? [{ label: t.fileImport.preview.period, value: t.fileImport.preview.periodValue(fmt.date(report.period.from), fmt.date(report.period.to)) }] : []),
-        { label: isPdfImporter(importer) ? t.fileImport.preview.documents : t.fileImport.preview.rows, value: fmt.number(report.rows) },
+        { label: pdf ? t.fileImport.preview.documents : t.fileImport.preview.rows, value: fmt.number(report.rows) },
         { label: t.fileImport.preview.newTrades, value: fmt.number(preview.addedTransactions) },
         { label: t.fileImport.preview.newMovements, value: fmt.number(preview.addedMovements) },
         ...(preview.balancePoints ? [{ label: t.fileImport.preview.balances, value: fmt.number(preview.balancePoints) }] : []),
@@ -189,14 +191,14 @@ export const BrokerFileImport = ({ importerId, onImporterChange, status, result,
                     {report.unsupported.length > 0 && (
                         <div>
                             <div className="text-xs font-semibold md3-negative">{`${t.fileImport.preview.unsupported}: ${fmt.number(report.unsupported.length)}`}</div>
-                            <p className="text-xs md3-text-muted mt-1">{t.fileImport.preview.unsupportedHint}</p>
+                            <p className="text-xs md3-text-muted mt-1">{pdf ? t.fileImport.preview.unsupportedHintPdf : t.fileImport.preview.unsupportedHint}</p>
                             <NoteList notes={report.unsupported} />
                         </div>
                     )}
                     {report.ignored.length > 0 && (
                         <div>
                             <div className="text-xs font-semibold md3-text-main">{`${t.fileImport.preview.ignored}: ${fmt.number(report.ignored.length)}`}</div>
-                            <p className="text-xs md3-text-muted mt-1">{t.fileImport.preview.ignoredHint}</p>
+                            <p className="text-xs md3-text-muted mt-1">{pdf ? t.fileImport.preview.ignoredHintPdf : t.fileImport.preview.ignoredHint}</p>
                             <NoteList notes={report.ignored} />
                         </div>
                     )}

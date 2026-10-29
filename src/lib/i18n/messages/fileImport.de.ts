@@ -45,6 +45,8 @@ export const fileImportDe = {
         unsupported: 'Nicht übernommen',
         unsupportedHint: 'Diese Zeilen haben eine finanzielle Wirkung, die Openfolio für dieses Format noch nicht übernimmt. Bitte bei Bedarf manuell erfassen.',
         ignoredHint: 'Verwaltungszeilen ohne Geld- oder Bestandswirkung.',
+        unsupportedHintPdf: 'Diese Dokumente oder Buchungen haben eine finanzielle Wirkung, die Openfolio noch nicht übernimmt. Bitte bei Bedarf manuell erfassen.',
+        ignoredHintPdf: 'Dokumente ohne Geld- oder Bestandswirkung, z. B. Kosteninformationen oder Auftragsbestätigungen.',
         note: (line: number, label: string, file?: string, page?: number) => `${file ? `${file}, ` : ''}${page ? `Seite ${page}` : `Zeile ${line}`}: ${label || '(ohne Typ)'}`,
         more: (count: number) => `… und ${count} weitere`,
         nothingNew: 'Alle Buchungen dieser Datei sind bereits im Depot.'
