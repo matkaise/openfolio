@@ -121,6 +121,10 @@ export const fileImportDe = {
         directa: {
             movimenti: 'Movimenti (CSV, italienisch)'
         },
+        disnat: {
+            'fr-comma': 'Kontoverlauf, aus Excel als CSV (französisch, Komma)',
+            'fr-semicolon': 'Kontoverlauf, aus Excel als CSV (französisch, Semikolon)'
+        },
         scalable: {
             de: 'PDF-Abrechnung Scalable Capital (deutsch)',
             en: 'PDF-Abrechnung Scalable Capital (englisch)',
@@ -522,6 +526,35 @@ export const fileImportDe = {
                 'Gebuchte Währung ist immer EUR („Importo euro“); Fremdwährungsbetrag und Divisa bleiben in den Rohdaten.',
                 'Kosten sind in der Kauf-/Verkaufszeile nicht getrennt ausgewiesen und werden nicht geschätzt.',
                 'Anleihen werden mit der Stückzahl der Datei (Nennwert) gebucht.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        disnat: {
+            scope: 'Disnat (Desjardins, Kanada): Kontoverlauf eines Kontos (z. B. CELI/TFSA, REER/RRSP, REEE/RESP, Barkonto), als XLSX exportiert und als CSV gespeichert.',
+            steps: [
+                'Bei Disnat anmelden und das Konto wählen, das exportiert werden soll.',
+                'Historique (History) und dann Compte (Account) wählen.',
+                'Den Zeitraum wählen (z. B. benutzerdefiniert ab Kontoeröffnung) und auf Exportieren klicken. Disnat erzeugt eine XLSX-Datei.',
+                'Die Datei in Excel oder LibreOffice öffnen und als CSV speichern (Trennzeichen Komma oder Semikolon). Die CSV-Datei hier ablegen.'
+            ],
+            settings: [
+                'Erkannt werden die französischen Spaltennamen des öffentlichen Beispiels (Date de transaction, Type de transaction, Montant de l\'opération, …). Ein englischer Export ist nicht belegt und wird nicht erkannt.',
+                'Beim Speichern keine Spalten löschen und keine Zahlen- oder Datumsformate ändern; Datum im Format JJJJ-MM-TT.'
+            ],
+            accounts: 'Je Disnat-Konto ein eigener Export und ein eigenes Openfolio-Depot. Überlappende Exporte werden nicht doppelt gebucht.',
+            supported: [
+                'ACHAT und VENTE von Aktien/ETFs (Classe d\'actif „Actions“) mit dem Betrag der Operation; Kommission als Gebühr, wenn Stückzahl × Kurs + Kommission den Betrag ergibt',
+                'Dividenden (wie gutgeschrieben), Retenue als Quellensteuer, Zinsen',
+                'Gebühren samt TPS/TVQ auf Gebühren, Einzahlungen (Cotisation, Barüberträge, REEE-Zuschüsse) und Auszahlungen (Résiliation, Retrait)'
+            ],
+            unsupported: [
+                'Überträge mit Wertpapier oder Stückzahl, Optionen und andere Anlageklassen, unbekannte Typen mit Betrag: erscheinen als nicht übernommen.',
+                'Zeilen ohne Symbol werden keinem Wertpapier zugeordnet.'
+            ],
+            limits: [
+                'Der Export enthält Disnat-Symbole, keine ISIN. Das Suffix „-C“ (kanadische Notierung) wird entfernt, damit Handel und Dividenden zum selben Wertpapier gehören; die Auflösung übernimmt der nächste Kursabruf.',
+                'Bei Wertpapieren in US-Dollar auf einem CAD-Konto enthält der Betrag Umrechnung und Kommission; die Kommission bleibt dann in den Rohdaten.',
+                'Exportweg nur von einem Disnat-Kunden beschrieben (Export-To-Ghostfolio, Issue #260); eine offizielle Anleitung wurde nicht gefunden.',
                 'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
             ]
         },

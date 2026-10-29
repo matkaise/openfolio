@@ -110,6 +110,10 @@ export const fileImportEn: typeof fileImportDe = {
         directa: {
             movimenti: 'Movimenti (CSV, Italian)'
         },
+        disnat: {
+            'fr-comma': 'Account history, saved from Excel as CSV (French, comma)',
+            'fr-semicolon': 'Account history, saved from Excel as CSV (French, semicolon)'
+        },
         scalable: {
             de: 'Scalable Capital PDF settlement (German)',
             en: 'Scalable Capital PDF settlement (English)',
@@ -511,6 +515,35 @@ export const fileImportEn: typeof fileImportDe = {
                 'The booked currency is always EUR ("Importo euro"); the foreign amount and Divisa stay in the raw data.',
                 'Costs are not shown apart on the buy/sell row and are not estimated.',
                 'Bonds are booked with the quantity of the file (nominal value).',
+                'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        disnat: {
+            scope: 'Disnat (Desjardins, Canada): account history of one account (e.g. TFSA, RRSP, RESP, cash account), exported as XLSX and saved as CSV.',
+            steps: [
+                'Log in to Disnat and choose the account to export.',
+                'Choose History (Historique) and then Account (Compte).',
+                'Choose the period (e.g. custom from account opening) and click Export. Disnat creates an XLSX file.',
+                'Open the file in Excel or LibreOffice and save it as CSV (comma or semicolon separated). Drop the CSV file here.'
+            ],
+            settings: [
+                'The French column names of the public sample are recognised (Date de transaction, Type de transaction, Montant de l\'opération, …). An English export is not documented and is not recognised.',
+                'Do not delete columns or change number or date formats when saving; dates as YYYY-MM-DD.'
+            ],
+            accounts: 'One export and one Openfolio portfolio per Disnat account. Overlapping exports are not booked twice.',
+            supported: [
+                'ACHAT and VENTE of stocks/ETFs (asset class "Actions") with the transaction amount; the commission as fee where quantity × price plus commission gives the amount',
+                'Dividends (as credited), Retenue as withholding tax, interest',
+                'Fees including GST/QST on fees, deposits (Cotisation, cash transfers, RESP grants) and withdrawals (Résiliation, Retrait)'
+            ],
+            unsupported: [
+                'Transfers with a security or quantity, options and other asset classes, unknown types with an amount: shown as not imported.',
+                'Rows without symbol are not matched to a security.'
+            ],
+            limits: [
+                'The export has Disnat symbols, no ISIN. The "-C" suffix (Canadian listing) is removed so trades and dividends belong to the same security; the next price update resolves it.',
+                'For US-dollar securities on a CAD account the amount includes conversion and commission; the commission then stays in the raw data.',
+                'The export path is only described by a Disnat customer (Export-To-Ghostfolio, issue #260); no official guide was found.',
                 'Only tested with synthetic files based on public samples.'
             ]
         },
