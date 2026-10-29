@@ -109,6 +109,9 @@ export const fileImportDe = {
         },
         avanza: {
             sv: 'Transaktionsexport (CSV, schwedisch)'
+        },
+        directa: {
+            movimenti: 'Movimenti (CSV, italienisch)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -475,6 +478,37 @@ export const fileImportDe = {
             limits: [
                 'Beträge in der Transaktionswährung (meist SEK). Bei Fremdwährungskonten bleibt das Courtage (in SEK) im Betrag enthalten und steht nur in den Rohdaten.',
                 'Den Exportweg beschreibt nur ein Avanza-Kunde (Export-To-Ghostfolio, Issue #165); eine offizielle Avanza-Anleitung wurde nicht gefunden.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        directa: {
+            scope: 'Directa SIM (Italien): Kontobewegungen „Movimenti“ eines Kontos als CSV.',
+            steps: [
+                'Directa im Modus „Libera“ öffnen und im Bereich Conto „Movimenti“ wählen.',
+                'Den Reiter „Tutti i movimenti“ und die Sortierung „Data operazione“ wählen.',
+                'Oben rechts den Zeitraum einstellen (Kalendersymbol).',
+                'Das Excel-Symbol anklicken, „File separato da virgole (csv)“ wählen und „Estrai“ anklicken.',
+                'Die CSV-Datei unverändert hier ablegen; die Kopfzeilen (Conto, Data estrazione, Zeitraum) dürfen bleiben.'
+            ],
+            settings: [
+                'Format „File separato da virgole (csv)“, nicht xlsx oder ods.',
+                'Directa liefert höchstens 3.000 Zeilen je Export. Bei mehr Bewegungen den Zeitraum teilen (z. B. ein Export je Jahr); überlappende Exporte werden nicht doppelt gebucht.'
+            ],
+            accounts: 'Ein Export je Directa-Konto; das Konto aus der Zeile „Conto : …“ ist Teil des Schlüssels, damit Buchungen verschiedener Konten nicht zusammenfallen.',
+            supported: [
+                'Acquisto und Vendita mit „Importo euro“ als Geldbetrag',
+                'Proventi und Dividenden, Anleihekupons (Cedola) und Zertifikatskupons als Zins, Stückzinsen (Ratei)',
+                'Einbehaltene Steuern (Rit.…) als Quellensteuer der Position; Ritenuta su plusvalenza, Tobin tax und Bollo als Steuer',
+                'Commissioni als Gebühr, Einzahlungen (Conferimento, Bonifico) und Auszahlungen (Prelievo)'
+            ],
+            unsupported: [
+                'Finanzierungen (Finanziamento) und unbekannte Bewegungsarten mit Betrag: erscheinen als nicht übernommen.',
+                'Käufe und Verkäufe ohne ISIN oder mit unplausiblem Vorzeichen.'
+            ],
+            limits: [
+                'Gebuchte Währung ist immer EUR („Importo euro“); Fremdwährungsbetrag und Divisa bleiben in den Rohdaten.',
+                'Kosten sind in der Kauf-/Verkaufszeile nicht getrennt ausgewiesen und werden nicht geschätzt.',
+                'Anleihen werden mit der Stückzahl der Datei (Nennwert) gebucht.',
                 'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
             ]
         }

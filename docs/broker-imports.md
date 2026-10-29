@@ -33,6 +33,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | Freetrade | Aktivitäten-Export als CSV (`activity`, 29 Spalten, Dezimalpunkt, ISO-Zeit in UTC) | Käufe/Verkäufe (ORDER) in Kontowährung mit Stempelsteuer und FX-Gebühr als Gebühr, Gratisaktien als Kauf plus Bonus-Einzahlung, Dividenden und PROPERTY-Ausschüttungen (brutto mit ausgewiesener Quellensteuer, sonst netto), Zinsen, TOP_UP/WITHDRAWAL; MONTHLY_STATEMENT übersprungen | Unbekannte Typen mit Betrag oder ISIN, Aufträge ohne ISIN oder Kauf/Verkauf; Depotüberträge fehlen im Export |
 | InvestEngine | Bericht „Trading statement“ als CSV (`trading-statement`; Pflichtspalten `Security / ISIN`, `Transaction Type`, `Quantity`, `Share Price`, `Total Trade Value`, `Trade Date/Time`; optional `Settlement Date`, `Broker`) | Käufe/Verkäufe in GBP mit Handelswert als Cash-Effekt, ISIN aus „Name / ISIN …“ | Andere Typen, Zeilen ohne ISIN; Dividenden, Gebühren und Ein-/Auszahlungen (nur im Cash Statement, dessen Format keine öffentliche Quelle hat) |
 | Avanza | Transaktionsexport (`sv`: `;`, Dezimalkomma, ISO-Datum, Spalte `Courtage (SEK)` oder `Courtage`), alle Konten in einer Datei | Köp/Sälj mit Courtage als Gebühr, Utdelning, Utländsk källskatt als Quellensteuer, Ränta, Insättning/Uttag (auch Überträge zwischen eigenen Konten), Övrigt: Avkastningsskatt (Steuer) und Gebührenerstattung | Andere Övrigt-Zeilen mit Stückzahl/Betrag (Fondsumtausch u. a.), unbekannte Typen mit Betrag, Zeilen ohne ISIN |
+| Directa | „Movimenti“ als CSV (`movimenti`: `,`, Dezimalpunkt, `TT-MM-JJJJ`, optionale Kopfzeilen „Conto“, „Data estrazione“, Zeitraum) | Acquisto/Vendita mit Importo euro, Proventi/Dividendi, Cedola und Coupon als Zins, Ratei, Rit.* als Quellensteuer, Ritenuta su plusvalenza/Tobin tax/Bollo als Steuer, Commissioni, Conferimento/Bonifico/Prelievo | Finanziamento und unbekannte Typen mit Betrag, Handel ohne ISIN; höchstens 3.000 Zeilen je Export |
 
 ## Quellen und Lizenzen
 
@@ -61,6 +62,7 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | InvestEngine | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `investEngineConverter.ts`, `models/investEngineRecord.ts`, `samples/investengine-export.csv`, Issue #241, PR #248 | Commit `9e35bd602f054f563b8c728bcb36dc5eb2bbcaa5` (geprüft 29.10.2026) | Apache-2.0 | Spalten des Trading statement, Dateiname `GIA_Trading_statement_<von>_to_<bis>.csv` (Issue #241), Betrags- (`£`) und Datumsformat (`TT/MM/JJ HH:mm:ss`) |
 | InvestEngine | [Help: Generate and download a custom report](https://help.investengine.com/hc/en-gb/articles/8927819031581-How-can-I-generate-and-download-a-custom-report), [Help: Choosing the right statement or report](https://help.investengine.com/hc/en-gb/articles/24811340395037-Guide-Choosing-the-Right-Statement-or-Report-for-Your-Needs) | 29.10.2026 (Seiten hinter Cloudflare, im Browser gelesen) | – (Dokumentation) | Menüweg Reports → Create report → Berichtstyp → Zeitraum → Portfolio → Generate report, PDF oder CSV; Cash Statement für Kontobewegungen |
 | Avanza | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `avanzaConverter.ts`, `models/avanzaRecord.ts`, `samples/avanza-export.csv`, README, Issue #165, PR #170 | Commit `9e35bd602f054f563b8c728bcb36dc5eb2bbcaa5` (geprüft 29.10.2026) | Apache-2.0 | Spalten, Typen und ihre Bedeutung (Übersetzung durch einen Avanza-Kunden in Issue #165), Zahlen-/Datumsformat, Exportweg Min ekonomi → Transaktioner → Exportera transaktioner. Keine offizielle Avanza-Anleitung gefunden. |
+| Directa | [Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) `directaConverter.ts`, `models/directaRecord.ts`, `samples/directa-export.csv`, `assets/directa-transactions.png`, `assets/directa-export.png`, README, PRs #141, #292, Issues #278, #294 | Commit `9e35bd602f054f563b8c728bcb36dc5eb2bbcaa5` (geprüft 29.10.2026) | Apache-2.0 | Spalten, Kopfzeilen vor der Tabelle, Typnamen, Zahlen-/Datumsformat, Exportweg und 3.000-Zeilen-Grenze aus den Screenshots. Keine offizielle Directa-Anleitung gefunden. |
 | DEGIRO | [Export-To-Ghostfolio README](https://github.com/dickwolff/Export-To-Ghostfolio#degiro) | Commit `9e35bd6` | Apache-2.0 | Exportweg Kontoübersicht |
 
 ### Abweichungen von der Vorlage (Swissquote)
@@ -251,3 +253,17 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
   Konten landen in einem Depot (eine Kontoauswahl beim Export ist nicht belegt).
 - Zahlen strikt mit Dezimalkomma ohne Tausendertrennzeichen; keine Standardwährung SEK für Zeilen ohne Währung
   (Vorlage), solche Zeilen mit Betrag werden gemeldet.
+
+### Abweichungen von der Vorlage (Directa)
+
+- Ein- und Auszahlungen (`Conferimento`, `Bonifico`, `Prelievo`) und `Bollo` werden gebucht statt übersprungen;
+  `Finanziamento` wird gemeldet.
+- Einbehaltene Steuern (`Rit.provento`, `Rit.cedola`, …) werden als Quellensteuer der Position gebucht, Ritenuta su
+  plusvalenza und Tobin tax als Steuer (Vorlage: alle als Gebühr). Stückzinsen (`Ratei`) als Zins mit Vorzeichen.
+- Handel mit `Importo euro` als Cash-Effekt (Vorlage: Betrag ohne Vorzeichen / Stückzahl als Kurs). Anleihen werden nicht
+  über Namensbestandteile („btp“, „romania“) erkannt und umgerechnet, sondern mit der Stückzahl der Datei gebucht.
+- Zeilen mit unbekanntem Typ werden gemeldet; die leere Schlusszeile wird als ignoriert gezählt. Buchungsdatum ist die
+  Data operazione (Vorlage: Data valuta), die Data valuta bleibt in den Rohdaten.
+- Kopfzeilen werden wie in PR #292 übersprungen; Zeilennummern im Bericht entsprechen der Datei, auch wenn Kopfzeilen nur
+  aus Kommas bestehen (`readCsvLines`). Das Konto aus „Conto : …“ ist Teil des Schlüssels.
+- Zahlen strikt mit Dezimalpunkt; ungültige Datumsangaben (z. B. `33-09-2024` in der Data operazione) führen zu einem Fehler.

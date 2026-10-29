@@ -73,3 +73,7 @@ Never copy rows from a real export into this folder.
   SEK with courtage, a dividend with foreign withholding tax, interest, yield tax (Avkastningsskatt), a fund fee refund,
   a sale with result and a fund switch as two "Övrigt" rows (not supported). Cash ends at SEK 3397.81 (ISK 3360.81,
   9876543 37.00).
+- `directa.csv`: Directa "Movimenti" CSV with BOM and the nine metadata rows (some of only commas), newest row first,
+  EUR. Covers a deposit, an ETF buy, a bond buy with accrued interest (Ratei), an Italian stock buy with Tobin tax, an
+  ETF distribution and a bond coupon with withheld tax, stamp duty (Bollo), a sale with capital gains tax, a withdrawal
+  and the empty trailing row. Cash ends at EUR 1064.10.
