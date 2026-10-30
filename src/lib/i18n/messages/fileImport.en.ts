@@ -130,6 +130,14 @@ export const fileImportEn: typeof fileImportDe = {
         },
         ing: {
             ing: 'ING Germany PDF settlement'
+        },
+        yuh: {
+            de: 'PDF transaction notice, German',
+            en: 'PDF transaction notice, English'
+        },
+        commsec: {
+            colon: 'PDF confirmation (COMPANY: …)',
+            plain: 'PDF confirmation (COMPANY … / SECURITY … CODE)'
         }
     },
     guides: {
@@ -156,6 +164,7 @@ export const fileImportEn: typeof fileImportDe = {
             ],
             limits: [
                 'Unknown booking texts in Account.csv are booked as adjustments.',
+                'Buys and sells come from Transactions.csv. A trade listed only in Account.csv (file missing, shorter period, left out by the export) appears under “Not imported”.',
                 'DEGIRO exports in English are not recognised yet.'
             ]
         },
@@ -680,6 +689,64 @@ export const fileImportEn: typeof fileImportDe = {
                 'A settlement is only booked if market value, fees and taxes add up exactly to the final amount; otherwise it is listed as not imported.',
                 'The French financial transaction tax is booked as a tax, not as a fee.',
                 'Only tested with synthetic PDFs based on publicly documented formats, not with current original settlements.'
+            ]
+        },
+        yuh: {
+            scope: 'Yuh accounts at Swissquote Bank (Switzerland): transaction notices as PDF, one document per activity. Not for regular Swissquote accounts: use the Swissquote CSV import for those.',
+            steps: [
+                'In the Yuh app, tap "Invest" and open an investment, for example a stock.',
+                'Scroll to the "Transactions" section.',
+                'Tap a buy, sell or dividend and save the "transaction notification" document as PDF.',
+                'Repeat for each activity and drop all PDFs here together.'
+            ],
+            settings: [
+                'Use original PDFs, no screenshots or scans: Openfolio only reads the text layer and runs no text recognition.',
+                'For a complete position history, import all notices since the account was opened.'
+            ],
+            accounts: 'Use one portfolio per Yuh account. A notice is recognised by its reference number and never booked twice; two equal buys with their own reference stay separate.',
+            supported: [
+                'Buy and sell (German and English, fractions too): commission as fee, less trading credit used; stamp duty as its own tax booking.',
+                'Dividend and capital gain (German): gross amount with withholding taxes as separate bookings, in the credited currency.',
+                'Payment credit and debit (German) as deposit and withdrawal.',
+                'Interest statement (German): interest per currency with withholding tax.'
+            ],
+            unsupported: [
+                'Title transfers, corporate actions, crypto and account statements are reported, not booked.',
+                'English dividend and payment notices and notices in French or Italian: there is no public sample for them, so they are reported.',
+                'Currency exchanges inside Yuh: no notice is known for them, so cash per currency stays incomplete.'
+            ],
+            limits: [
+                'A notice is only booked if amount, fees and taxes add up exactly to the amount debited or credited; otherwise it is listed as not imported.',
+                'The path in the app is only documented for buy, sell and dividend. Where payment notices and interest statements are stored could not be verified publicly; PDFs you have are read.',
+                'Only tested with synthetic PDFs based on publicly documented formats, not with current original notices.'
+            ]
+        },
+        commsec: {
+            scope: 'CommSec accounts in Australia: trade confirmations (contract notes) for buys and sells on the Australian market. Not for CommSec International or holdings lists.',
+            steps: [
+                'Log in to CommSec.',
+                'Open Trade > Manage Orders > Confirmations. On minor trust accounts the item may be called Trading > Confirmations.',
+                'Download the confirmations you need as PDF.',
+                'Drop all PDFs here together.'
+            ],
+            settings: [
+                'Use original PDFs, no scans: Openfolio only reads the text layer and runs no text recognition.',
+                'For a complete position history, import all confirmations since the account was opened.'
+            ],
+            accounts: 'Use one portfolio per CommSec account. A confirmation is recognised by its Confirmation No and never booked twice; several confirmations in one PDF are booked one by one.',
+            supported: [
+                'Buys and sells in both known layouts: consideration as trade value, brokerage & costs as fee. GST is part of the fee and not booked again.'
+            ],
+            unsupported: [
+                'Dividends, corporate actions, deposits and interest are not on the confirmations and are therefore missing.',
+                'Confirmations with application money and other CommSec documents are reported, not booked.',
+                'CommSec International (its own Excel export) is not read.'
+            ],
+            limits: [
+                'A confirmation is only booked when consideration and brokerage add up exactly to total cost or net proceeds.',
+                'Confirmations name the ASX code, no ISIN. The security is looked up by code and currency at the next price update and can be completed there.',
+                'Settlement runs through the linked bank account, so cash movements in the portfolio are incomplete.',
+                'The publicly known samples date from 2020; only tested with synthetic PDFs, not with current original confirmations.'
             ]
         }
     } satisfies Record<string, ImportGuide>

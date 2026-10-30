@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseDegiroAccountCsv, parseDegiroTradesCsv, parseFlatexCashBalancesCsv } from '../csvParser';
+import { classifyDegiroAccountDescription, parseDegiroAccountCsv, parseDegiroTradesCsv, parseFlatexCashBalancesCsv } from '../csvParser';
 
 describe('parseFlatexCashBalancesCsv', () => {
   it('keeps the end-of-day balance per currency even for reverse-chronological rows', () => {
@@ -86,6 +86,43 @@ describe('parseDegiroAccountCsv', () => {
     expect(movements).toHaveLength(1);
     expect(movements[0]).toMatchObject({ kind: 'fx', internal: true, currency: 'CHF', amount: -100 });
   });
+
+  const accountHeader = 'Datum,Uhrze,Valutadatum,Produkt,ISIN,Beschreibung,FX,\u00c4nderung,,Saldo,,Order-ID';
+
+  it('keeps identical rows of one order as separate bookings', () => {
+    const fill = '03-01-2024,09:00,03-01-2024,ABC,US0000000001,W\u00e4hrungswechsel (Einbuchung),,USD,100.00,USD,100.00,11111111-1111-4111-8111-111111111111';
+    const movements = parseDegiroAccountCsv([accountHeader, fill, fill].join('\n'));
+    expect(movements).toHaveLength(2);
+    expect(new Set(movements.map((m) => m.externalId)).size).toBe(2);
+  });
+
+  it('books a cash sweep as an internal pair, not as a withdrawal', () => {
+    const movements = parseDegiroAccountCsv([
+      accountHeader,
+      "04-01-2024,06:00,04-01-2024,,,Auszahlung von Ihrem Geldkonto bei der flatexDEGIRO Bank: 1\u2019250.00 CHF,,,,CHF,0.00,",
+      '04-01-2024,06:00,04-01-2024,FLATEX CHF BANKACCOUNT,NLFLATEXACNT,Degiro Cash Sweep Transfer,,CHF,1250.00,CHF,1250.00,'
+    ].join('\n'));
+    expect(movements.map((m) => [m.kind, m.amount, m.internal])).toEqual(expect.arrayContaining([
+      ['transfer', -1250, true],
+      ['transfer', 1250, true]
+    ]));
+  });
+
+  it('does not take a price in the text for an amount', () => {
+    const movements = parseDegiroAccountCsv([
+      accountHeader,
+      '04-01-2024,06:00,04-01-2024,CHF MONEY MARKET,LU0000000003,Geldmarktfonds Umwandlung: Kauf 0.5 zu je 9876.54 CHF,,,,CHF,100.00,',
+      '04-01-2024,06:00,04-01-2024,CHF MONEY MARKET,LU0000000003,Geldmarktfonds Umwandlung: Verkauf 0.5 zu je 9876.54 CHF,,CHF,4938.27,CHF,100.00,'
+    ].join('\n'));
+    expect(movements.map((m) => m.amount)).toEqual([4938.27]);
+  });
+
+  it('leaves the legs of corporate actions to Transactions.csv', () => {
+    ['Aktiensplit: Verkauf 10 zu je 5 USD', 'Fusion: Kauf 2 zu je 25 EUR', 'ISIN-\u00c4nderung: Kauf 10 zu je 5 USD'].forEach((text) => {
+      expect(classifyDegiroAccountDescription(text)).toBeNull();
+    });
+    expect(classifyDegiroAccountDescription('Geldmarktfonds Umwandlung: Kauf 1 zu je 5 EUR')).toMatchObject({ type: 'Transfer', isInternal: true });
+  });
 });
 
 describe('parseDegiroTradesCsv', () => {
@@ -153,5 +190,19 @@ describe('parseDegiroTradesCsv', () => {
     const [tx] = parseDegiroTradesCsv(csv);
     expect(tx.quantity).toBe(1000);
     expect(tx.amount).toBeCloseTo(-1234.57, 6);
+  });
+});
+
+describe('DEGIRO CSV quoting', () => {
+  const header = 'Datum,Uhrzeit,Produkt,ISIN,Referenzbörse,Ausführungsort,Anzahl,Kurs,,Wert in Lokalwährung,,Wert EUR,Wechselkurs,AutoFX-Gebühr,Transaktionsgebühren und/oder Fremdkosten,Gesamt EUR,Order-ID,';
+  const tradeWithName = (name: string) => `${header}\n15-03-2024,15:30,${name},US0000000001,NDQ,XNAS,1,"1,5",USD,"-1,5",USD,"-1,5",,,,"-1,5",,11111111-1111-4111-8111-111111111111`;
+
+  it('keeps quotes that belong to the value', () => {
+    expect(parseDegiroTradesCsv(tradeWithName('"ACME ""A"""'))[0].name).toBe('ACME "A"');
+    expect(parseDegiroTradesCsv(tradeWithName('"""A"" ACME"'))[0].name).toBe('"A" ACME');
+  });
+
+  it('still reads commas inside quoted cells', () => {
+    expect(parseDegiroTradesCsv(tradeWithName('"ACME, INC"'))[0].name).toBe('ACME, INC');
   });
 });

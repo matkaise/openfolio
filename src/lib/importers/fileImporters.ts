@@ -16,6 +16,8 @@ import { swissquoteFileImporter } from './swissquote';
 import { tradeRepublicFileImporter } from './traderepublic';
 import { trading212FileImporter } from './trading212Csv';
 import { xtbFileImporter } from './xtb';
+import { yuhFileImporter } from './yuh';
+import { commSecFileImporter } from './commsec';
 import { hasTextLayer, type PdfDocumentText } from '@/lib/pdf/pdfText';
 import {
     FileImportError,
@@ -47,7 +49,9 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     finpensionFileImporter,
     scalableFileImporter,
     flatexFileImporter,
-    ingFileImporter
+    ingFileImporter,
+    yuhFileImporter,
+    commSecFileImporter
 ];
 
 export const findFileImporter = (id: string): BrokerFileImporter | undefined => (
@@ -97,5 +101,6 @@ export const readImportFiles = (
         const withFile = (notes: FileImportResult['report']['ignored']) => notes.map((note) => ({ ...note, file: file.name }));
         return { ...result, report: { ...result.report, ignored: withFile(result.report.ignored), unsupported: withFile(result.report.unsupported) } };
     });
-    return { importer, result: results.length === 1 ? results[0] : mergeFileImports(importer, results) };
+    const result = results.length === 1 ? results[0] : mergeFileImports(importer, results);
+    return { importer, result: !isPdfImporter(importer) && importer.finish ? importer.finish(result) : result };
 };
