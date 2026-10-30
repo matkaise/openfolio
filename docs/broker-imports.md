@@ -65,6 +65,8 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | flatex | PDF, je Dokument eine Datei: `flatex` (flatex Bank AG, flatexDEGIRO Bank AG/SE, Deutschland und Österreich), `fintech` (FinTech Group Bank AG, älteres Layout „Kurswert EUR 1.050,00“) | Wertpapierabrechnung Kauf/Verkauf und Sammelabrechnung mit Provision und Spesen als Gebühr, einbehaltene Steuer/KESt als Steuerbuchung (Erstattung positiv); Dividendengutschrift und Ertragsmitteilung brutto in Kontowährung mit Quellensteuer, Steuer und Gebühren; Steuer thesaurierender Fonds; Vorabpauschale; Depotservicegebühr | Anleihen (Prozentkurs, Stückzinsen), Krypto, Devisen, Stornos, Kontoauszüge, Depotein-/-ausgänge, Kapitalmaßnahmen, Stockdividenden, Gutschrifts-/Belastungsanzeigen. Auftrags-, Änderungs- und Streichungsbestätigungen sowie Kosteninformationen werden ohne Buchung übersprungen |
 | ING Deutschland | PDF, je Dokument eine Datei: `ing` (ING-DiBa AG; ING Spanien wird nicht erkannt) | Wertpapierabrechnung Kauf (auch Sparplan, Einmalanlage, Wiederanlage), Bezug, Verkauf; Rückzahlung/Einlösung in Stück als Verkauf; Provision und Entgelte als Gebühr, Steuern als eigene Buchung; Dividenden- und Ertragsgutschrift brutto in Kontowährung mit Quellensteuer und Steuern; Zinsgutschrift als Zinsen; Steuer aus Ertragsgutschrift ohne Auszahlung und Vorabpauschale; nachträgliche Verlustverrechnung | Anleihen (Nominale, Stückzinsen), Stornos, Kontoauszüge, Umtausch, Überträge, Kapitalmaßnahmen. Auftrags-, Änderungs- und Streichungsbestätigungen sowie Kosteninformationen werden ohne Buchung übersprungen |
 | comdirect | PDF, je Dokument eine Datei oder Abrechnung und Steuermitteilung in einer Datei: `comdirect`; zusätzlich zur API (`src/lib/importers/comdirect.ts`) | Wertpapierabrechnung Kauf/Verkauf inkl. Teilausführungen, Fremdwährung, Festpreis; Provision und Entgelte als Gebühr; Steuermitteilung zu Kauf/Verkauf als Steuerbuchung (Erstattung positiv); Steuermitteilung zu Dividenden und Investment-Ausschüttungen; Vorabpauschale; Dividendengutschriften vor 2009 ohne Steuermitteilung | Dividenden-/Ertragsgutschriften mit „vor Steuern“ (bewusst, Hinweis im Bericht), Anleihen, Umtausch, Einlösung, Sachausschüttung, Fremdwährungsgutschriften vor 2009, Verkäufe mit negativem Erlös, Finanzreport, Verwahrentgelt. Ausführungsbestätigungen und Kosteninformationen werden ohne Buchung übersprungen |
+| Yuh | PDF, je Aktivität eine Datei (Transaktionsbeleg der Swissquote Bank für Yuh Accounts): `de`, `en` | Kauf/Verkauf (de/en) mit Kommission abzüglich Trading Credit als Gebühr, Stempelsteuer als Steuerbuchung; Dividende und Kapitalgewinn (de) brutto mit Quellen-/Verrechnungssteuer; Zahlungsverkehr Gutschrift/Belastung (de); Zinsabrechnung (de) je Währung | Titelumbuchungen, Kapitalmaßnahmen, Krypto, Kontoauszüge, englische Dividenden und Zahlungsbelege, Französisch/Italienisch; normale Swissquote-PDFs werden nicht erkannt |
+| CommSec | PDF-Bestätigung (Contract Note) Commonwealth Securities Limited: `colon`, `plain`; mehrere Bestätigungen je Datei möglich | Käufe/Verkäufe in AUD mit Brokerage als Gebühr, Wertpapier unter dem ASX-Code | Dividenden und Cash (nicht auf den Bestätigungen), Application Money, andere CommSec-Dokumente, CommSec International |
 
 ## Quellen und Lizenzen
 
@@ -106,6 +108,10 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | ING Deutschland | [Parqet FAQ](https://faq.parqet.com/de/articles/651196-ing-pdf-import) | 30.10.2026 | – (Dokumentation) | Downloadweg Posteingang → erweiterte Suche → Depot, Dokumentarten Abrechnung Kauf/Verkauf und Ertragsabrechnung |
 | comdirect | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/ComdirectPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/comdirect/` | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 | Nur Formatwissen: Bankkennung, Trennung von Abrechnung und Steuermitteilung, Feld- und Zeilenaufbau, Sperrschrift der Steuermitteilung, Umrechnungszeilen, Gutschriften vor 2009. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. Die Testdokumente wurden nur lokal als Gegenprobe durch den Importer geführt. |
 | comdirect | [Parqet FAQ](https://faq.parqet.com/de/articles/651189-comdirect-pdf-import) | 30.10.2026 | – (Dokumentation) | PostBox-Sammeldownload als ZIP, Dokumentwahl Wertpapierabrechnung und Steuermitteilung; Dividendengutschrift ist laut Parqet seit Januar 2026 kein Importdokument |
+| Yuh | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/SwissquotePDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/swissquote/` (`Kauf05`, `Sell01`, `Dividende05/06`, `Zahlungsverkehr01–04`, `Zinsabrechnung01`, `Titelumbuchung01`) | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Dokumenttitel, Referenzzeile, Tabellenaufbau, Feldnamen, Trading Credit, Spalten der Zinsabrechnung. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
+| Yuh | [Parqet FAQ](https://faq.parqet.com/de/articles/871931-yuh-pdf-import) | 30.10.2026 | – (Dokumentation) | Downloadweg in der App (Investieren → Anlage → Transaktionen → Aktivität → Transaktionsbenachrichtigung als PDF), unterstützte Dokumentarten |
+| CommSec | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/CommSecPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/commsec/` (`Kauf01/02`, `Verkauf01`, 2020) | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: beide Layouts, Feldnamen, Reihenfolge der Blöcke. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
+| CommSec | [CommSec Help: Trade confirmations](https://www.commsec.com.au/support/help-centre/managing-your-account/Trade_preferences.html), [Statements Minor Trust](https://www.commsec.com.au/support/help-centre/documents-and-statements/statements-and-reports-minor-trust.html) | 30.10.2026 | – (Dokumentation) | Downloadweg Trade → Manage Orders → Confirmations; Abweichung Trading → Confirmations bei Minor-Trust-Konten |
 
 ### Abweichungen von der Vorlage (Swissquote)
 
@@ -415,3 +421,27 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 - Kennung: Rechnungsnummer der Abrechnung, Referenz-Nummer der Steuermitteilung; bei fehlender Nummer ISIN, Datum und Stückzahl.
 - Anleihen (Nennwert in Währung) wie bei flatex nicht gebucht. Finanzreport und Verwahrentgelt bucht PP; Openfolio meldet sie, weil
   die API dieselben Kontobewegungen liefert und ein Abgleich dafür fehlt.
+
+### Abweichungen von der Vorlage (Yuh)
+
+- Erkennung: Swissquote Bank und der Name Yuh im Dokument. PP behandelt beide gleich; Openfolio liest hier nur Yuh-Belege,
+  weil für normale Swissquote-Konten der CSV-Import besteht.
+- Abstimmung: Betrag ∓ Kommission ∓ Stempelsteuer ± Trading Credit muss den belasteten oder gutgeschriebenen Betrag ergeben.
+- Trading Credit: PP weist die volle Kommission als Gebühr aus und verringert den Bruttowert. Openfolio bucht den Bruttowert
+  des Belegs und als Gebühr nur, was tatsächlich bezahlt wurde (Kommission minus Credit).
+- Stempelsteuer ist wie bei PP Steuer, aber eine eigene Buchung. Die Summenzeile der Zinsabrechnung wird nicht verwendet,
+  weil sie bei Fremdwährungen in CHF steht (PP übernimmt dort den CHF-Wert als Fremdwährungsbetrag).
+- Zinsen werden brutto mit Verrechnungssteuer als eigener Buchung übernommen; Nullzeilen entfallen.
+- Handel in Fremdwährung: Die Abstimmung läuft in der Abrechnungswährung; `fxRate` wird aus beiden Beträgen errechnet, weil
+  Swissquote Kurse teils skaliert druckt. Nur am deutschen Swissquote-Layout belegt, nicht an einem Yuh-Original.
+- Englische Dividenden- und Zahlungsbelege: PP kennt nur die deutschen Bezeichnungen. Sie werden gemeldet, nicht erraten.
+
+### Abweichungen von der Vorlage (CommSec)
+
+- Dokumentart: PP kennt nur Bestätigungen („WE HAVE BOUGHT/SOLD“). Die Klasse deckt keine Dividenden, Bestände oder CommSec
+  International ab; deshalb behauptet Openfolio dafür nichts.
+- GST: PP bucht `TOTAL GST` als Steuer zusätzlich zur Gebühr und drückt damit den Bruttowert. `BROKERAGE & COSTS INCL GST` enthält
+  die GST bereits; Openfolio bucht Consideration plus Brokerage, was genau `TOTAL COST` beziehungsweise `NET PROCEEDS` ergibt.
+- Stückzahl aus `TOTAL UNITS`, damit Teilausführungen mit mehreren Kurszeilen stimmen; PP liest die erste Kurszeile.
+- `APPLICATION MONEY` ungleich 0 wird gemeldet; PP bucht es als Gebühr, die Bedeutung ist aber nicht belegt.
+- Wertpapier unter dem ASX-Code im Feld `isin` wie bei XTB oder Schwab; keine ISIN und kein geratener Yahoo-Suffix.

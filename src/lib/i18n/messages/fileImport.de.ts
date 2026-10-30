@@ -144,6 +144,14 @@ export const fileImportDe = {
         },
         comdirect: {
             comdirect: 'PDF-Dokumente comdirect'
+        },
+        yuh: {
+            de: 'PDF-Transaktionsbeleg, Deutsch',
+            en: 'PDF-Transaktionsbeleg, Englisch'
+        },
+        commsec: {
+            colon: 'PDF-Bestätigung (COMPANY: …)',
+            plain: 'PDF-Bestätigung (COMPANY … / SECURITY … KÜRZEL)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -170,6 +178,7 @@ export const fileImportDe = {
             ],
             limits: [
                 'Unbekannte Buchungstexte der Account.csv werden als Korrektur gebucht.',
+                'Käufe und Verkäufe kommen aus der Transactions.csv. Steht ein Trade nur in der Account.csv (Datei fehlt, kürzerer Zeitraum, vom Export ausgelassen), erscheint er unter „Nicht übernommen“.',
                 'Englischsprachige DEGIRO-Exporte werden noch nicht erkannt.'
             ]
         },
@@ -728,6 +737,64 @@ export const fileImportDe = {
                 'Bei Überschneidung mit der Schnittstelle bleibt die zuerst vorhandene Buchung bestehen. Für Abgleiche fehlt eine gemeinsame Kennung: Vorabpauschalen und Steuern aus der Schnittstelle werden nicht abgeglichen.',
                 'Eine Abrechnung wird nur gebucht, wenn Kurswert und Gebühren genau den Betrag vor Steuern ergeben; sonst erscheint sie als nicht übernommen.',
                 'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
+            ]
+        },
+        yuh: {
+            scope: 'Yuh-Konten bei der Swissquote Bank (Schweiz): Transaktionsbelege als PDF, je Aktivität ein Dokument. Nicht für normale Swissquote-Konten: dafür den Swissquote-CSV-Import verwenden.',
+            steps: [
+                'In der Yuh-App auf „Investieren“ tippen und eine Anlage öffnen, zum Beispiel eine Aktie.',
+                'Zum Abschnitt „Transaktionen“ scrollen.',
+                'Einen Kauf, Verkauf oder eine Dividende antippen und das Dokument „Transaktionsbenachrichtigung“ als PDF speichern.',
+                'Für jede Aktivität wiederholen und alle PDFs gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Original-PDFs verwenden, keine Screenshots oder Scans: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Belege ab Kontoeröffnung importieren.'
+            ],
+            accounts: 'Je Yuh-Konto ein eigenes Depot verwenden. Ein Beleg wird anhand seiner Referenznummer erkannt und nicht doppelt gebucht; zwei gleich hohe Käufe mit eigener Referenz bleiben getrennt.',
+            supported: [
+                'Kauf und Verkauf (Deutsch und Englisch, auch Bruchteile): Kommission als Gebühr, abzüglich eingesetztem Trading Credit; Stempelsteuer als eigene Steuerbuchung.',
+                'Dividende und Kapitalgewinn (Deutsch): Bruttobetrag mit Quellen- und Verrechnungssteuer als eigenen Buchungen, in der gutgeschriebenen Währung.',
+                'Zahlungsverkehr Gutschrift und Belastung (Deutsch) als Ein- und Auszahlung.',
+                'Zinsabrechnung (Deutsch): Zinsen je Währung mit Verrechnungssteuer.'
+            ],
+            unsupported: [
+                'Titelumbuchungen, Kapitalmaßnahmen, Krypto und Kontoauszüge werden gemeldet, nicht gebucht.',
+                'Dividenden und Zahlungsbelege auf Englisch sowie Belege auf Französisch oder Italienisch: Für sie gibt es keine öffentliche Vorlage, sie werden gemeldet.',
+                'Währungswechsel innerhalb von Yuh: Dafür ist kein Beleg bekannt, der Cash je Währung bleibt dadurch unvollständig.'
+            ],
+            limits: [
+                'Ein Beleg wird nur gebucht, wenn Betrag, Gebühren und Steuern genau den belasteten oder gutgeschriebenen Betrag ergeben; sonst erscheint er als nicht übernommen.',
+                'Der Weg in der App ist nur für Kauf, Verkauf und Dividende belegt. Wo Zahlungsbelege und Zinsabrechnungen abgelegt sind, ließ sich nicht öffentlich prüfen; vorhandene PDFs werden gelesen.',
+                'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Belegen.'
+            ]
+        },
+        commsec: {
+            scope: 'CommSec-Konten in Australien: Trade Confirmations (Contract Notes) für Käufe und Verkäufe am australischen Markt. Nicht für CommSec International und nicht für Bestandslisten.',
+            steps: [
+                'Bei CommSec anmelden.',
+                'Trade → Manage Orders → Confirmations öffnen. Bei Minor-Trust-Konten kann der Menüpunkt Trading → Confirmations heißen.',
+                'Die gewünschten Bestätigungen als PDF herunterladen.',
+                'Alle PDFs gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Original-PDFs verwenden, keine Scans: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Bestätigungen ab Depoteröffnung importieren.'
+            ],
+            accounts: 'Je CommSec-Konto ein eigenes Depot verwenden. Eine Bestätigung wird anhand ihrer Confirmation No erkannt und nicht doppelt gebucht; mehrere Bestätigungen in einer PDF werden einzeln gebucht.',
+            supported: [
+                'Käufe und Verkäufe in beiden bekannten Layouts: Consideration als Handelswert, Brokerage & Costs als Gebühr. Die GST ist in der Gebühr enthalten und wird nicht zusätzlich gebucht.'
+            ],
+            unsupported: [
+                'Dividenden, Kapitalmaßnahmen, Einzahlungen und Zinsen stehen nicht auf den Bestätigungen und fehlen daher.',
+                'Bestätigungen mit Application Money und andere CommSec-Dokumente werden gemeldet, nicht gebucht.',
+                'CommSec International (eigener Excel-Export) wird nicht gelesen.'
+            ],
+            limits: [
+                'Eine Bestätigung wird nur gebucht, wenn Consideration und Brokerage genau Total Cost beziehungsweise Net Proceeds ergeben.',
+                'Die Bestätigungen nennen nur den ASX-Code, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Code und Währung gesucht und kann dort nachgetragen werden.',
+                'Die Abrechnung läuft über das verknüpfte Bankkonto: Cash-Bewegungen im Depot sind daher nicht vollständig.',
+                'Die öffentlich bekannten Muster stammen aus dem Jahr 2020; nur mit synthetischen PDFs getestet, nicht mit aktuellen Original-Bestätigungen.'
             ]
         }
     } as Record<string, ImportGuide>
