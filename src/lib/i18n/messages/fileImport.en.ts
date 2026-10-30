@@ -60,6 +60,9 @@ export const fileImportEn: typeof fileImportDe = {
             transactions: 'Transactions.csv (buys/sells)',
             account: 'Account.csv (account statement)'
         },
+        ibkr: {
+            activity: 'Activity Flex Query (XML)'
+        },
         trading212: {
             standard: 'CSV history export',
             utc: 'CSV history export (time in UTC)'
@@ -166,6 +169,39 @@ export const fileImportEn: typeof fileImportDe = {
                 'Unknown booking texts in Account.csv are booked as adjustments.',
                 'Buys and sells come from Transactions.csv. A trade listed only in Account.csv (file missing, shorter period, left out by the export) appears under “Not imported”.',
                 'DEGIRO exports in English are not recognised yet.'
+            ]
+        },
+        ibkr: {
+            scope: 'Interactive Brokers accounts (also CapTrader, Lynx and other IBKR partners, unchecked). File from an Activity Flex Query in XML format. CSV Flex files and Trade Confirmation Flex are not read.',
+            steps: [
+                'Client Portal: Performance & Reports → Flex Queries (or Menu → Reporting → Flex Queries).',
+                'In the Activity Flex Query section click the plus sign and enter a name.',
+                'Under Sections click Trades, Cash Transactions, Open Positions, Corporate Actions, Transfers and Sales Tax Details and select the fields below.',
+                'Under Delivery Configuration choose XML as the format and a period, then Continue → Create.',
+                'Click the blue Run arrow next to the saved query, confirm the period and format XML and save the file. Unzip a ZIP file first.'
+            ],
+            settings: [
+                'Trades, level Execution: currency, assetCategory, symbol, description, conid, isin, transactionID, tradeID, ibOrderID, tradeDate, dateTime, quantity, tradePrice, proceeds, ibCommission, ibCommissionCurrency, taxes, buySell, levelOfDetail, fxRateToBase.',
+                'Cash Transactions, level Detail: currency, symbol, isin, description, type, amount, transactionID, settleDate, dateTime, reportDate, levelOfDetail.',
+                'Open Positions, level Summary: assetCategory, symbol, isin, position, levelOfDetail.',
+                'Corporate Actions and Transfers: type, symbol, description. Sales Tax Details: currency, date, salesTax, taxableDescription, transactionID.',
+                'In every section also select accountId.',
+                'Date format in the general configuration: yyyyMMdd or yyyy-MM-dd. Other formats are ambiguous; such rows appear under “Not imported”.'
+            ],
+            accounts: 'One file and one portfolio per IBKR account; a file with several accounts is refused. A query covers at most one year: for the full history import one run per year (according to IBKR, saved data goes back four calendar years). Repeated or overlapping files are not booked twice, also not against the Flex connection.',
+            supported: [
+                'Buys and sells of stocks, ETFs, funds and bonds per execution with commission and taxes; cancellations as reversing bookings',
+                'Currency conversions (assetCategory CASH) as internal bookings with commission',
+                'Dividends and payments in lieu, withholding tax, interest, fees, deposits and withdrawals, sales tax'
+            ],
+            unsupported: [
+                'Options, futures, CFDs, warrants and other instruments: they appear under “Not imported” and their cash effect is missing.',
+                'Corporate actions (splits, mergers, spin-offs) and transfers (position transfers): they appear under “Not imported”; please adjust holdings by hand.'
+            ],
+            limits: [
+                'The file import does not compare holdings with Open Positions; only the Flex connection does.',
+                'Balances from the Cash Report are not read. Unknown Cash Transactions types are booked as adjustments.',
+                'Securities without an ISIN run under the IBKR symbol. Tested with synthetic files only, not with an original export.'
             ]
         },
         trading212: {
