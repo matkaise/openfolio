@@ -152,6 +152,9 @@ export const fileImportDe = {
         commsec: {
             colon: 'PDF-Bestätigung (COMPANY: …)',
             plain: 'PDF-Bestätigung (COMPANY … / SECURITY … KÜRZEL)'
+        },
+        dkb: {
+            dkb: 'PDF-Abrechnung DKB'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -795,6 +798,38 @@ export const fileImportDe = {
                 'Die Bestätigungen nennen nur den ASX-Code, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Code und Währung gesucht und kann dort nachgetragen werden.',
                 'Die Abrechnung läuft über das verknüpfte Bankkonto: Cash-Bewegungen im Depot sind daher nicht vollständig.',
                 'Die öffentlich bekannten Muster stammen aus dem Jahr 2020; nur mit synthetischen PDFs getestet, nicht mit aktuellen Original-Bestätigungen.'
+            ]
+        },
+        dkb: {
+            scope: 'Depots bei der DKB (Deutsche Kreditbank AG).',
+            steps: [
+                'Im DKB-Postfach den Ordner „Wertpapierdokumente“ öffnen.',
+                'Je Vorgang das PDF wählen: Kauf- und Verkaufsabrechnungen tragen Titel wie „Kauf - WKN … - Wertpapierabrechnung vom …“, Dividenden heißen „Ertragsabrechnung“.',
+                'Mit „Speichern“ herunterladen; mehrere Dokumente lassen sich gemeinsam auswählen.',
+                'Alle PDFs gemeinsam hier ablegen; jedes PDF ist ein Dokument.'
+            ],
+            settings: [
+                'Original-PDFs aus dem Postfach verwenden, nicht ausdrucken, scannen oder fotografieren: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Abrechnungen ab Depoteröffnung importieren, auch die Halbjahresabrechnungen von Sparplänen.'
+            ],
+            accounts: 'Je Depot importieren. Bereits importierte Abrechnungen werden anhand ihrer Rechnungs-, Abrechnungs- oder Ordernummer erkannt und nicht doppelt gebucht.',
+            supported: [
+                'Wertpapier Abrechnung Kauf, Ausgabe Investmentfonds, Verkauf und Rücknahme Investmentfonds (auch Direkthandel): Kurswert, Provision und Entgelte als Gebühr, Steuern als eigene Buchung.',
+                'Steuerliche Ausgleichrechnung eines Verlustverkaufs: die Erstattung als eigene Steuerbuchung mit eigenem Datum.',
+                'Halbjahresabrechnung Sparplan: jeder Kauf einzeln.',
+                'Dividendengutschrift, Ausschüttung, Gutschrift von Investmenterträgen: Bruttobetrag in Kontowährung mit Quellensteuer und Steuern; Zinsgutschrift als Zinsen.',
+                'Vorabpauschale mit einbehaltener Steuer.'
+            ],
+            unsupported: [
+                'Anleihen (Nominale statt Stück, Stückzinsen) einschließlich Rückzahlungen; Zinsgutschriften werden dagegen gebucht.',
+                'Stornos, Kapitalrückzahlungen, Depotüberträge und Depotauszüge mit Verwahrentgelt.',
+                'Konto- und Kreditkartenauszüge (Ein- und Auszahlungen, Zinsen).',
+                'Kosteninformationen und Hinweise zum Basisinformationsblatt werden ohne Buchung übersprungen, ebenso Vorabpauschalen ohne einbehaltene Steuer.'
+            ],
+            limits: [
+                'Eine Abrechnung wird nur gebucht, wenn Kurswert, Gebühren und Steuern genau den ausmachenden Betrag ergeben; sonst erscheint sie als nicht übernommen.',
+                'Die Finanztransaktionssteuer wird als Steuer gebucht, nicht als Gebühr.',
+                'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
             ]
         }
     } as Record<string, ImportGuide>

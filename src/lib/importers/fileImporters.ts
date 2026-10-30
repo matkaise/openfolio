@@ -3,6 +3,7 @@ import { comdirectFileImporter } from './comdirectPdf';
 import { degiroFileImporter } from './degiroFile';
 import { directaFileImporter } from './directa';
 import { disnatFileImporter } from './disnat';
+import { dkbFileImporter } from './dkb';
 import { etoroFileImporter } from './etoro';
 import { finpensionFileImporter } from './finpension';
 import { flatexFileImporter } from './flatex';
@@ -53,7 +54,8 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     ingFileImporter,
     comdirectFileImporter,
     yuhFileImporter,
-    commSecFileImporter
+    commSecFileImporter,
+    dkbFileImporter
 ];
 
 export const findFileImporter = (id: string): BrokerFileImporter | undefined => (
