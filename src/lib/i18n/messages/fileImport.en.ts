@@ -128,6 +128,9 @@ export const fileImportEn: typeof fileImportDe = {
             flatex: 'flatex / flatexDEGIRO Bank PDF settlement',
             fintech: 'FinTech Group Bank PDF settlement (until 2020)'
         },
+        ing: {
+            ing: 'ING Germany PDF settlement'
+        },
         yuh: {
             de: 'PDF transaction notice, German',
             en: 'PDF transaction notice, English'
@@ -654,6 +657,38 @@ export const fileImportEn: typeof fileImportDe = {
                 'Savings plan executions are booked as buys but not marked as savings plan.',
                 'At flatex, the financial transaction tax is part of the third-party expenses and is therefore booked as a fee.',
                 'Tested only with synthetic PDFs following publicly documented formats, not with current original settlements.'
+            ]
+        },
+        ing: {
+            scope: 'Direkt-Depot accounts at ING Germany (ING-DiBa AG). Not for other ING countries: settlements from ING in Spain, for example, have a different format and are not recognised.',
+            steps: [
+                'In ING online banking, open the Post-Box area (inbox).',
+                'Use the advanced search to choose the securities account and, if needed, narrow the period or document type.',
+                'For each "Abrechnung Kauf", "Abrechnung Verkauf" and "Ertragsabrechnung", open the arrow in the table and download the PDF.',
+                'Drop all PDFs here together; each PDF is one document.'
+            ],
+            settings: [
+                'Use the original PDFs from the inbox; do not print, scan or photograph them: Openfolio only reads the text layer, without text recognition.',
+                'For complete holdings, import all settlements since the account was opened.'
+            ],
+            accounts: 'Import per securities account. Settlements that were already imported are recognised and not booked twice; partial executions of an order stay separate.',
+            supported: [
+                'Wertpapierabrechnung Kauf (including savings plans, one-off investments and reinvestment), Bezug and Verkauf: market value in account currency, commission and charges as a fee, taxes as a separate booking; discounts reduce the purchase amount.',
+                'Rückzahlung and Einlösung of certificates quoted in units, as a sale.',
+                'Dividendengutschrift and Ertragsgutschrift: gross amount in account currency, withholding tax and taxes as separate bookings.',
+                'Zinsgutschrift as interest; Ertragsgutschrift without a payout and Vorabpauschale: the tax only.',
+                'Nachträgliche Verlustverrechnung (later loss offset): refund or charge as a tax booking.'
+            ],
+            unsupported: [
+                'Bonds (nominal value instead of units, accrued interest): settlements are reported as not imported, while interest credits are booked.',
+                'Cancellations ("*** Storno ***", "Sie erhalten eine neue Abrechnung"): a settlement that was already imported must be corrected by hand.',
+                'Account statements (deposits, withdrawals, interest), exchanges, securities transfers and other corporate actions.',
+                'Order, change and cancellation confirmations and cost information are skipped without a booking; only the settlement proves an execution.'
+            ],
+            limits: [
+                'A settlement is only booked if market value, fees and taxes add up exactly to the final amount; otherwise it is listed as not imported.',
+                'The French financial transaction tax is booked as a tax, not as a fee.',
+                'Only tested with synthetic PDFs based on publicly documented formats, not with current original settlements.'
             ]
         },
         yuh: {
