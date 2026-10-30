@@ -138,6 +138,10 @@ export const fileImportDe = {
         flatex: {
             flatex: 'PDF-Abrechnung flatex / flatexDEGIRO Bank',
             fintech: 'PDF-Abrechnung FinTech Group Bank (bis 2020)'
+        },
+        yuh: {
+            de: 'PDF-Transaktionsbeleg, Deutsch',
+            en: 'PDF-Transaktionsbeleg, Englisch'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -656,6 +660,36 @@ export const fileImportDe = {
                 'Sparplanausführungen werden als Kauf gebucht, aber nicht als Sparplan markiert.',
                 'Die Finanztransaktionssteuer steckt bei flatex in den fremden Spesen und wird daher als Gebühr gebucht.',
                 'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
+            ]
+        },
+        yuh: {
+            scope: 'Yuh-Konten bei der Swissquote Bank (Schweiz): Transaktionsbelege als PDF, je Aktivität ein Dokument. Nicht für normale Swissquote-Konten: dafür den Swissquote-CSV-Import verwenden.',
+            steps: [
+                'In der Yuh-App auf „Investieren“ tippen und eine Anlage öffnen, zum Beispiel eine Aktie.',
+                'Zum Abschnitt „Transaktionen“ scrollen.',
+                'Einen Kauf, Verkauf oder eine Dividende antippen und das Dokument „Transaktionsbenachrichtigung“ als PDF speichern.',
+                'Für jede Aktivität wiederholen und alle PDFs gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Original-PDFs verwenden, keine Screenshots oder Scans: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Belege ab Kontoeröffnung importieren.'
+            ],
+            accounts: 'Je Yuh-Konto ein eigenes Depot verwenden. Ein Beleg wird anhand seiner Referenznummer erkannt und nicht doppelt gebucht; zwei gleich hohe Käufe mit eigener Referenz bleiben getrennt.',
+            supported: [
+                'Kauf und Verkauf (Deutsch und Englisch, auch Bruchteile): Kommission als Gebühr, abzüglich eingesetztem Trading Credit; Stempelsteuer als eigene Steuerbuchung.',
+                'Dividende und Kapitalgewinn (Deutsch): Bruttobetrag mit Quellen- und Verrechnungssteuer als eigenen Buchungen, in der gutgeschriebenen Währung.',
+                'Zahlungsverkehr Gutschrift und Belastung (Deutsch) als Ein- und Auszahlung.',
+                'Zinsabrechnung (Deutsch): Zinsen je Währung mit Verrechnungssteuer.'
+            ],
+            unsupported: [
+                'Titelumbuchungen, Kapitalmaßnahmen, Krypto und Kontoauszüge werden gemeldet, nicht gebucht.',
+                'Dividenden und Zahlungsbelege auf Englisch sowie Belege auf Französisch oder Italienisch: Für sie gibt es keine öffentliche Vorlage, sie werden gemeldet.',
+                'Währungswechsel innerhalb von Yuh: Dafür ist kein Beleg bekannt, der Cash je Währung bleibt dadurch unvollständig.'
+            ],
+            limits: [
+                'Ein Beleg wird nur gebucht, wenn Betrag, Gebühren und Steuern genau den belasteten oder gutgeschriebenen Betrag ergeben; sonst erscheint er als nicht übernommen.',
+                'Der Weg in der App ist nur für Kauf, Verkauf und Dividende belegt. Wo Zahlungsbelege und Zinsabrechnungen abgelegt sind, ließ sich nicht öffentlich prüfen; vorhandene PDFs werden gelesen.',
+                'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Belegen.'
             ]
         }
     } as Record<string, ImportGuide>

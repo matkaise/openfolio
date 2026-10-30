@@ -127,6 +127,10 @@ export const fileImportEn: typeof fileImportDe = {
         flatex: {
             flatex: 'flatex / flatexDEGIRO Bank PDF settlement',
             fintech: 'FinTech Group Bank PDF settlement (until 2020)'
+        },
+        yuh: {
+            de: 'PDF transaction notice, German',
+            en: 'PDF transaction notice, English'
         }
     },
     guides: {
@@ -645,6 +649,36 @@ export const fileImportEn: typeof fileImportDe = {
                 'Savings plan executions are booked as buys but not marked as savings plan.',
                 'At flatex, the financial transaction tax is part of the third-party expenses and is therefore booked as a fee.',
                 'Tested only with synthetic PDFs following publicly documented formats, not with current original settlements.'
+            ]
+        },
+        yuh: {
+            scope: 'Yuh accounts at Swissquote Bank (Switzerland): transaction notices as PDF, one document per activity. Not for regular Swissquote accounts: use the Swissquote CSV import for those.',
+            steps: [
+                'In the Yuh app, tap "Invest" and open an investment, for example a stock.',
+                'Scroll to the "Transactions" section.',
+                'Tap a buy, sell or dividend and save the "transaction notification" document as PDF.',
+                'Repeat for each activity and drop all PDFs here together.'
+            ],
+            settings: [
+                'Use original PDFs, no screenshots or scans: Openfolio only reads the text layer and runs no text recognition.',
+                'For a complete position history, import all notices since the account was opened.'
+            ],
+            accounts: 'Use one portfolio per Yuh account. A notice is recognised by its reference number and never booked twice; two equal buys with their own reference stay separate.',
+            supported: [
+                'Buy and sell (German and English, fractions too): commission as fee, less trading credit used; stamp duty as its own tax booking.',
+                'Dividend and capital gain (German): gross amount with withholding taxes as separate bookings, in the credited currency.',
+                'Payment credit and debit (German) as deposit and withdrawal.',
+                'Interest statement (German): interest per currency with withholding tax.'
+            ],
+            unsupported: [
+                'Title transfers, corporate actions, crypto and account statements are reported, not booked.',
+                'English dividend and payment notices and notices in French or Italian: there is no public sample for them, so they are reported.',
+                'Currency exchanges inside Yuh: no notice is known for them, so cash per currency stays incomplete.'
+            ],
+            limits: [
+                'A notice is only booked if amount, fees and taxes add up exactly to the amount debited or credited; otherwise it is listed as not imported.',
+                'The path in the app is only documented for buy, sell and dividend. Where payment notices and interest statements are stored could not be verified publicly; PDFs you have are read.',
+                'Only tested with synthetic PDFs based on publicly documented formats, not with current original notices.'
             ]
         }
     } satisfies Record<string, ImportGuide>
