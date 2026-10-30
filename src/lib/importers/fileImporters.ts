@@ -17,6 +17,7 @@ import { trading212FileImporter } from './trading212Csv';
 import { xtbFileImporter } from './xtb';
 import { yuhFileImporter } from './yuh';
 import { commSecFileImporter } from './commsec';
+import { hargreavesLansdownFileImporter } from './hargreavesLansdown';
 import { hasTextLayer, type PdfDocumentText } from '@/lib/pdf/pdfText';
 import {
     FileImportError,
@@ -49,7 +50,8 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     scalableFileImporter,
     flatexFileImporter,
     yuhFileImporter,
-    commSecFileImporter
+    commSecFileImporter,
+    hargreavesLansdownFileImporter
 ];
 
 export const findFileImporter = (id: string): BrokerFileImporter | undefined => (
