@@ -1,10 +1,10 @@
-import { readDegiroAccountCsv, readDegiroTradesCsv, type DegiroRowNote } from '@/lib/csvParser';
+import { isDegiroAccountHeader, isDegiroTradesHeader, readDegiroAccountCsv, readDegiroTradesCsv, type DegiroRowNote } from '@/lib/csvParser';
 import { batchPeriod, type FileImporter, type FileImportResult, type ImportRowNote } from './fileImport';
 import { parseDegiroFiles } from './importBatch';
 
-// DEGIRO (flatexDEGIRO) CSV exports in German: Transactions.csv (trades) and Account.csv
-// (account statement with dividends, taxes, fees, deposits and balances). The parsing
-// itself lives in csvParser.ts; this wraps it as a file importer.
+// DEGIRO (flatexDEGIRO) CSV exports in German or English: Transactions.csv (trades) and
+// Account.csv (account statement with dividends, taxes, fees, deposits and balances). The
+// parsing itself lives in csvParser.ts; this wraps it as a file importer.
 
 const firstLine = (text: string) => text.replace(/^﻿/, '').split(/\r?\n/, 1)[0] || '';
 
@@ -37,18 +37,23 @@ export const degiroFileImporter: FileImporter = {
     formats: ['CSV'],
     accept: '.csv',
     multiple: true,
-    sources: [{ label: 'Export-To-Ghostfolio: DEGIRO', url: 'https://github.com/dickwolff/Export-To-Ghostfolio#degiro' }],
-    verified: '2026-10-28',
+    sources: [
+        { label: 'Export-To-Ghostfolio: DEGIRO', url: 'https://github.com/dickwolff/Export-To-Ghostfolio#degiro' },
+        { label: 'opensteuerauszug: DEGIRO Account.csv', url: 'https://github.com/vroonhof/opensteuerauszug/blob/main/src/opensteuerauszug/importers/degiro/account_csv_parser.py' },
+        { label: 'Stonks: DEGIRO export formats', url: 'https://github.com/sleousis/Stonks/blob/main/docs/design/degiro.md' }
+    ],
+    verified: '2026-10-30',
     detect: (text) => {
         const header = firstLine(text);
-        if (header.includes('Referenzbörse') && header.includes('Anzahl')) return 'transactions';
-        if (header.includes('Valutadatum') && header.includes('Beschreibung')) return 'account';
+        const english = header.startsWith('Date');
+        if (isDegiroTradesHeader(header)) return english ? 'transactions-en' : 'transactions';
+        if (isDegiroAccountHeader(header)) return english ? 'account-en' : 'account';
         return null;
     },
     parse: (text) => {
         const batch = parseDegiroFiles([text]);
         const variant = degiroFileImporter.detect(text) || 'unknown';
-        const { rows, notes } = variant === 'transactions' ? readDegiroTradesCsv(text) : readDegiroAccountCsv(text);
+        const { rows, notes } = variant.startsWith('transactions') ? readDegiroTradesCsv(text) : readDegiroAccountCsv(text);
         return {
             batch,
             report: {
