@@ -6,6 +6,7 @@ import { etoroFileImporter } from './etoro';
 import { finpensionFileImporter } from './finpension';
 import { flatexFileImporter } from './flatex';
 import { freetradeFileImporter } from './freetrade';
+import { ingFileImporter } from './ing';
 import { investEngineFileImporter } from './investengine';
 import { revolutFileImporter } from './revolut';
 import { saxoFileImporter } from './saxo';
@@ -49,6 +50,7 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     finpensionFileImporter,
     scalableFileImporter,
     flatexFileImporter,
+    ingFileImporter,
     yuhFileImporter,
     commSecFileImporter,
     hargreavesLansdownFileImporter
@@ -101,5 +103,6 @@ export const readImportFiles = (
         const withFile = (notes: FileImportResult['report']['ignored']) => notes.map((note) => ({ ...note, file: file.name }));
         return { ...result, report: { ...result.report, ignored: withFile(result.report.ignored), unsupported: withFile(result.report.unsupported) } };
     });
-    return { importer, result: results.length === 1 ? results[0] : mergeFileImports(importer, results) };
+    const result = results.length === 1 ? results[0] : mergeFileImports(importer, results);
+    return { importer, result: !isPdfImporter(importer) && importer.finish ? importer.finish(result) : result };
 };
