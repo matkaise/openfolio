@@ -3,7 +3,9 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { FileImportError, isPdfImporter, type FileImporter } from '../fileImport';
 import { detectFileImporter, FILE_IMPORTERS, readImportFiles } from '../fileImporters';
-import { parseDegiroFiles } from '../importBatch';
+import { classifyDegiroAccountDescription } from '@/lib/csvParser';
+import { degiroFileImporter } from '../degiroFile';
+import { parseDegiroFiles, type ImportBatch } from '../importBatch';
 import { fileImportDe } from '@/lib/i18n/messages/fileImport.de';
 import { fileImportEn } from '@/lib/i18n/messages/fileImport.en';
 
@@ -38,7 +40,11 @@ describe('file importer registry', () => {
   });
 
   it('gives every CSV fixture to exactly one importer, with a named variant', () => {
+<<<<<<< HEAD
     const fixtures = ['ibkr-flex.xml', 'degiro-account.csv', 'degiro-transactions.csv', 'swissquote-en.csv', 'swissquote-de.csv', 'trading212.csv', 'traderepublic.csv', 'xtb-cash-operations.csv', 'xtb-legacy.csv', 'saxo.csv', 'schwab.csv', 'revolut.csv', 'etoro.csv', 'freetrade.csv', 'investengine.csv', 'avanza.csv', 'directa.csv', 'disnat.csv', 'finpension-3a.csv', 'finpension-bvg.csv'];
+=======
+    const fixtures = ['degiro-account.csv', 'degiro-transactions.csv', 'degiro-account-en.csv', 'degiro-transactions-en.csv', 'swissquote-en.csv', 'swissquote-de.csv', 'trading212.csv', 'traderepublic.csv', 'xtb-cash-operations.csv', 'xtb-legacy.csv', 'saxo.csv', 'schwab.csv', 'revolut.csv', 'etoro.csv', 'freetrade.csv', 'investengine.csv', 'avanza.csv', 'directa.csv', 'disnat.csv', 'finpension-3a.csv', 'finpension-bvg.csv'];
+>>>>>>> fix/ibkr-flex-gaps
     fixtures.forEach((file) => {
       const text = readFileSync(path.join(fixtureDir, file), 'utf-8');
       const textImporters = FILE_IMPORTERS.filter((importer): importer is FileImporter => !isPdfImporter(importer));
@@ -76,6 +82,47 @@ describe('readImportFiles', () => {
       { name: 'other.csv', text: 'a,b\n1,2\n' }
     ]))).toBe('unknownFormat');
     expect(errorCode(() => readImportFiles([]))).toBe('noRows');
+  });
+});
+
+describe('DEGIRO in English', () => {
+  const fixture = (name: string) => readFileSync(path.join(fixtureDir, name), 'utf-8');
+  const summary = (batch: ImportBatch) => batch.entries.map((entry) => [entry.date, entry.kind, entry.amount, entry.currency, entry.isin, entry.internal]).sort();
+  const de = readImportFiles([{ name: 'a.csv', text: tradesCsv }, { name: 'b.csv', text: accountCsv }]).result;
+  const en = readImportFiles([{ name: 'a.csv', text: fixture('degiro-transactions-en.csv') }, { name: 'b.csv', text: fixture('degiro-account-en.csv') }]).result;
+
+  it('books the same as the German export', () => {
+    expect(en.report.variant).toBe('transactions-en+account-en');
+    expect(summary(en.batch)).toEqual(summary(de.batch));
+    expect(en.batch.cashBalances).toEqual(de.batch.cashBalances);
+    expect(en.report.unsupported).toEqual([]);
+  });
+
+  it('classifies the row texts of English statements', () => {
+    const type = (text: string) => classifyDegiroAccountDescription(text)?.type ?? null;
+    expect(type('Buy 10 ACME INC@5.5 USD (US0000000001)')).toBeNull();
+    expect(type('STOCK SPLIT: Sell 10 ACME INC@5.5 USD (US0000000001)')).toBeNull();
+    expect(type('MERGER: Buy 2 ACME INC@25 EUR (US0000000001)')).toBeNull();
+    expect(type('Dividend')).toBe('Dividend');
+    expect(type('Fund Distribution')).toBe('Dividend');
+    expect(type('Dividend Tax')).toBe('Tax');
+    expect(type('Stamp Duty')).toBe('Tax');
+    expect(type('Spanish Transaction Tax')).toBe('Tax');
+    expect(type('DEGIRO Exchange Connection Fee 2024 (Xetra - XET)')).toBe('Fee');
+    expect(type('ADR/GDR Pass-Through Fee')).toBe('Fee');
+    expect(type('Flatex Interest Income')).toBe('Interest');
+    expect(type('iDEAL Deposit')).toBe('Deposit');
+    expect(type('Withdrawal')).toBe('Withdrawal');
+    expect(type('Reservation iDEAL / Sofort Deposit')).toBe('Transfer');
+    expect(type('Money Market fund conversion: Buy 0.1 at 100 EUR')).toBe('Transfer');
+    expect(type('Transfer to your Cash Account at flatexDEGIRO Bank: 10.00 EUR')).toBe('Transfer');
+    expect(type('Something new')).toBe('Adjustment');
+  });
+
+  it('refuses the older layout instead of reading shifted columns', () => {
+    const older = 'Date,Time,Product,ISIN,Reference,Venue,Quantity,Price,,Local value,,Value,,Exchange rate,Transaction costs,,Total,,Order ID\n';
+    expect(degiroFileImporter.detect(older)).toBeNull();
+    expect(degiroFileImporter.detect('Datum,Uhrzeit,Produkt,ISIN,Referenzbörse,Ausführungsort,Anzahl,Kurs,,Wert in Lokalwährung,,Wert,,Wechselkurs,Transaktionsgebühren,,Gesamt,,Order-ID\n')).toBeNull();
   });
 });
 

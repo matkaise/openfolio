@@ -69,7 +69,9 @@ export const fileImportDe = {
     variants: {
         degiro: {
             transactions: 'Transactions.csv (Käufe/Verkäufe)',
-            account: 'Account.csv (Kontoübersicht)'
+            'transactions-en': 'Transactions.csv, Englisch (Käufe/Verkäufe)',
+            account: 'Account.csv (Kontoübersicht)',
+            'account-en': 'Account.csv, Englisch (Kontoübersicht)'
         } as Record<string, string>,
         ibkr: {
             activity: 'Aktivitäts-Flex-Abfrage (XML)'
@@ -156,14 +158,14 @@ export const fileImportDe = {
     } as Record<string, Record<string, string>>,
     guides: {
         degiro: {
-            scope: 'flatexDEGIRO-Konten; Exporte mit deutscher Spaltenbeschriftung.',
+            scope: 'flatexDEGIRO-Konten; Exporte mit deutscher oder englischer Spaltenbeschriftung.',
             steps: [
                 'Transaktionen (im Hauptmenü bzw. Posteingang): Zeitraum wählen → Export → CSV. Ergebnis: Transactions.csv mit Käufen und Verkäufen.',
                 'Posteingang → Kontoübersicht: denselben Zeitraum wählen → Export → CSV. Ergebnis: Account.csv mit Dividenden, Steuern, Gebühren, Ein- und Auszahlungen.',
                 'Beide Dateien gemeinsam hier ablegen.'
             ],
             settings: [
-                'Sprache der DEGIRO-Oberfläche: Deutsch. Die Spalten werden auf Deutsch erwartet.',
+                'Sprache der DEGIRO-Oberfläche: Deutsch oder Englisch. Andere Sprachen werden nicht erkannt.',
                 'Zeitraum möglichst ab Kontoeröffnung, damit Bestände und Cash vollständig sind.'
             ],
             accounts: 'Je DEGIRO-Konto ein eigenes Depot verwenden. Fremdwährungs-Unterkonten stehen in derselben Account.csv. Wiederholte oder überlappende Exporte werden nicht doppelt gebucht.',
@@ -174,12 +176,13 @@ export const fileImportDe = {
                 'Währungswechsel zwischen Unterkonten und Kontostände je Währung'
             ],
             unsupported: [
-                'Kapitalmaßnahmen werden nicht als eigene Bestandsbuchung erkannt.'
+                'Kapitalmaßnahmen erkennt Openfolio nicht als eigene Bestandsbuchung: Ihre Teile aus der Transactions.csv werden als Verkauf und Kauf gebucht. Bestand und Geld stimmen, der Kostenansatz beginnt aber neu und die Differenz erscheint als realisierter Gewinn oder Verlust.'
             ],
             limits: [
                 'Unbekannte Buchungstexte der Account.csv werden als Korrektur gebucht.',
                 'Käufe und Verkäufe kommen aus der Transactions.csv. Steht ein Trade nur in der Account.csv (Datei fehlt, kürzerer Zeitraum, vom Export ausgelassen), erscheint er unter „Nicht übernommen“.',
-                'Englischsprachige DEGIRO-Exporte werden noch nicht erkannt.'
+                'Exporte mit der älteren Spaltenfolge (ohne Spalte AutoFX-Gebühr) werden nicht erkannt.',
+                'Englische Exporte sind nur mit synthetischen Dateien getestet. Die Sprache nicht zwischen zwei Exporten wechseln: Kontozeilen derselben Buchung werden sonst doppelt erkannt.'
             ]
         },
         ibkr: {
