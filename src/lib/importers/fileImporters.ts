@@ -18,6 +18,7 @@ import { trading212FileImporter } from './trading212Csv';
 import { xtbFileImporter } from './xtb';
 import { yuhFileImporter } from './yuh';
 import { commSecFileImporter } from './commsec';
+import { questradeFileImporter } from './questrade';
 import { hasTextLayer, type PdfDocumentText } from '@/lib/pdf/pdfText';
 import {
     FileImportError,
@@ -51,7 +52,8 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     flatexFileImporter,
     ingFileImporter,
     yuhFileImporter,
-    commSecFileImporter
+    commSecFileImporter,
+    questradeFileImporter
 ];
 
 export const findFileImporter = (id: string): BrokerFileImporter | undefined => (
