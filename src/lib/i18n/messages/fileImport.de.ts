@@ -139,6 +139,9 @@ export const fileImportDe = {
             flatex: 'PDF-Abrechnung flatex / flatexDEGIRO Bank',
             fintech: 'PDF-Abrechnung FinTech Group Bank (bis 2020)'
         },
+        ing: {
+            ing: 'PDF-Abrechnung ING Deutschland'
+        },
         yuh: {
             de: 'PDF-Transaktionsbeleg, Deutsch',
             en: 'PDF-Transaktionsbeleg, Englisch'
@@ -664,6 +667,38 @@ export const fileImportDe = {
                 'Eine Abrechnung wird nur gebucht, wenn Kurswert, Gebühren und Steuern genau den Endbetrag ergeben; sonst erscheint sie als nicht übernommen.',
                 'Sparplanausführungen werden als Kauf gebucht, aber nicht als Sparplan markiert.',
                 'Die Finanztransaktionssteuer steckt bei flatex in den fremden Spesen und wird daher als Gebühr gebucht.',
+                'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
+            ]
+        },
+        ing: {
+            scope: 'Direkt-Depots der ING Deutschland (ING-DiBa AG). Nicht für andere ING-Landesgesellschaften: Abrechnungen etwa der ING in Spanien haben ein anderes Format und werden nicht erkannt.',
+            steps: [
+                'Im Internetbanking der ING den Post-Box-Bereich (Posteingang) öffnen.',
+                'Über die erweiterte Suche das Depot wählen und bei Bedarf Zeitraum oder Dokumentart eingrenzen.',
+                'Bei jeder Abrechnung Kauf, Abrechnung Verkauf und Ertragsabrechnung den Pfeil in der Tabelle öffnen und das PDF herunterladen.',
+                'Alle PDFs gemeinsam hier ablegen; jedes PDF ist ein Dokument.'
+            ],
+            settings: [
+                'Original-PDFs aus dem Posteingang verwenden, nicht ausdrucken, scannen oder fotografieren: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Abrechnungen ab Depoteröffnung importieren.'
+            ],
+            accounts: 'Je Depot importieren. Bereits importierte Abrechnungen werden erkannt und nicht doppelt gebucht; Teilausführungen einer Order bleiben getrennt.',
+            supported: [
+                'Wertpapierabrechnung Kauf (auch Sparplan, Einmalanlage, Wiederanlage), Bezug und Verkauf: Kurswert in Kontowährung, Provision und Entgelte als Gebühr, Steuern als eigene Buchung; Rabatte mindern den Kaufbetrag.',
+                'Rückzahlung und Einlösung von Zertifikaten in Stück als Verkauf.',
+                'Dividendengutschrift und Ertragsgutschrift: Bruttobetrag in Kontowährung, Quellensteuer und Steuern als eigene Buchungen.',
+                'Zinsgutschrift als Zinsen; Ertragsgutschrift ohne Auszahlung und Vorabpauschale: nur die Steuer.',
+                'Nachträgliche Verlustverrechnung: Erstattung oder Belastung als Steuerbuchung.'
+            ],
+            unsupported: [
+                'Anleihen (Nominale statt Stück, Stückzinsen): Abrechnungen werden als nicht übernommen gemeldet, Zinsgutschriften dagegen gebucht.',
+                'Stornos („*** Storno ***“, „Sie erhalten eine neue Abrechnung“): Eine bereits importierte Abrechnung muss von Hand korrigiert werden.',
+                'Kontoauszüge (Ein- und Auszahlungen, Zinsen), Umtausch, Depotüberträge und andere Kapitalmaßnahmen.',
+                'Auftrags-, Änderungs- und Streichungsbestätigungen sowie Kosteninformationen werden ohne Buchung übersprungen; erst die Wertpapierabrechnung belegt eine Ausführung.'
+            ],
+            limits: [
+                'Eine Abrechnung wird nur gebucht, wenn Kurswert, Gebühren und Steuern genau den Endbetrag ergeben; sonst erscheint sie als nicht übernommen.',
+                'Die französische Finanztransaktionssteuer wird als Steuer gebucht, nicht als Gebühr.',
                 'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
             ]
         },
