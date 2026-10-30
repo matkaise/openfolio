@@ -141,6 +141,9 @@ export const fileImportDe = {
         },
         ing: {
             ing: 'PDF-Abrechnung ING Deutschland'
+        },
+        comdirect: {
+            comdirect: 'PDF-Dokumente comdirect'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -690,6 +693,40 @@ export const fileImportDe = {
             limits: [
                 'Eine Abrechnung wird nur gebucht, wenn Kurswert, Gebühren und Steuern genau den Endbetrag ergeben; sonst erscheint sie als nicht übernommen.',
                 'Die französische Finanztransaktionssteuer wird als Steuer gebucht, nicht als Gebühr.',
+                'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
+            ]
+        },
+        comdirect: {
+            scope: 'PDF-Dokumente aus der comdirect-PostBox, zusätzlich zur Schnittstelle unter „Broker“. Beide Wege dürfen dasselbe Depot füllen, sie sind aber nicht gleichwertig: Nur die PDFs enthalten Gebühren und Steuern von Wertpapiergeschäften.',
+            steps: [
+                'In der PostBox die Wertpapierabrechnungen und die Steuermitteilungen (Betreff „Steuermitteilung“ mit WKN) auswählen.',
+                'Unten in der PostBox den Sammeldownload nutzen und „herunterladen“ wählen; comdirect liefert ein ZIP-Archiv.',
+                'Das ZIP entpacken: Openfolio liest nur die PDFs selbst, kein ZIP.',
+                'Alle PDFs gemeinsam hier ablegen, Abrechnung und Steuermitteilung gehören zusammen.'
+            ],
+            settings: [
+                'Original-PDFs aus der PostBox verwenden, nicht ausdrucken, scannen oder fotografieren: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für Dividenden die Steuermitteilung importieren. Eine Dividenden- oder Ertragsgutschrift allein bucht nichts.'
+            ],
+            accounts: 'Je Depot importieren. Bereits importierte Dokumente werden erkannt und nicht doppelt gebucht, auch wenn beide Dokumente in einem PDF stehen. Liegen schon Buchungen aus der comdirect-Schnittstelle im Depot, werden Käufe und Verkäufe (gleicher Tag, Wertpapier, Stückzahl) sowie Dividenden (gleicher Nettobetrag innerhalb von 5 Tagen) nicht noch einmal gebucht.',
+            supported: [
+                'Wertpapierabrechnung Kauf und Verkauf, auch mit Teilausführungen, Fremdwährung und Festpreis: Kurswert in Kontowährung, Provision und Entgelte als Gebühr, Rabatte auf den Kaufaufschlag mindern den Kaufbetrag.',
+                'Steuermitteilung zu Kauf und Verkauf: abgeführte oder erstattete Steuern als eigene Buchung.',
+                'Steuermitteilung zu in- und ausländischen Dividenden und Investment-Ausschüttungen: die Dividende mit angerechneter Quellensteuer und Steuern.',
+                'Steuermitteilung zur Vorabpauschale: nur die Steuer.',
+                'Dividendengutschriften von vor 2009, für die es keine Steuermitteilung gibt, in Kontowährung.'
+            ],
+            unsupported: [
+                'Dividenden- und Ertragsgutschriften mit „vor Steuern“ werden bewusst nicht gebucht: Die Steuermitteilung derselben Dividende nennt den Betrag, der aufs Konto ging.',
+                'Anleihen, Wertpapierumtausch, Einlösungen, Sachausschüttungen, ältere Fremdwährungsgutschriften und Verkäufe mit negativem Erlös.',
+                'Finanzreport (Ein- und Auszahlungen, Zinsen) und Abrechnung Verwahrentgelt.',
+                'Ausführungsbestätigungen und Kosteninformationen werden ohne Buchung übersprungen; erst die Wertpapierabrechnung belegt eine Ausführung.'
+            ],
+            limits: [
+                'Der Bruttobetrag einer Dividende ist der Betrag vor Steuern plus angerechnete Quellensteuer. Nicht anrechenbare Quellensteuer steht nur in der Gutschrift und mindert hier den Bruttobetrag; das Cash stimmt trotzdem.',
+                'Ohne Steuermitteilung fehlt bei Verkäufen die Steuer, ohne Abrechnung der Verkauf selbst: Für einen richtigen Kontostand beide Dokumente importieren.',
+                'Bei Überschneidung mit der Schnittstelle bleibt die zuerst vorhandene Buchung bestehen. Für Abgleiche fehlt eine gemeinsame Kennung: Vorabpauschalen und Steuern aus der Schnittstelle werden nicht abgeglichen.',
+                'Eine Abrechnung wird nur gebucht, wenn Kurswert und Gebühren genau den Betrag vor Steuern ergeben; sonst erscheint sie als nicht übernommen.',
                 'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
             ]
         }

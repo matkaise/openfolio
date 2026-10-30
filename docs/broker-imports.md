@@ -64,6 +64,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | Scalable Capital | PDF, je Dokument eine Datei: `de`, `en` (Scalable Capital GmbH/Bank GmbH), `baader` (Baader Bank für Scalable-Kunden bis 2024) | Wertpapierabrechnung Kauf/Verkauf/Sparplan mit Ordergebühren, Steuern und Finanztransaktionssteuer als Steuerbuchung; Dividenden brutto mit Quellensteuer und deutschen Steuern; Vorabpauschale; Steuerneuberechnung; Baader: Kauf/Verkauf mit Provision und Steuern, Fondsausschüttung/Ausschüttung/Dividende(nabrechnung) | Verrechnungskonto/Kontoauszug, Rechnungsabschluss, Reklassifizierung (Belastung), Kapitalrückzahlung, Zinszahlung, Laufzeitende/Knock-out, Stornos; Baader: Thesaurierung, Vorabpauschale, Steuerausgleich, Kontoauszüge, englische Dokumente; Niederländisch/Italienisch/Französisch. Kosteninformation und Auftragsbestätigung werden ohne Buchung übersprungen |
 | flatex | PDF, je Dokument eine Datei: `flatex` (flatex Bank AG, flatexDEGIRO Bank AG/SE, Deutschland und Österreich), `fintech` (FinTech Group Bank AG, älteres Layout „Kurswert EUR 1.050,00“) | Wertpapierabrechnung Kauf/Verkauf und Sammelabrechnung mit Provision und Spesen als Gebühr, einbehaltene Steuer/KESt als Steuerbuchung (Erstattung positiv); Dividendengutschrift und Ertragsmitteilung brutto in Kontowährung mit Quellensteuer, Steuer und Gebühren; Steuer thesaurierender Fonds; Vorabpauschale; Depotservicegebühr | Anleihen (Prozentkurs, Stückzinsen), Krypto, Devisen, Stornos, Kontoauszüge, Depotein-/-ausgänge, Kapitalmaßnahmen, Stockdividenden, Gutschrifts-/Belastungsanzeigen. Auftrags-, Änderungs- und Streichungsbestätigungen sowie Kosteninformationen werden ohne Buchung übersprungen |
 | ING Deutschland | PDF, je Dokument eine Datei: `ing` (ING-DiBa AG; ING Spanien wird nicht erkannt) | Wertpapierabrechnung Kauf (auch Sparplan, Einmalanlage, Wiederanlage), Bezug, Verkauf; Rückzahlung/Einlösung in Stück als Verkauf; Provision und Entgelte als Gebühr, Steuern als eigene Buchung; Dividenden- und Ertragsgutschrift brutto in Kontowährung mit Quellensteuer und Steuern; Zinsgutschrift als Zinsen; Steuer aus Ertragsgutschrift ohne Auszahlung und Vorabpauschale; nachträgliche Verlustverrechnung | Anleihen (Nominale, Stückzinsen), Stornos, Kontoauszüge, Umtausch, Überträge, Kapitalmaßnahmen. Auftrags-, Änderungs- und Streichungsbestätigungen sowie Kosteninformationen werden ohne Buchung übersprungen |
+| comdirect | PDF, je Dokument eine Datei oder Abrechnung und Steuermitteilung in einer Datei: `comdirect`; zusätzlich zur API (`src/lib/importers/comdirect.ts`) | Wertpapierabrechnung Kauf/Verkauf inkl. Teilausführungen, Fremdwährung, Festpreis; Provision und Entgelte als Gebühr; Steuermitteilung zu Kauf/Verkauf als Steuerbuchung (Erstattung positiv); Steuermitteilung zu Dividenden und Investment-Ausschüttungen; Vorabpauschale; Dividendengutschriften vor 2009 ohne Steuermitteilung | Dividenden-/Ertragsgutschriften mit „vor Steuern“ (bewusst, Hinweis im Bericht), Anleihen, Umtausch, Einlösung, Sachausschüttung, Fremdwährungsgutschriften vor 2009, Verkäufe mit negativem Erlös, Finanzreport, Verwahrentgelt. Ausführungsbestätigungen und Kosteninformationen werden ohne Buchung übersprungen |
 
 ## Quellen und Lizenzen
 
@@ -103,6 +104,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | flatex | [Parqet FAQ](https://faq.parqet.com/de/articles/871917-flatex-pdf-import) | 29.10.2026 | – (Dokumentation) | Downloadweg Post → Dokumentenarchiv → Zeitraum, unterstützte und nicht importierte Dokumentarten |
 | ING Deutschland | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/INGDiBaPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/ingdiba/` | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 | Nur Formatwissen: Bankkennung, Dokumenttitel, Feldnamen (Kurswert, Rabatt, Provision, Entgelte, Steuerzeilen, Endbetrag, Umrechnungszeilen, QuSt), Gemeinschaftsdepot-Zeilen, Storno-Kennzeichen, Vorabpauschale, Verlustverrechnung. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. Die Testdokumente wurden nur lokal als Gegenprobe durch den Importer geführt. |
 | ING Deutschland | [Parqet FAQ](https://faq.parqet.com/de/articles/651196-ing-pdf-import) | 30.10.2026 | – (Dokumentation) | Downloadweg Posteingang → erweiterte Suche → Depot, Dokumentarten Abrechnung Kauf/Verkauf und Ertragsabrechnung |
+| comdirect | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/ComdirectPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/comdirect/` | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 | Nur Formatwissen: Bankkennung, Trennung von Abrechnung und Steuermitteilung, Feld- und Zeilenaufbau, Sperrschrift der Steuermitteilung, Umrechnungszeilen, Gutschriften vor 2009. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. Die Testdokumente wurden nur lokal als Gegenprobe durch den Importer geführt. |
+| comdirect | [Parqet FAQ](https://faq.parqet.com/de/articles/651189-comdirect-pdf-import) | 30.10.2026 | – (Dokumentation) | PostBox-Sammeldownload als ZIP, Dokumentwahl Wertpapierabrechnung und Steuermitteilung; Dividendengutschrift ist laut Parqet seit Januar 2026 kein Importdokument |
 
 ### Abweichungen von der Vorlage (Swissquote)
 
@@ -388,3 +391,27 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 - Kontoauszüge bucht PP (Ein-/Auszahlungen, Zinsen, Steuern); Openfolio meldet sie, damit nichts doppelt zu den Abrechnungen
   gebucht wird. Ein- und Auszahlungen müssen vorerst manuell erfasst werden.
 - Einen ING-CSV-Import gibt es nicht; Überschneidungen mit einem anderen Importweg bestehen nicht.
+
+### Abweichungen von der Vorlage (comdirect)
+
+- Zwei Dokumente je Vorgang: Die Abrechnung endet bei „vor Steuern“, die Steuermitteilung nennt Steuern und „nach Steuern“.
+  PP führt beide zu einer Buchung zusammen. Openfolio liest jede Datei einzeln, deshalb liefert jedes Dokument seinen Teil:
+  Handel und Gebühren aus der Abrechnung, die Steuer als eigene Buchung aus der Steuermitteilung. Gemeinsam ergeben sie den
+  Endbetrag, unabhängig von der Reihenfolge und davon, ob sie in einer oder zwei Dateien liegen.
+- Dividenden: Die Entscheidung fällt auf die **Steuermitteilung**. Sie enthält, was aufs Konto ging, und Parqet nimmt seit
+  Januar 2026 nur noch sie an. Die Gutschrift mit „vor Steuern“ wird ignoriert, mit Hinweis im Bericht, sodass jede Dividende
+  genau eine Quelle hat. Folge: Der Bruttobetrag ist „vor Steuern“ plus angerechnete Quellensteuer; nicht anrechenbare
+  Quellensteuer und der Betrag in Fremdwährung stehen nur in der Gutschrift. PP übernimmt sie von dort. Gutschriften ohne
+  „vor Steuern“ (bis 2008) sind endgültig und werden gebucht, solange sie in Kontowährung lauten.
+- Ausführungsbestätigungen („Die Abrechnung lassen wir … folgen“) bucht PP als Verkauf; Openfolio überspringt sie, weil sie
+  keine Abrechnung sind. Sonst stünde derselbe Verkauf ohne gemeinsame Kennung doppelt im Depot.
+- Überschneidung mit der API: Beide Wege nutzen die Quelle `comdirect`, PDF-Kennungen beginnen mit `comdirect-pdf:`. Eine
+  gemeinsame Kennung gibt es nicht. `comdirectOverlap.ts` gleicht daher Handel über Tag, ISIN und Stückzahl ab und Erträge
+  über den Nettobetrag innerhalb von 5 Tagen (fehlt der API die ISIN, genügen Betrag und Datum). Je Buchung deckt genau eine
+  der Gegenseite, gleiche Trades eines Tages bleiben also getrennt. Es bleibt die zuerst vorhandene Buchung: Liegt der API-Trade
+  schon vor, fehlt dessen Gebühr; die Steuer aus der Steuermitteilung kommt trotzdem hinzu, weil die API sie nicht liefert.
+  Vorabpauschale und Gebühren werden nicht abgeglichen. Das Verhalten ist nur synthetisch geprüft; ob API-`transactionValue`,
+  Geschäftstag und Verwendungszweck in echten Daten so aussehen, steht aus.
+- Kennung: Rechnungsnummer der Abrechnung, Referenz-Nummer der Steuermitteilung; bei fehlender Nummer ISIN, Datum und Stückzahl.
+- Anleihen (Nennwert in Währung) wie bei flatex nicht gebucht. Finanzreport und Verwahrentgelt bucht PP; Openfolio meldet sie, weil
+  die API dieselben Kontobewegungen liefert und ein Abgleich dafür fehlt.
