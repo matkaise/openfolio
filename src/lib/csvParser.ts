@@ -286,7 +286,9 @@ const foldText = (value: string): string => {
 /**
  * Classifies a DEGIRO Account.csv description. Order matters: "Dividendensteuer" must be
  * checked before "Dividende", and "Zinsen" (often negative debit interest) is interest.
- * Returns null for trade rows, which come from Transactions.csv.
+ * Returns null for trade rows, which come from Transactions.csv. That includes the legs of
+ * corporate actions ("Aktiensplit: Verkauf 10 zu je 5 USD", "Fusion: Kauf ..."): Transactions.csv
+ * lists them too, without an order id.
  */
 export const classifyDegiroAccountDescription = (
     description: string
@@ -307,6 +309,9 @@ export const classifyDegiroAccountDescription = (
         || normalized.includes('reservation ideal')
     ) {
         return { type: 'Transfer', isInternal: true };
+    }
+    if (/\b(kauf|verkauf)\b.*\bzu je\b/.test(normalized)) {
+        return null;
     }
     if (normalized.includes('einzahlung')) {
         return { type: 'Deposit' };
@@ -362,8 +367,9 @@ const parseAccountRowWith = (row: string[], num: (value: string) => number): Par
 
     let amount = num(row[8]);
     if (!Number.isFinite(amount) || (row[8] || '').trim() === '') {
-        // Withdrawals and transfers leave the amount column empty and name it in the text
-        const matches = description.match(/[-+]?\d[\d'’.,]*/g);
+        // Transfers leave the amount column empty and name it in the text. A price ("Geldmarktfonds
+        // Umwandlung: Kauf 0.1 zu je 100 EUR") is no amount: such rows do not change the balance.
+        const matches = /\bzu je\b/i.test(description) ? null : description.match(/[-+]?\d[\d'’.,]*/g);
         const fromDescription = matches ? num(matches[matches.length - 1]) : NaN;
         if (Number.isFinite(fromDescription)) {
             amount = fromDescription;
@@ -396,26 +402,43 @@ export const parseDegiroAccountCsv = (text: string): ImportEntry[] => {
     const decimal = detectDecimalSeparator(collectCells(rows, [6, 8, 10]));
     const num = (value: string) => parseNumberWithSeparator(value, decimal);
 
+    // A cash sweep moves money between DEGIRO and the flatexDEGIRO bank account as a pair of
+    // rows: "Degiro Cash Sweep Transfer" with the amount and a text row naming it. The text row
+    // "Auszahlung von Ihrem Geldkonto" of such a pair is no withdrawal, the money stays in the account.
+    const sweepKey = (row: ParsedAccountRow) => [row.date, row.time, row.currency, Math.abs(row.amount).toFixed(2)].join('|');
+    const sweeps = new Set(rows.slice(1)
+        .map((row) => parseAccountRowWith(row, num))
+        .filter((row): row is ParsedAccountRow => row !== null && foldText(row.description).includes('cash sweep transfer'))
+        .map(sweepKey));
+
     const entries: ImportEntry[] = [];
+    const seenKeys = new Map<string, number>();
     for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         const parsed = parseAccountRowWith(row, num);
         if (!parsed) continue;
 
-        const classification = classifyDegiroAccountDescription(parsed.description);
-        if (!classification) continue;
+        const found = classifyDegiroAccountDescription(parsed.description);
+        if (!found) continue;
+        const classification = found.type === 'Withdrawal' && sweeps.has(sweepKey(parsed))
+            ? { type: 'Transfer' as const, isInternal: true }
+            : found;
 
         let amount = parsed.amount;
         if (Math.abs(amount) < 0.0000001) continue;
 
         // Rows without an amount column carry an unsigned amount in the text
-        if (classification.type === 'Withdrawal' && amount > 0) amount = -amount;
-        if (classification.type === 'Deposit' && amount < 0) amount = -amount;
+        if (found.type === 'Withdrawal' && amount > 0) amount = -amount;
+        if (found.type === 'Deposit' && amount < 0) amount = -amount;
 
+        // Partial fills of one order can produce identical rows; they stay separate bookings
         const orderId = (row[11] || '').trim();
+        const baseKey = [parsed.date, parsed.time, parsed.currency, amount.toFixed(8), parsed.description, orderId].join('|');
+        const occurrence = (seenKeys.get(baseKey) || 0) + 1;
+        seenKeys.set(baseKey, occurrence);
         entries.push(statementEntry({
             source: 'Flatex',
-            externalId: [parsed.date, parsed.time, parsed.currency, amount.toFixed(8), parsed.description, orderId].join('|'),
+            externalId: occurrence > 1 ? `${baseKey}#${occurrence}` : baseKey,
             orderId: orderId || undefined,
             date: parsed.date,
             type: classification.type,
