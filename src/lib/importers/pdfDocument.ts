@@ -62,11 +62,13 @@ export type DocumentOutcome =
 export const unsupported = (label: string, at?: DocLine): DocumentOutcome => ({ kind: 'unsupported', label, at });
 export const ignored = (label: string, at?: DocLine): DocumentOutcome => ({ kind: 'ignored', label, at });
 
-/** Import result of one PDF. */
-export const documentResult = (importerId: string, source: string, variant: string, outcome: DocumentOutcome): FileImportResult => {
+/** Import result of one PDF; a collective statement has one outcome per settlement. */
+export const documentResult = (importerId: string, source: string, variant: string, outcomes: DocumentOutcome | DocumentOutcome[]): FileImportResult => {
     const batch = emptyImportBatch(source);
     const notes: { ignored: ImportRowNote[]; unsupported: ImportRowNote[] } = { ignored: [], unsupported: [] };
-    if (outcome.kind === 'booked') batch.entries.push(...outcome.entries);
-    else notes[outcome.kind].push({ line: outcome.at?.line ?? 1, page: outcome.at?.page ?? 1, label: outcome.label });
+    (Array.isArray(outcomes) ? outcomes : [outcomes]).forEach((outcome) => {
+        if (outcome.kind === 'booked') batch.entries.push(...outcome.entries);
+        else notes[outcome.kind].push({ line: outcome.at?.line ?? 1, page: outcome.at?.page ?? 1, label: outcome.label });
+    });
     return { batch, report: { importerId, variant, period: batchPeriod(batch), rows: 1, ...notes } };
 };
