@@ -118,6 +118,11 @@ export const fileImportEn: typeof fileImportDe = {
             '3a': 'Transaction report pillar 3a (CSV)',
             bvg: 'Transaction report vested benefits/BVG (CSV)',
             report: 'Transaction report (CSV, without buys, sells or deposits)'
+        },
+        scalable: {
+            de: 'Scalable Capital PDF settlement (German)',
+            en: 'Scalable Capital PDF settlement (English)',
+            baader: 'Baader Bank PDF settlement (until 2024)'
         }
     },
     guides: {
@@ -574,6 +579,37 @@ export const fileImportEn: typeof fileImportDe = {
                 'The variant (3a or BVG) is recognised from the categories; a report with only interest and fees is called "transaction report".',
                 'The export path is only documented by Export-To-Ghostfolio; no official Finpension guide was found.',
                 'Only tested with synthetic files based on public samples.'
+            ]
+        },
+        scalable: {
+            scope: 'Scalable Capital Broker (custody at Scalable Capital Bank) with settlements in German or English, and earlier Baader Bank settlements for Scalable clients (broker and wealth management until 2024). Not for the CSV export (Prime) and not for account statements.',
+            steps: [
+                'Log in to Scalable Capital and choose the Broker.',
+                'In the "Transactions" tab, open a transaction and download its settlement (PDF); every transaction has its own PDF.',
+                'Earlier settlements from the Baader Bank period: in the Baader Bank login, save them under "Download" → "Wertpapierumsätze".',
+                'Drop all PDFs here together; each PDF is one document.'
+            ],
+            settings: [
+                'Use the original PDFs, not printed, scanned or photographed copies: Openfolio only reads the text layer, without text recognition.',
+                'For complete holdings, import every settlement since the account was opened, including savings plan executions.'
+            ],
+            accounts: 'Import per securities account. Settlements already imported are recognised by order and trade number (Baader: transaction number) and not booked twice; partial executions of one order stay separate.',
+            supported: [
+                'Wertpapierabrechnung / Contract note: buys, sells and savings plan executions with order fees; taxes and financial transaction tax as bookings of their own.',
+                'Dividende / Dividend: gross amount with foreign withholding tax and German taxes, in the account currency.',
+                'Vorabpauschale (advance lump sum tax) and Steuerneuberechnung (tax refund or charge).',
+                'Baader Bank: buy/sell settlements with commission and taxes, fund distributions, distributions and dividends.'
+            ],
+            unsupported: [
+                'Cash account statement (deposits, withdrawals, interest, Prime fees) and interest statement: please add them manually.',
+                'Reclassification of a distribution, capital repayment, coupon payment, maturity/knock-out, cancellations and corporate actions.',
+                'Baader Bank: accumulation notices, advance lump sum, tax adjustments, account statements, wealth management fees, English settlements.',
+                'Cost information and order confirmations are skipped without booking; only the settlement proves an execution.'
+            ],
+            limits: [
+                'A settlement is only booked when amount, fees and taxes add up exactly to the settled amount; otherwise it is listed as not imported.',
+                'Settlements in other languages (Dutch, Italian, French) are not read yet.',
+                'Tested only with synthetic PDFs following publicly documented formats, not with current original settlements.'
             ]
         }
     } satisfies Record<string, ImportGuide>
