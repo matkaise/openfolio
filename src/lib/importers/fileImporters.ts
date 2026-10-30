@@ -15,6 +15,7 @@ import { swissquoteFileImporter } from './swissquote';
 import { tradeRepublicFileImporter } from './traderepublic';
 import { trading212FileImporter } from './trading212Csv';
 import { xtbFileImporter } from './xtb';
+import { yuhFileImporter } from './yuh';
 import { hasTextLayer, type PdfDocumentText } from '@/lib/pdf/pdfText';
 import {
     FileImportError,
@@ -45,7 +46,8 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     disnatFileImporter,
     finpensionFileImporter,
     scalableFileImporter,
-    flatexFileImporter
+    flatexFileImporter,
+    yuhFileImporter
 ];
 
 export const findFileImporter = (id: string): BrokerFileImporter | undefined => (
