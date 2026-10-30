@@ -125,6 +125,11 @@ export const fileImportDe = {
             'fr-comma': 'Kontoverlauf, aus Excel als CSV (französisch, Komma)',
             'fr-semicolon': 'Kontoverlauf, aus Excel als CSV (französisch, Semikolon)'
         },
+        finpension: {
+            '3a': 'Transaktionsbericht Säule 3a (CSV)',
+            bvg: 'Transaktionsbericht Freizügigkeit/BVG (CSV)',
+            report: 'Transaktionsbericht (CSV, ohne Käufe, Verkäufe oder Einzahlungen)'
+        },
         scalable: {
             de: 'PDF-Abrechnung Scalable Capital (deutsch)',
             en: 'PDF-Abrechnung Scalable Capital (englisch)',
@@ -559,6 +564,35 @@ export const fileImportDe = {
                 'Der Export enthält Disnat-Symbole, keine ISIN. Das Suffix „-C“ (kanadische Notierung) wird entfernt, damit Handel und Dividenden zum selben Wertpapier gehören; die Auflösung übernimmt der nächste Kursabruf.',
                 'Bei Wertpapieren in US-Dollar auf einem CAD-Konto enthält der Betrag Umrechnung und Kommission; die Kommission bleibt dann in den Rohdaten.',
                 'Exportweg nur von einem Disnat-Kunden beschrieben (Export-To-Ghostfolio, Issue #260); eine offizielle Anleitung wurde nicht gefunden.',
+                'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
+            ]
+        },
+        finpension: {
+            scope: 'Finpension (Schweiz): Säule-3a-Portfolios und Freizügigkeitskonten (BVG), Transaktionsbericht als CSV je Portfolio.',
+            steps: [
+                'Bei Finpension anmelden und auf der Startseite das Portfolio wählen.',
+                'Rechts „Transaktionen“ (Transactions) öffnen.',
+                'Beim Eintrag „Transaktionsbericht (CSV-Datei)“ (transaction report) den Download wählen (alternativ per E-Mail senden lassen).',
+                'Die CSV-Datei unverändert hier ablegen.'
+            ],
+            settings: [
+                'Den Bericht nicht in Excel öffnen und neu speichern: Semikolon, Dezimalpunkt und Datum JJJJ-MM-TT werden im Original erwartet.'
+            ],
+            accounts: 'Je Finpension-Portfolio (jedes 3a-Portfolio, jedes Freizügigkeitskonto) ein eigener Bericht und ein eigenes Openfolio-Depot. Überlappende Berichte werden nicht doppelt gebucht.',
+            supported: [
+                'Käufe und Verkäufe (3a: Buy/Sell; BVG: Portfolio Transaction, Richtung aus dem Cash Flow) in CHF',
+                'Ausschüttungen (Dividend, Dividend and Interest Distributions), Zinsen (Interests), Pauschalgebühr (Flat-rate administrative/administration fee)',
+                'Einzahlungen (Deposit), Freizügigkeitsüberträge (Transfer vested benefits) als Ein- oder Auszahlung, Auszahlungen (Withdraw…)',
+                'Tagesendsaldo der Spalte Balance als Kontostand'
+            ],
+            unsupported: [
+                'Unbekannte Kategorien mit Betrag oder Anteilen: erscheinen als nicht übernommen.',
+                'Käufe/Verkäufe ohne ISIN oder mit widersprüchlichem Vorzeichen von Anteilen und Cash Flow.'
+            ],
+            limits: [
+                'Beträge in CHF („Asset Price in CHF“, „Cash Flow“); Fondswährung und Kurs bleiben in den Rohdaten.',
+                'Die Variante (3a oder BVG) wird an den Kategorien erkannt; ein Bericht nur mit Zinsen und Gebühren heisst „Transaktionsbericht“.',
+                'Exportweg nur aus Export-To-Ghostfolio belegt; eine offizielle Finpension-Anleitung wurde nicht gefunden.',
                 'Nur mit synthetischen Dateien nach öffentlichen Beispielen getestet.'
             ]
         },

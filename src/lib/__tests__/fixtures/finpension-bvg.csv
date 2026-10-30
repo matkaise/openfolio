@@ -1,0 +1,8 @@
+﻿Date;Category;"Asset Name";ISIN;"Number of Shares";"Asset Currency";"Currency Rate";"Asset Price in CHF";"Cash Flow";Balance
+2025-06-02;"Portfolio Transaction";"Exempel Index Fund Equity World A";CH0000000011;0.020000;CHF;1.0000000000;1700.000000;34.000000;70.350000
+2025-05-22;"Dividend and Interest Distributions";"Exempel Index Fund Equity World A";CH0000000011;0.000000;CHF;1.0000000000;10.500000;1.650000;36.350000
+2025-01-21;Interests;;;0.000000;CHF;1.0000000000;0.000000;0.050000;34.700000
+2025-01-21;"Flat-rate administration fee";;;0.000000;CHF;1.0000000000;0.000000;-0.350000;34.650000
+2024-10-29;"Portfolio Transaction";"Exempel Index Fund Equity World A";CH0000000011;0.100000;CHF;1.0000000000;1650.000000;-165.000000;35.000000
+2024-10-22;"Portfolio Transaction";"Exempel Index Fund Equity World A";CH0000000011;3.000000;CHF;1.0000000000;1600.000000;-4800.000000;200.000000
+2024-10-16;"Transfer vested benefits";;;0.000000;CHF;1.0000000000;0.000000;5000.000000;5000.000000

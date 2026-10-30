@@ -3,6 +3,7 @@ import { degiroFileImporter } from './degiroFile';
 import { directaFileImporter } from './directa';
 import { disnatFileImporter } from './disnat';
 import { etoroFileImporter } from './etoro';
+import { finpensionFileImporter } from './finpension';
 import { flatexFileImporter } from './flatex';
 import { freetradeFileImporter } from './freetrade';
 import { investEngineFileImporter } from './investengine';
@@ -42,6 +43,7 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     avanzaFileImporter,
     directaFileImporter,
     disnatFileImporter,
+    finpensionFileImporter,
     scalableFileImporter,
     flatexFileImporter
 ];

@@ -82,3 +82,9 @@ Never copy rows from a real export into this folder.
   stock bought on the CAD account, dividends with the bare symbol, withholding tax, interest, an annual fee with
   GST/QST, a sale with commission, a cash transfer in, a security transfer (not supported) and a withdrawal. Cash ends
   at CAD 1362.77.
+- `finpension-3a.csv`: Finpension pillar 3a transaction report (`;`, BOM, quoted headers), newest row first, Balance
+  consistent row by row. Covers a deposit, fund buys, the flat-rate fee, a distribution, interest, a rebalancing sell and
+  buy and a made-up unknown category "Tax refund" (reported). Booked cash CHF 341.95; Balance 345.15 includes the
+  reported row.
+- `finpension-bvg.csv`: Finpension vested benefits (BVG) report: transfer of vested benefits, two buys and one sell as
+  "Portfolio Transaction", fee, interest and a distribution. Cash ends at CHF 70.35.
