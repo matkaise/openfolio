@@ -21,6 +21,15 @@
 <OpenPosition accountId="U0000001" currency="USD" assetCategory="STK" symbol="ACME" description="ACME CORP" conid="1000001" isin="US0000000001" position="6" markPrice="130" levelOfDetail="SUMMARY" />
 <OpenPosition accountId="U0000001" currency="EUR" assetCategory="STK" symbol="WDG" description="EUROWIDGET AG &amp; CO" conid="1000002" isin="DE0000000002" position="20" markPrice="52" levelOfDetail="SUMMARY" />
 </OpenPositions>
+<SalesTaxes>
+<SalesTax accountId="U0000001" currency="USD" date="20240704" salesTax="-0.30" taxableDescription="M******1:IBKR PRO MARKET DATA" transactionID="8101" code="" />
+</SalesTaxes>
+<CorporateActions>
+<CorporateAction accountId="U0000001" currency="USD" assetCategory="STK" symbol="ACME" description="ACME(US0000000001) SPLIT 2 FOR 1" conid="1000001" isin="US0000000001" reportDate="20240801" dateTime="20240731;202500" type="FS" quantity="6" proceeds="0" levelOfDetail="DETAIL" />
+</CorporateActions>
+<Transfers>
+<Transfer accountId="U0000001" currency="EUR" assetCategory="STK" symbol="WDG" description="EUROWIDGET AG &amp; CO" conid="1000002" isin="DE0000000002" date="20240805" type="ACATS" direction="IN" quantity="5" cashTransfer="0" levelOfDetail="DETAIL" />
+</Transfers>
 </FlexStatement>
 </FlexStatements>
 </FlexQueryResponse>
