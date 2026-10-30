@@ -149,6 +149,11 @@ export const fileImportDe = {
         commsec: {
             colon: 'PDF-Bestätigung (COMPANY: …)',
             plain: 'PDF-Bestätigung (COMPANY … / SECURITY … KÜRZEL)'
+        },
+        questrade: {
+            statement: 'PDF-Monatsauszug',
+            'trade-confirmation': 'PDF-Trade-Confirmation-Report',
+            other: 'Anderes Questrade-Dokument'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -758,6 +763,37 @@ export const fileImportDe = {
                 'Die Bestätigungen nennen nur den ASX-Code, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Code und Währung gesucht und kann dort nachgetragen werden.',
                 'Die Abrechnung läuft über das verknüpfte Bankkonto: Cash-Bewegungen im Depot sind daher nicht vollständig.',
                 'Die öffentlich bekannten Muster stammen aus dem Jahr 2020; nur mit synthetischen PDFs getestet, nicht mit aktuellen Original-Bestätigungen.'
+            ]
+        },
+        questrade: {
+            scope: 'Questrade-Konten in Kanada (Self-directed, Questwealth): Monatsauszüge („Account statement“) und Trade Confirmation Reports als PDF. Der Excel-Export der Transaktionshistorie wird hier nicht gelesen.',
+            steps: [
+                'Bei Questrade anmelden.',
+                'Monatsauszüge: Seite „Documents“ öffnen und unter „Recent statements“ die Auszüge als PDF speichern.',
+                'Oder Handelsbestätigungen: Seite „Reports“ öffnen, „Trade confirmation“ wählen, nach Symbol oder Datum suchen und den Bericht als PDF speichern.',
+                'Alle PDFs gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Monatsauszüge bevorzugen: Nur sie enthalten neben Käufen auch Ausschüttungen und Einzahlungen.',
+                'Original-PDFs verwenden, keine Scans: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Auszüge ab Kontoeröffnung importieren.'
+            ],
+            accounts: 'Je Questrade-Konto ein eigenes Depot verwenden. Dieselbe Buchung in Auszug und Report erhält dieselbe Kennung, wenn Datum, Stückzahl und Betrag gleich sind. Der Auszug kann Teilausführungen aber zusammenfassen: Für denselben Zeitraum daher nur eine der beiden Dokumentarten importieren.',
+            supported: [
+                'Monatsauszug: Käufe und Verkäufe in CAD und USD mit Kommission, Ausschüttungen (UNIT DIST) und Contributions.',
+                'Trade Confirmation Report: Käufe und Verkäufe mit Kommission und SEC-Gebühren als Gebühr.'
+            ],
+            unsupported: [
+                'Im Auszug werden Auszahlungen, Einzahlungen ohne „Contribution“, Quellensteuer, Zinsen, Devisen, Überträge, Kapitalmaßnahmen und Gebühren gemeldet, nicht gebucht: Für diese Zeilen ist kein Muster öffentlich.',
+                'Optionen und Anleihen (Stückzinsen) werden gemeldet.',
+                'Trades mit Abwicklung nach Monatsende werden übersprungen und gemeldet; sie stehen im Auszug des Folgemonats.'
+            ],
+            limits: [
+                'Der Auszug wird je Tabelle nur gebucht, wenn Anfangssaldo und Zeilen genau den Schlusssaldo ergeben; sonst wird die Tabelle als nicht übernommen gemeldet.',
+                'Beim Report müssen die Zeilen die Zeile „Totals“ ergeben.',
+                'Auszüge und Reports nennen nur Symbole, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Symbol und Währung gesucht und kann dort nachgetragen werden.',
+                'Questrade beschreibt den Ablageort, aber nicht die Download-Schaltfläche; die Anleitung ist von 2022.',
+                'Verkäufe im Auszug und USD-Zeilen im Auszug kommen in den öffentlichen Mustern nicht vor; nur mit synthetischen PDFs getestet.'
             ]
         }
     } as Record<string, ImportGuide>

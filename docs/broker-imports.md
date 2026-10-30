@@ -66,6 +66,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | ING Deutschland | PDF, je Dokument eine Datei: `ing` (ING-DiBa AG; ING Spanien wird nicht erkannt) | Wertpapierabrechnung Kauf (auch Sparplan, Einmalanlage, Wiederanlage), Bezug, Verkauf; Rückzahlung/Einlösung in Stück als Verkauf; Provision und Entgelte als Gebühr, Steuern als eigene Buchung; Dividenden- und Ertragsgutschrift brutto in Kontowährung mit Quellensteuer und Steuern; Zinsgutschrift als Zinsen; Steuer aus Ertragsgutschrift ohne Auszahlung und Vorabpauschale; nachträgliche Verlustverrechnung | Anleihen (Nominale, Stückzinsen), Stornos, Kontoauszüge, Umtausch, Überträge, Kapitalmaßnahmen. Auftrags-, Änderungs- und Streichungsbestätigungen sowie Kosteninformationen werden ohne Buchung übersprungen |
 | Yuh | PDF, je Aktivität eine Datei (Transaktionsbeleg der Swissquote Bank für Yuh Accounts): `de`, `en` | Kauf/Verkauf (de/en) mit Kommission abzüglich Trading Credit als Gebühr, Stempelsteuer als Steuerbuchung; Dividende und Kapitalgewinn (de) brutto mit Quellen-/Verrechnungssteuer; Zahlungsverkehr Gutschrift/Belastung (de); Zinsabrechnung (de) je Währung | Titelumbuchungen, Kapitalmaßnahmen, Krypto, Kontoauszüge, englische Dividenden und Zahlungsbelege, Französisch/Italienisch; normale Swissquote-PDFs werden nicht erkannt |
 | CommSec | PDF-Bestätigung (Contract Note) Commonwealth Securities Limited: `colon`, `plain`; mehrere Bestätigungen je Datei möglich | Käufe/Verkäufe in AUD mit Brokerage als Gebühr, Wertpapier unter dem ASX-Code | Dividenden und Cash (nicht auf den Bestätigungen), Application Money, andere CommSec-Dokumente, CommSec International |
+| Questrade | PDF: `statement` (Monatsauszug, Abschnitt „04. ACTIVITY DETAILS“), `trade-confirmation` (Trade Confirmation Report), `other` (nur Meldung) | Auszug: Buy/Sell in CAD/USD mit Kommission, UNIT DIST als Ausschüttung, Contribution als Einzahlung; Report: Buy/Sell mit Kommission und SEC-Gebühren. Wertpapier unter dem Symbol | Alle anderen Zeilen der Tabellen (Auszahlungen, Quellensteuer, Zinsen, Devisen, Überträge, Kapitalmaßnahmen, Gebühren), Optionen, Anleihen; Trades mit Abwicklung nach Monatsende werden übersprungen |
 
 ## Quellen und Lizenzen
 
@@ -109,6 +110,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | Yuh | [Parqet FAQ](https://faq.parqet.com/de/articles/871931-yuh-pdf-import) | 30.10.2026 | – (Dokumentation) | Downloadweg in der App (Investieren → Anlage → Transaktionen → Aktivität → Transaktionsbenachrichtigung als PDF), unterstützte Dokumentarten |
 | CommSec | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/CommSecPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/commsec/` (`Kauf01/02`, `Verkauf01`, 2020) | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: beide Layouts, Feldnamen, Reihenfolge der Blöcke. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
 | CommSec | [CommSec Help: Trade confirmations](https://www.commsec.com.au/support/help-centre/managing-your-account/Trade_preferences.html), [Statements Minor Trust](https://www.commsec.com.au/support/help-centre/documents-and-statements/statements-and-reports-minor-trust.html) | 30.10.2026 | – (Dokumentation) | Downloadweg Trade → Manage Orders → Confirmations; Abweichung Trading → Confirmations bei Minor-Trust-Konten |
+| Questrade | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/QuestradeGroupPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/questradegroup/` (`AccountStatement01`, `Buy01–08`, `Dividend01–03`, `Sell01`) | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Abschnitte, Tabellenspalten CAD/USD, Zeilenaufbau, Datumsformate beider Dokumente, Spalten des Reports. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
+| Questrade | [Introduction to your account](https://www.questrade.com/learning/using-questrade/introduction-to-your-account) (Stand 17.10.2022, im Browser gelesen) | 30.10.2026 | – (Dokumentation) | Seite Documents → Recent statements (monatlich oder quartalsweise, Self-directed und Questwealth), Seite Reports → Trade confirmation (Suche nach Symbol oder Datum) |
 
 ### Abweichungen von der Vorlage (Swissquote)
 
@@ -418,3 +421,16 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 - Stückzahl aus `TOTAL UNITS`, damit Teilausführungen mit mehreren Kurszeilen stimmen; PP liest die erste Kurszeile.
 - `APPLICATION MONEY` ungleich 0 wird gemeldet; PP bucht es als Gebühr, die Bedeutung ist aber nicht belegt.
 - Wertpapier unter dem ASX-Code im Feld `isin` wie bei XTB oder Schwab; keine ISIN und kein geratener Yahoo-Suffix.
+
+### Abweichungen von der Vorlage (Questrade)
+
+- Abstimmung: Der Auszug führt je Aktivität eine Tabelle zwischen Opening und Closing balance. Openfolio prüft je Tabelle und Währung,
+  ob die Netto-Spalte aufgeht, und meldet sonst die Tabelle. PP liest Zeilen einzeln. Einige PP-Testdokumente sind zusammengesetzt und
+  gehen deshalb nicht auf; `AccountStatement01`, `Buy01/02`, `Dividend01–03` stimmen.
+- Währung: PP nimmt für jede Zeile die Summenwährung des Auszugs. Openfolio liest die Spaltengruppe CAD oder USD der Zeile; USD-Zeilen
+  sind nur aus dem Tabellenkopf abgeleitet.
+- Verkäufe im Auszug: PP bucht nur `Buy`. Openfolio bucht `Sell` spiegelbildlich und prüft das Vorzeichen; nicht an einem Original belegt.
+- Offene Trades (Abschnitt 05): PP bucht sie; Openfolio überspringt sie mit Meldung, sie stehen im Folgemonat in den Transaktionen.
+- Kennung: Report und Auszug tragen keine gemeinsame Nummer, deshalb Konto, Datum, Richtung, Symbol, Stückzahl und Nettobetrag, bei Wiederholung
+  im Dokument mit Zähler. Fasst der Auszug Teilausführungen zusammen, greift das nicht; die Anleitung rät zu einer Dokumentart je Zeitraum.
+- Report-Datum `TT-MM-JJ` wie bei PP, im Auszug `MM-TT-JJJJ`. Der Punkt vor kanadischen Symbolen entfällt, die Währung geht an die Suche.
