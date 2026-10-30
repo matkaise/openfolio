@@ -131,6 +131,10 @@ export const fileImportEn: typeof fileImportDe = {
         yuh: {
             de: 'PDF transaction notice, German',
             en: 'PDF transaction notice, English'
+        },
+        commsec: {
+            colon: 'PDF confirmation (COMPANY: …)',
+            plain: 'PDF confirmation (COMPANY … / SECURITY … CODE)'
         }
     },
     guides: {
@@ -679,6 +683,34 @@ export const fileImportEn: typeof fileImportDe = {
                 'A notice is only booked if amount, fees and taxes add up exactly to the amount debited or credited; otherwise it is listed as not imported.',
                 'The path in the app is only documented for buy, sell and dividend. Where payment notices and interest statements are stored could not be verified publicly; PDFs you have are read.',
                 'Only tested with synthetic PDFs based on publicly documented formats, not with current original notices.'
+            ]
+        },
+        commsec: {
+            scope: 'CommSec accounts in Australia: trade confirmations (contract notes) for buys and sells on the Australian market. Not for CommSec International or holdings lists.',
+            steps: [
+                'Log in to CommSec.',
+                'Open Trade > Manage Orders > Confirmations. On minor trust accounts the item may be called Trading > Confirmations.',
+                'Download the confirmations you need as PDF.',
+                'Drop all PDFs here together.'
+            ],
+            settings: [
+                'Use original PDFs, no scans: Openfolio only reads the text layer and runs no text recognition.',
+                'For a complete position history, import all confirmations since the account was opened.'
+            ],
+            accounts: 'Use one portfolio per CommSec account. A confirmation is recognised by its Confirmation No and never booked twice; several confirmations in one PDF are booked one by one.',
+            supported: [
+                'Buys and sells in both known layouts: consideration as trade value, brokerage & costs as fee. GST is part of the fee and not booked again.'
+            ],
+            unsupported: [
+                'Dividends, corporate actions, deposits and interest are not on the confirmations and are therefore missing.',
+                'Confirmations with application money and other CommSec documents are reported, not booked.',
+                'CommSec International (its own Excel export) is not read.'
+            ],
+            limits: [
+                'A confirmation is only booked when consideration and brokerage add up exactly to total cost or net proceeds.',
+                'Confirmations name the ASX code, no ISIN. The security is looked up by code and currency at the next price update and can be completed there.',
+                'Settlement runs through the linked bank account, so cash movements in the portfolio are incomplete.',
+                'The publicly known samples date from 2020; only tested with synthetic PDFs, not with current original confirmations.'
             ]
         }
     } satisfies Record<string, ImportGuide>
