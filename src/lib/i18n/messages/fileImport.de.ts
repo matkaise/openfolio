@@ -134,6 +134,10 @@ export const fileImportDe = {
             de: 'PDF-Abrechnung Scalable Capital (deutsch)',
             en: 'PDF-Abrechnung Scalable Capital (englisch)',
             baader: 'PDF-Abrechnung der Baader Bank (bis 2024)'
+        },
+        flatex: {
+            flatex: 'PDF-Abrechnung flatex / flatexDEGIRO Bank',
+            fintech: 'PDF-Abrechnung FinTech Group Bank (bis 2020)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -620,6 +624,37 @@ export const fileImportDe = {
             limits: [
                 'Eine Abrechnung wird nur gebucht, wenn Betrag, Gebühren und Steuern genau den abgerechneten Betrag ergeben; sonst erscheint sie als nicht übernommen.',
                 'Abrechnungen in anderen Sprachen (Niederländisch, Italienisch, Französisch) werden noch nicht gelesen.',
+                'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
+            ]
+        },
+        flatex: {
+            scope: 'flatex-Depots in Deutschland und Österreich (flatex Bank AG, flatexDEGIRO Bank AG/SE, bis 2020 FinTech Group Bank AG). Nicht für DEGIRO-Konten: dafür den DEGIRO-CSV-Import verwenden.',
+            steps: [
+                'Im flatex-Depot den Bereich „Post“ öffnen und „Dokumentenarchiv“ wählen.',
+                'Bei Bedarf einen Zeitraum wählen, um ältere Abrechnungen anzuzeigen.',
+                'Die Wertpapierabrechnungen, Sammelabrechnungen, Dividendengutschriften und Ertragsmitteilungen als PDF herunterladen.',
+                'Alle PDFs gemeinsam hier ablegen; jedes PDF ist ein Dokument, eine Sammelabrechnung kann mehrere Ausführungen enthalten.'
+            ],
+            settings: [
+                'Original-PDFs aus dem Dokumentenarchiv verwenden, nicht ausdrucken, scannen oder fotografieren: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Abrechnungen ab Depoteröffnung importieren.'
+            ],
+            accounts: 'Je Depot importieren. Bereits importierte Abrechnungen werden anhand von Auftrags- und Transaktionsnummer erkannt und nicht doppelt gebucht; Teilausführungen (…/1, …/2) bleiben getrennt.',
+            supported: [
+                'Wertpapierabrechnung Kauf/Verkauf (auch Fonds/Zertifikate) und Sammelabrechnung (Wertpapierkauf/-verkauf): Kurswert, Provision und Spesen als Gebühr, einbehaltene Steuer (KESt) als eigene Buchung, Erstattungen als positive Steuer.',
+                'Dividendengutschrift und Ertragsmitteilung ausschüttender Fonds: Bruttobetrag in Kontowährung mit Quellensteuer, einbehaltener Steuer und Gebühren, umgerechnet zum angegebenen Devisenkurs.',
+                'Ertragsmitteilung thesaurierender Fonds: nur die einbehaltene Steuer.',
+                'Wertpapierabrechnung Vorabpauschale (einbehaltene Steuer) und Depotservicegebühr ausländischer Lagerstellen.'
+            ],
+            unsupported: [
+                'Anleihen (Abrechnung in Prozent mit Stückzinsen), Kryptowerte, Devisengeschäfte, Stornos und Korrekturen.',
+                'Kontoauszüge (Ein- und Auszahlungen, Zinsen), Depotein- und -ausgänge, Kapitalmaßnahmen, Stockdividenden, Gutschrifts-/Belastungsanzeigen.',
+                'Auftrags-, Änderungs- und Streichungsbestätigungen sowie Kosteninformationen werden ohne Buchung übersprungen; erst die Wertpapierabrechnung belegt eine Ausführung.'
+            ],
+            limits: [
+                'Eine Abrechnung wird nur gebucht, wenn Kurswert, Gebühren und Steuern genau den Endbetrag ergeben; sonst erscheint sie als nicht übernommen.',
+                'Sparplanausführungen werden als Kauf gebucht, aber nicht als Sparplan markiert.',
+                'Die Finanztransaktionssteuer steckt bei flatex in den fremden Spesen und wird daher als Gebühr gebucht.',
                 'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
             ]
         }

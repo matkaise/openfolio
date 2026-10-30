@@ -123,6 +123,10 @@ export const fileImportEn: typeof fileImportDe = {
             de: 'Scalable Capital PDF settlement (German)',
             en: 'Scalable Capital PDF settlement (English)',
             baader: 'Baader Bank PDF settlement (until 2024)'
+        },
+        flatex: {
+            flatex: 'flatex / flatexDEGIRO Bank PDF settlement',
+            fintech: 'FinTech Group Bank PDF settlement (until 2020)'
         }
     },
     guides: {
@@ -609,6 +613,37 @@ export const fileImportEn: typeof fileImportDe = {
             limits: [
                 'A settlement is only booked when amount, fees and taxes add up exactly to the settled amount; otherwise it is listed as not imported.',
                 'Settlements in other languages (Dutch, Italian, French) are not read yet.',
+                'Tested only with synthetic PDFs following publicly documented formats, not with current original settlements.'
+            ]
+        },
+        flatex: {
+            scope: 'flatex accounts in Germany and Austria (flatex Bank AG, flatexDEGIRO Bank AG/SE, until 2020 FinTech Group Bank AG). Not for DEGIRO accounts: use the DEGIRO CSV import for those.',
+            steps: [
+                'In the flatex account, open "Post" and choose "Dokumentenarchiv" (document archive).',
+                'If needed, choose a period to show older settlements.',
+                'Download the securities settlements, collective settlements, dividend credits and income notices as PDF.',
+                'Drop all PDFs here together; each PDF is one document, a collective settlement can contain several executions.'
+            ],
+            settings: [
+                'Use the original PDFs from the document archive, not printed, scanned or photographed copies: Openfolio only reads the text layer, without text recognition.',
+                'For complete holdings, import every settlement since the account was opened.'
+            ],
+            accounts: 'Import per securities account. Settlements already imported are recognised by order and transaction number and not booked twice; partial executions (…/1, …/2) stay separate.',
+            supported: [
+                'Wertpapierabrechnung Kauf/Verkauf (also funds/certificates) and Sammelabrechnung (collective buy/sell settlement): price value, commission and expenses as fee, withheld tax (KESt) as a booking of its own, refunds as positive tax.',
+                'Dividendengutschrift and Ertragsmitteilung of distributing funds: gross amount in the account currency with withholding tax, withheld tax and fees, converted at the stated exchange rate.',
+                'Ertragsmitteilung of accumulating funds: only the withheld tax.',
+                'Vorabpauschale settlement (withheld tax) and custody fees of foreign custodians.'
+            ],
+            unsupported: [
+                'Bonds (settled in percent with accrued interest), crypto, currency exchange, cancellations and corrections.',
+                'Account statements (deposits, withdrawals, interest), security transfers in and out, corporate actions, stock dividends, credit/debit notes.',
+                'Order, change and cancellation confirmations and cost information are skipped without booking; only the settlement proves an execution.'
+            ],
+            limits: [
+                'A settlement is only booked when price value, fees and taxes add up exactly to the final amount; otherwise it is listed as not imported.',
+                'Savings plan executions are booked as buys but not marked as savings plan.',
+                'At flatex, the financial transaction tax is part of the third-party expenses and is therefore booked as a fee.',
                 'Tested only with synthetic PDFs following publicly documented formats, not with current original settlements.'
             ]
         }
