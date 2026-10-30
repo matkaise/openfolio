@@ -16,9 +16,11 @@ export interface SyntheticPage {
     imageOnly?: boolean;
 }
 
-// WinAnsiEncoding: Latin-1 for the umlauts, plus the euro sign at 0x80
+// WinAnsiEncoding: Latin-1 for the umlauts, plus the few characters it places in 0x80–0x9f
+const WIN_ANSI: Record<string, number> = { '€': 0x80, '•': 0x95, '–': 0x96, '—': 0x97 };
+
 const encode = (text: string): string => Array.from(text).map((char) => {
-    const code = char === '€' ? 0x80 : char.charCodeAt(0);
+    const code = WIN_ANSI[char] ?? char.charCodeAt(0);
     if (code > 0xff) throw new Error(`not encodable: ${char}`);
     if (char === '(' || char === ')' || char === '\\') return `\\${char}`;
     return code < 0x20 || code > 0x7e ? `\\${code.toString(8).padStart(3, '0')}` : char;
