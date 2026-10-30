@@ -66,6 +66,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | ING Deutschland | PDF, je Dokument eine Datei: `ing` (ING-DiBa AG; ING Spanien wird nicht erkannt) | Wertpapierabrechnung Kauf (auch Sparplan, Einmalanlage, Wiederanlage), Bezug, Verkauf; Rückzahlung/Einlösung in Stück als Verkauf; Provision und Entgelte als Gebühr, Steuern als eigene Buchung; Dividenden- und Ertragsgutschrift brutto in Kontowährung mit Quellensteuer und Steuern; Zinsgutschrift als Zinsen; Steuer aus Ertragsgutschrift ohne Auszahlung und Vorabpauschale; nachträgliche Verlustverrechnung | Anleihen (Nominale, Stückzinsen), Stornos, Kontoauszüge, Umtausch, Überträge, Kapitalmaßnahmen. Auftrags-, Änderungs- und Streichungsbestätigungen sowie Kosteninformationen werden ohne Buchung übersprungen |
 | Yuh | PDF, je Aktivität eine Datei (Transaktionsbeleg der Swissquote Bank für Yuh Accounts): `de`, `en` | Kauf/Verkauf (de/en) mit Kommission abzüglich Trading Credit als Gebühr, Stempelsteuer als Steuerbuchung; Dividende und Kapitalgewinn (de) brutto mit Quellen-/Verrechnungssteuer; Zahlungsverkehr Gutschrift/Belastung (de); Zinsabrechnung (de) je Währung | Titelumbuchungen, Kapitalmaßnahmen, Krypto, Kontoauszüge, englische Dividenden und Zahlungsbelege, Französisch/Italienisch; normale Swissquote-PDFs werden nicht erkannt |
 | CommSec | PDF-Bestätigung (Contract Note) Commonwealth Securities Limited: `colon`, `plain`; mehrere Bestätigungen je Datei möglich | Käufe/Verkäufe in AUD mit Brokerage als Gebühr, Wertpapier unter dem ASX-Code | Dividenden und Cash (nicht auf den Bestätigungen), Application Money, andere CommSec-Dokumente, CommSec International |
+| Hargreaves Lansdown | PDF-Contract-Note (`contract-note`), je Abschluss eine Datei | Käufe/Verkäufe in GBP aus der Consideration mit Commission als Gebühr, Stamp Duty und PTM Levy als Steuerbuchung, sofern die Summe aufgeht | Dividenden und Cash (nicht auf Contract Notes), Investment Reports, unbekannte Kostenzeilen |
 
 ## Quellen und Lizenzen
 
@@ -109,6 +110,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | Yuh | [Parqet FAQ](https://faq.parqet.com/de/articles/871931-yuh-pdf-import) | 30.10.2026 | – (Dokumentation) | Downloadweg in der App (Investieren → Anlage → Transaktionen → Aktivität → Transaktionsbenachrichtigung als PDF), unterstützte Dokumentarten |
 | CommSec | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/CommSecPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/commsec/` (`Kauf01/02`, `Verkauf01`, 2020) | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: beide Layouts, Feldnamen, Reihenfolge der Blöcke. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
 | CommSec | [CommSec Help: Trade confirmations](https://www.commsec.com.au/support/help-centre/managing-your-account/Trade_preferences.html), [Statements Minor Trust](https://www.commsec.com.au/support/help-centre/documents-and-statements/statements-and-reports-minor-trust.html) | 30.10.2026 | – (Dokumentation) | Downloadweg Trade → Manage Orders → Confirmations; Abweichung Trading → Confirmations bei Minor-Trust-Konten |
+| Hargreaves Lansdown | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/HargreavesLansdownPlcExtractor.java` (Klasse `HargreavesLansdownPlcExtractor`) mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/hargreaveslansdownplc/` | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Wertpapierblock, Datums- und Summenzeile, gesperrte Schrift in neueren Notes, Preis in Pence. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
+| Hargreaves Lansdown | [HL Service Terms reference guide](https://www.hl.co.uk/terms-and-conditions/hl-service-terms-and-conditions-reference-guide), [Sharesight](https://www.sharesight.com/partners/hargreaves-lansdown/), [PP-Forum](https://forum.portfolio-performance.info/t/pdf-import-from-hargreaves-landsdown/21726) | 30.10.2026 | – (Dokumentation) | Contract Notes sind online verfügbar und als PDF ladbar; kein PDF für Dividenden laut Forum. **Kein öffentlicher Menüweg gefunden**, die Anleitung nennt deshalb keinen. Die offizielle Anleitung für Investment Reports (Portfolio history) gilt nicht nachweislich für Contract Notes. |
 
 ### Abweichungen von der Vorlage (Swissquote)
 
@@ -418,3 +421,12 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 - Stückzahl aus `TOTAL UNITS`, damit Teilausführungen mit mehreren Kurszeilen stimmen; PP liest die erste Kurszeile.
 - `APPLICATION MONEY` ungleich 0 wird gemeldet; PP bucht es als Gebühr, die Bedeutung ist aber nicht belegt.
 - Wertpapier unter dem ASX-Code im Feld `isin` wie bei XTB oder Schwab; keine ISIN und kein geratener Yahoo-Suffix.
+
+### Abweichungen von der Vorlage (Hargreaves Lansdown)
+
+- Abstimmung: PP errechnet den Bruttowert rückwärts. Openfolio verlangt Consideration ± Kosten = Betrag der Zeile `Settlement Date`.
+- Stamp Duty und PTM Levy: PP kennt nur `Commission`. UK-Aktienkäufe tragen diese Abgaben üblicherweise; sie werden als Steuer
+  gebucht, wenn die Summe aufgeht. Andere Kostenzeilen führen zur Meldung, weil ihre Bedeutung nicht belegt ist.
+- Pence: Die Kurszeile druckt je nach Wertpapier Pence (`2267.4179`), nur die Consideration ist in GBP. Der Kurs wird nicht verwendet.
+- Name wie bei PP aus Emittent und Rest der Mengenzeile. `STOCK CODE` bleibt in den Rohdaten, das Wertpapier läuft unter der ISIN.
+- Handelsdatum aus der Datumszeile, Settlement Date in den Rohdaten.
