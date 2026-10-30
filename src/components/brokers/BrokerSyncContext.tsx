@@ -21,6 +21,7 @@ import {
     supportsFolderAccess
 } from '@/lib/brokers/handleStore';
 import { reconcilePositions } from '@/lib/brokers/reconcile';
+import type { ImportRowNote } from '@/lib/importers/fileImport';
 import { parseIbkrFlexXml } from '@/lib/importers/ibkrFlex';
 import { parseTrading212Data, type Trading212Data } from '@/lib/importers/trading212';
 import { parseComdirectData, type ComdirectData } from '@/lib/importers/comdirect';
@@ -121,6 +122,17 @@ const describeSummary = (summary: ImportSummary) => {
     const added = summary.addedTransactions + summary.addedMovements;
     const duplicates = summary.duplicateTransactions + summary.duplicateMovements;
     return getT().brokers.sync.summary(added, duplicates);
+};
+
+const FLEX_NOTE_LIMIT = 8;
+
+/** Rows of a Flex statement that were not booked, as notes for the import dialog. */
+const flexReportNotes = (rows: ImportRowNote[]): string[] => {
+    const { preview } = getT().fileImport;
+    return [
+        ...rows.slice(0, FLEX_NOTE_LIMIT).map((row) => `${preview.unsupported}: ${preview.note(row.line, row.label)}`),
+        ...(rows.length > FLEX_NOTE_LIMIT ? [preview.more(rows.length - FLEX_NOTE_LIMIT)] : [])
+    ];
 };
 
 const addPortfolioIfNew = (project: ProjectData, target: PortfolioTarget): ProjectData => (
@@ -267,7 +279,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
                 }
                 const parsed = parseIbkrFlexXml(await fetchIbkrStatement(token, connection.queryId));
                 const label = parsed.period ? getT().brokers.sync.flexPeriod(parsed.period.from, parsed.period.to) : getT().brokers.sync.flexQueryShort;
-                handleBatch(projectRef.current || current, connection, parsed.batch, { files: [label], newestModified: 0 }, parsed.positions);
+                handleBatch(projectRef.current || current, connection, parsed.batch, { files: [label], newestModified: 0 }, parsed.positions, flexReportNotes(parsed.unsupported));
                 return;
             }
 

@@ -88,3 +88,6 @@ Never copy rows from a real export into this folder.
   reported row.
 - `finpension-bvg.csv`: Finpension vested benefits (BVG) report: transfer of vested benefits, two buys and one sell as
   "Portfolio Transaction", fee, interest and a distribution. Cash ends at CHF 70.35.
+- `ibkr-flex.xml`: Activity Flex Query (XML) of one account. Covers stock trades, a currency conversion with
+  commission, an option trade (not supported), cash transactions in detail and as summary, a sales tax, open positions,
+  a corporate action and a transfer (both not supported, must be reported). Ends at USD 2414.99 and EUR -3.00 without the option.
