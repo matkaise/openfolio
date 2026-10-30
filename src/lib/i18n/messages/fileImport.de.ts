@@ -151,6 +151,10 @@ export const fileImportDe = {
         commsec: {
             colon: 'PDF-Bestätigung (COMPANY: …)',
             plain: 'PDF-Bestätigung (COMPANY … / SECURITY … KÜRZEL)'
+        },
+        robinhood: {
+            statement: 'PDF-Monatsauszug',
+            other: 'Anderes Robinhood-Dokument'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -761,6 +765,40 @@ export const fileImportDe = {
                 'Die Bestätigungen nennen nur den ASX-Code, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Code und Währung gesucht und kann dort nachgetragen werden.',
                 'Die Abrechnung läuft über das verknüpfte Bankkonto: Cash-Bewegungen im Depot sind daher nicht vollständig.',
                 'Die öffentlich bekannten Muster stammen aus dem Jahr 2020; nur mit synthetischen PDFs getestet, nicht mit aktuellen Original-Bestätigungen.'
+            ]
+        },
+        robinhood: {
+            scope: 'Robinhood-Brokerage-Konten in den USA: Monatsauszüge (Monthly statements) als PDF. Der CSV-Bericht „Account activity report“ wird hier nicht gelesen.',
+            steps: [
+                'In der App oder im Web „Account“ öffnen; in der App zuerst das Menü (drei Striche).',
+                '„Reports and statements“ wählen, dann „Monthly statements“.',
+                'Den Kontotyp wählen und das PDF des gewünschten Monats herunterladen.',
+                'Alle Monate gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Der Auszug eines Monats steht innerhalb der ersten zwei Wochen des Folgemonats bereit. Ohne Aktivität gibt es stattdessen einen Quartalsauszug.',
+                'Original-PDFs verwenden, keine Scans: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Auszüge ab Kontoeröffnung importieren.'
+            ],
+            accounts: 'Je Robinhood-Konto (zum Beispiel Individual und IRA) ein eigenes Depot verwenden. Wiederholte Importe buchen nichts doppelt; gleich hohe Trades eines Auszugs bleiben getrennt.',
+            supported: [
+                'Käufe und Verkäufe (Cash-Konto) in USD.',
+                'Dividenden (CDIV) brutto und ausländische Quellensteuer (DTAX) als eigene Buchung.',
+                'ACH-Ein- und -Auszahlungen, interne Überträge (ITRF), Cashback der Kreditkarte (XENT_CC) als Einzahlung.',
+                'Zinsen auf das Sweep-Guthaben (INT).'
+            ],
+            unsupported: [
+                'Alle anderen Typcodes, etwa Splits, Optionen, Margin, Gebühren und Depotüberträge, werden mit ihrem Code gemeldet, nicht gebucht.',
+                'Trades, die noch nicht abgewickelt sind, werden übersprungen und gemeldet; sie stehen im Auszug des Folgemonats.',
+                'Die Sweep-Bewegungen (Deposit Sweep Activity) sind interne Umbuchungen und werden nicht gebucht.',
+                'Krypto, Futures und Ausgaben stehen nicht im Wertpapierauszug.'
+            ],
+            limits: [
+                'Ein Auszug wird nur gebucht, wenn die Zeilen die Zeile „Total Funds Paid and Received“ ergeben; nicht gebuchte Zeilen zählen dabei mit. Sonst erscheint die Tabelle als nicht übernommen.',
+                'Die Auszüge trennen Soll und Haben im Text nicht; die Richtung folgt aus dem Typcode.',
+                'Das Wertpapier läuft unter dem Ticker, weil Dividenden nur ihn nennen. Die CUSIP bleibt in den Rohdaten. Die ISIN wird nicht errechnet.',
+                'Überträge sind nur für das Individual-Konto belegt.',
+                'Nur mit synthetischen PDFs nach einem öffentlichen Muster von Januar 2026 getestet, nicht mit eigenen Original-Auszügen.'
             ]
         }
     } as Record<string, ImportGuide>
