@@ -78,3 +78,53 @@ describe('readImportFiles', () => {
     expect(errorCode(() => readImportFiles([]))).toBe('noRows');
   });
 });
+
+describe('DEGIRO import report', () => {
+  const accountHeader = accountCsv.split('\n', 1)[0];
+  const tradesHeader = tradesCsv.split('\n', 1)[0];
+  const orderId = '11111111-1111-4111-8111-111111111111';
+  const accountBuy = `15-03-2024,15:30,15-03-2024,ACME CORP,US0000000001,Kauf 10 zu je 100 USD (US0000000001),,USD,-1000.00,USD,-1000.00,${orderId}`;
+  const tradeBuy = `15-03-2024,15:30,ACME CORP,US0000000001,NDQ,XNAS,10,100.0000,USD,-1000.00,USD,-880.00,1.1364,-2.20,-1.00,-881.00,,${orderId}`;
+  const read = (...files: [string, string[]][]) => readImportFiles(files.map(([name, lines]) => ({ name, text: lines.join('\n') }))).result;
+
+  it('does not list trades that Transactions.csv books', () => {
+    const { report } = read(['Account.csv', [accountHeader, accountBuy]], ['Transactions.csv', [tradesHeader, tradeBuy]]);
+    expect(report.ignored).toEqual([]);
+    expect(report.unsupported).toEqual([]);
+  });
+
+  it('reports trades that only Account.csv lists', () => {
+    const { report } = read(['Account.csv', [accountHeader, accountBuy]]);
+    expect(report.unsupported).toEqual([{ line: 2, label: 'Kauf 10 zu je 100 USD (US0000000001)' }]);
+  });
+
+  it('reports corporate action legs without their trade, and accepts them with it', () => {
+    const leg = '20-05-2024,09:00,20-05-2024,ACME CORP,US0000000001,Aktiensplit: Kauf 20 zu je 50 USD,,USD,-1000.00,USD,0.00,';
+    const tradeLeg = '20-05-2024,09:00,ACME CORP,US0000000001,NDQ,XNAS,20,50.0000,USD,-1000.00,USD,-880.00,1.1364,,,-880.00,,';
+    expect(read(['Account.csv', [accountHeader, leg]]).report.unsupported).toHaveLength(1);
+    expect(read(['Account.csv', [accountHeader, leg]], ['Transactions.csv', [tradesHeader, tradeLeg]]).report.unsupported).toEqual([]);
+  });
+
+  it('lists rows without an effect as ignored and counts wrapped rows once, with their file line', () => {
+    const { report } = read(['Account.csv', [
+      accountHeader,
+      '04-01-2024,06:00,04-01-2024,MONEY MARKET,LU0000000003,Geldmarktfonds Umwandlung: Kauf 0.5 zu je 98.76 CHF,,,,CHF,100.00,',
+      '03-01-2024,09:00,03-01-2024,ACME CORP,US0000000001,Einzahlung,,CHF,100.00,CHF,100.00,1111',
+      ',,,,,,,,,,,2222',
+      '02-01-2024,09:00,02-01-2024,,,Unbekannt ohne Datum,,CHF,0.00,CHF,0.00,'
+    ]]);
+    expect(report.rows).toBe(3);
+    expect(report.ignored).toEqual([
+      { line: 2, label: 'Geldmarktfonds Umwandlung: Kauf 0.5 zu je 98.76 CHF' },
+      { line: 5, label: 'Unbekannt ohne Datum' }
+    ]);
+  });
+
+  it('reports amounts it cannot place and trades with an unreadable date', () => {
+    const account = read(['Account.csv', [accountHeader, 'kein Datum,,,,,Korrektur,,CHF,5.00,CHF,5.00,']]);
+    expect(account.report.unsupported).toEqual([{ line: 2, label: 'Korrektur' }]);
+    const trades = read(['Transactions.csv', [tradesHeader, tradeBuy.replace('15-03-2024', '2024/03/15')]]);
+    expect(trades.batch.entries).toEqual([]);
+    expect(trades.report.unsupported).toEqual([{ line: 2, label: 'ACME CORP' }]);
+  });
+});

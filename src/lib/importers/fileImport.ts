@@ -64,6 +64,8 @@ export interface FileImporter extends FileImporterInfo {
     detect: (text: string) => string | null;
     /** `fileName` only for data the file itself lacks (XTB: account currency), never for detection. */
     parse: (text: string, fileName?: string) => FileImportResult;
+    /** Runs once all files of an import are read, for checks across them (DEGIRO: trades listed in only one file). */
+    finish?: (result: FileImportResult) => FileImportResult;
 }
 
 /** Importer of PDF documents; several files (one per settlement) can be imported together. */

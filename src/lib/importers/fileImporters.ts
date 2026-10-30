@@ -99,5 +99,6 @@ export const readImportFiles = (
         const withFile = (notes: FileImportResult['report']['ignored']) => notes.map((note) => ({ ...note, file: file.name }));
         return { ...result, report: { ...result.report, ignored: withFile(result.report.ignored), unsupported: withFile(result.report.unsupported) } };
     });
-    return { importer, result: results.length === 1 ? results[0] : mergeFileImports(importer, results) };
+    const result = results.length === 1 ? results[0] : mergeFileImports(importer, results);
+    return { importer, result: !isPdfImporter(importer) && importer.finish ? importer.finish(result) : result };
 };

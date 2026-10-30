@@ -1,4 +1,5 @@
-import { batchPeriod, type FileImporter } from './fileImport';
+import { readDegiroAccountCsv, readDegiroTradesCsv, type DegiroRowNote } from '@/lib/csvParser';
+import { batchPeriod, type FileImporter, type FileImportResult, type ImportRowNote } from './fileImport';
 import { parseDegiroFiles } from './importBatch';
 
 // DEGIRO (flatexDEGIRO) CSV exports in German: Transactions.csv (trades) and Account.csv
@@ -6,6 +7,29 @@ import { parseDegiroFiles } from './importBatch';
 // itself lives in csvParser.ts; this wraps it as a file importer.
 
 const firstLine = (text: string) => text.replace(/^﻿/, '').split(/\r?\n/, 1)[0] || '';
+
+/** Trade rows of Account.csv travel in the ignored list until all files are read. */
+type PendingNote = ImportRowNote & Pick<DegiroRowNote, 'trade'>;
+
+const toNote = ({ line, label, trade }: DegiroRowNote): PendingNote => ({ line, label, ...(trade ? { trade } : {}) });
+
+/**
+ * Trade rows of Account.csv are booked from Transactions.csv. A row whose trade is not there
+ * (Account.csv imported alone, a shorter period, a trade the export leaves out) has a cash and
+ * position effect that is missing from the import, so it is reported as not imported.
+ */
+const finishReport = (result: FileImportResult): FileImportResult => {
+    const trades = result.batch.entries.filter((entry) => entry.kind === 'buy' || entry.kind === 'sell');
+    const orders = new Set(trades.map((entry) => entry.orderId).filter(Boolean));
+    const legs = new Set(trades.filter((entry) => !entry.orderId).map((entry) => entry.isin));
+    const ignored: ImportRowNote[] = [];
+    const missing: ImportRowNote[] = [];
+    (result.report.ignored as PendingNote[]).forEach(({ trade, ...note }) => {
+        if (!trade) ignored.push(note);
+        else if (!(trade.orderId ? orders.has(trade.orderId) : legs.has(trade.isin))) missing.push(note);
+    });
+    return { ...result, report: { ...result.report, ignored, unsupported: [...result.report.unsupported, ...missing] } };
+};
 
 export const degiroFileImporter: FileImporter = {
     id: 'degiro',
@@ -23,17 +47,19 @@ export const degiroFileImporter: FileImporter = {
     },
     parse: (text) => {
         const batch = parseDegiroFiles([text]);
-        const lines = text.split(/\r?\n/).filter((line) => line.trim()).length;
+        const variant = degiroFileImporter.detect(text) || 'unknown';
+        const { rows, notes } = variant === 'transactions' ? readDegiroTradesCsv(text) : readDegiroAccountCsv(text);
         return {
             batch,
             report: {
                 importerId: 'degiro',
-                variant: degiroFileImporter.detect(text) || 'unknown',
+                variant,
                 period: batchPeriod(batch),
-                rows: Math.max(0, lines - 1),
-                ignored: [],
-                unsupported: []
+                rows,
+                ignored: notes.filter((note) => note.status === 'ignored').map(toNote),
+                unsupported: notes.filter((note) => note.status === 'unsupported').map(toNote)
             }
         };
-    }
+    },
+    finish: finishReport
 };
