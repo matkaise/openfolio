@@ -164,6 +164,7 @@ export const fileImportDe = {
             ],
             limits: [
                 'Unbekannte Buchungstexte der Account.csv werden als Korrektur gebucht.',
+                'Käufe und Verkäufe kommen aus der Transactions.csv. Steht ein Trade nur in der Account.csv (Datei fehlt, kürzerer Zeitraum, vom Export ausgelassen), erscheint er unter „Nicht übernommen“.',
                 'Englischsprachige DEGIRO-Exporte werden noch nicht erkannt.'
             ]
         },

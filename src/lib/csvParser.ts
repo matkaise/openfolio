@@ -79,11 +79,30 @@ export const buildDegiroTradeKey = (row: string[]): string => {
     return `degiro:${orderId}:${part(0)} ${part(1)}:${part(3)}:${part(6)}@${part(7)}`;
 };
 
+/** A row of a DEGIRO export that did not become a booking. */
+export interface DegiroRowNote {
+    line: number;
+    label: string;
+    status: 'ignored' | 'unsupported';
+    /** Trade row of Account.csv: booked if Transactions.csv has this trade. */
+    trade?: { orderId?: string; isin?: string };
+}
+
+export interface DegiroFileRead {
+    entries: ImportEntry[];
+    rows: number; // data rows, with wrapped lines counted once
+    notes: DegiroRowNote[];
+}
+
 /** DEGIRO "Transactions.csv": one entry per fill. Other files give an empty list. */
-export const parseDegiroTradesCsv = (text: string): ImportEntry[] => {
-    const rows = parseCsvRows(text);
+export const parseDegiroTradesCsv = (text: string): ImportEntry[] => readDegiroTradesCsv(text).entries;
+
+export const readDegiroTradesCsv = (text: string): DegiroFileRead => {
+    const { rows, lines } = parseNumberedCsvRows(text);
     const entries: ImportEntry[] = [];
-    if (!rows.length) return entries;
+    const notes: DegiroRowNote[] = [];
+    const result = () => ({ entries, rows: Math.max(0, rows.length - 1), notes });
+    if (!rows.length) return result();
 
     // Columns: 0 Datum, 1 Uhrzeit, 2 Produkt, 3 ISIN, 4 Referenzbörse, 5 Ausführungsort, 6 Anzahl,
     // 7 Kurs, 8 Kurswährung, 9 Wert in Lokalwährung, 10 Lokalwährung, 11 Wert <Konto>, 12 Wechselkurs,
@@ -91,7 +110,7 @@ export const parseDegiroTradesCsv = (text: string): ImportEntry[] => {
     // Fees (13, 14) are in the account currency named in the "Gesamt XXX" header.
     // "Gesamt" = "Wert" + transaction fees; the AutoFX fee is reported on top.
     const header = rows[0].join(',');
-    if (!(header.includes('Referenzbörse') && header.includes('Anzahl'))) return entries;
+    if (!(header.includes('Referenzbörse') && header.includes('Anzahl'))) return result();
 
     const decimal = detectDecimalSeparator(collectCells(rows, [6, 7, 9, 11, 12, 13, 14, 15]));
     const num = (value: string) => parseNumberWithSeparator(value, decimal);
@@ -102,6 +121,10 @@ export const parseDegiroTradesCsv = (text: string): ImportEntry[] => {
     for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         if (row.length < 10) continue;
+        if (!/^\d{2}-\d{2}-\d{4}$/.test(row[0].trim())) {
+            notes.push({ line: lines[i], label: row[2] || row[0], status: 'unsupported' });
+            continue;
+        }
 
         const quantity = num(row[6]);
         const fxRate = num(row[12]);
@@ -130,7 +153,7 @@ export const parseDegiroTradesCsv = (text: string): ImportEntry[] => {
         }));
     }
     // Account.csv rows (dividends, taxes, interest, deposits, ...) come from parseDegiroAccountCsv.
-    return entries;
+    return result();
 };
 
 export const parseFlatexCashBalancesCsv = (text: string): CashBalanceImportPoint[] => {
@@ -393,12 +416,21 @@ const parseAccountRowWith = (row: string[], num: (value: string) => number): Par
 };
 
 /** DEGIRO "Account.csv": one entry per statement row except trades. Other files give an empty list. */
-export const parseDegiroAccountCsv = (text: string): ImportEntry[] => {
-    const rows = parseCsvRows(text);
-    if (!rows.length) return [];
+export const parseDegiroAccountCsv = (text: string): ImportEntry[] => readDegiroAccountCsv(text).entries;
+
+export const readDegiroAccountCsv = (text: string): DegiroFileRead => {
+    const { rows, lines } = parseNumberedCsvRows(text);
+    const entries: ImportEntry[] = [];
+    const notes: DegiroRowNote[] = [];
+    const result = (): DegiroFileRead => ({
+        entries: entries.sort((a, b) => a.date.localeCompare(b.date) || (a.externalId || '').localeCompare(b.externalId || '')),
+        rows: Math.max(0, rows.length - 1),
+        notes
+    });
+    if (!rows.length) return result();
 
     const header = rows[0].join(',');
-    if (!(header.includes('Valutadatum') && header.includes('Beschreibung'))) return [];
+    if (!(header.includes('Valutadatum') && header.includes('Beschreibung'))) return result();
     const decimal = detectDecimalSeparator(collectCells(rows, [6, 8, 10]));
     const num = (value: string) => parseNumberWithSeparator(value, decimal);
 
@@ -411,21 +443,32 @@ export const parseDegiroAccountCsv = (text: string): ImportEntry[] => {
         .filter((row): row is ParsedAccountRow => row !== null && foldText(row.description).includes('cash sweep transfer'))
         .map(sweepKey));
 
-    const entries: ImportEntry[] = [];
     const seenKeys = new Map<string, number>();
     for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
+        const line = lines[i];
         const parsed = parseAccountRowWith(row, num);
-        if (!parsed) continue;
+        if (!parsed) {
+            const label = (row[5] || '').trim() || (row[3] || '').trim() || (row[0] || '').trim();
+            notes.push({ line, label, status: (row[8] || '').trim() ? 'unsupported' : 'ignored' });
+            continue;
+        }
 
         const found = classifyDegiroAccountDescription(parsed.description);
-        if (!found) continue;
+        if (!found) {
+            const orderId = (row[11] || '').trim();
+            notes.push({ line, label: parsed.description, status: 'ignored', trade: { ...(orderId ? { orderId } : {}), ...(parsed.isin ? { isin: parsed.isin } : {}) } });
+            continue;
+        }
         const classification = found.type === 'Withdrawal' && sweeps.has(sweepKey(parsed))
             ? { type: 'Transfer' as const, isInternal: true }
             : found;
 
         let amount = parsed.amount;
-        if (Math.abs(amount) < 0.0000001) continue;
+        if (Math.abs(amount) < 0.0000001) {
+            notes.push({ line, label: parsed.description, status: 'ignored' });
+            continue;
+        }
 
         // Rows without an amount column carry an unsigned amount in the text
         if (found.type === 'Withdrawal' && amount > 0) amount = -amount;
@@ -452,7 +495,7 @@ export const parseDegiroAccountCsv = (text: string): ImportEntry[] => {
         }));
     }
 
-    return entries.sort((a, b) => a.date.localeCompare(b.date) || (a.externalId || '').localeCompare(b.externalId || ''));
+    return result();
 };
 
 // Simple CSV Splitter that handles quoted fields
@@ -482,14 +525,20 @@ const parseCsvLine = (line: string, delimiter = ','): string[] => {
     return result.map((cell) => cell.trim());
 };
 
-const parseCsvRows = (text: string, delimiter = ','): string[][] => {
-    const rawLines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
-    const parsedRows = rawLines.map((line) => parseCsvLine(line, delimiter));
-    return mergeSparseContinuationRows(parsedRows);
+/** Rows of a file with the file line each one starts on. */
+const parseNumberedCsvRows = (text: string, delimiter = ','): { rows: string[][]; lines: number[] } => {
+    const rawLines = text.split(/\r?\n/)
+        .map((line, index) => ({ line, number: index + 1 }))
+        .filter(({ line }) => line.trim().length > 0);
+    const { rows, sources } = mergeSparseContinuationRows(rawLines.map(({ line }) => parseCsvLine(line, delimiter)));
+    return { rows, lines: sources.map((source) => rawLines[source].number) };
 };
 
-const mergeSparseContinuationRows = (rows: string[][]): string[][] => {
-    if (rows.length <= 2) return rows;
+const parseCsvRows = (text: string, delimiter = ','): string[][] => parseNumberedCsvRows(text, delimiter).rows;
+
+/** `sources` holds the input index of each resulting row. */
+const mergeSparseContinuationRows = (rows: string[][]): { rows: string[][]; sources: number[] } => {
+    if (rows.length <= 2) return { rows, sources: rows.map((_, index) => index) };
 
     const width = rows[0].length;
     const normalizeRow = (row: string[]) => {
@@ -505,6 +554,7 @@ const mergeSparseContinuationRows = (rows: string[][]): string[][] => {
     };
 
     const merged = [normalizeRow(rows[0])];
+    const sources = [0];
 
     for (let i = 1; i < rows.length; i += 1) {
         const row = normalizeRow(rows[i]);
@@ -512,6 +562,7 @@ const mergeSparseContinuationRows = (rows: string[][]): string[][] => {
 
         if (!shouldMerge(row) || !previous || (previous[0] || '').trim() === '') {
             merged.push(row);
+            sources.push(i);
             continue;
         }
 
@@ -529,5 +580,5 @@ const mergeSparseContinuationRows = (rows: string[][]): string[][] => {
         }
     }
 
-    return merged;
+    return { rows: merged, sources };
 };

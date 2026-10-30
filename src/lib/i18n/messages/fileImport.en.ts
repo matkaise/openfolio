@@ -153,6 +153,7 @@ export const fileImportEn: typeof fileImportDe = {
             ],
             limits: [
                 'Unknown booking texts in Account.csv are booked as adjustments.',
+                'Buys and sells come from Transactions.csv. A trade listed only in Account.csv (file missing, shorter period, left out by the export) appears under “Not imported”.',
                 'DEGIRO exports in English are not recognised yet.'
             ]
         },
