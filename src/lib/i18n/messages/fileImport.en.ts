@@ -58,7 +58,9 @@ export const fileImportEn: typeof fileImportDe = {
     variants: {
         degiro: {
             transactions: 'Transactions.csv (buys/sells)',
-            account: 'Account.csv (account statement)'
+            'transactions-en': 'Transactions.csv, English (buys/sells)',
+            account: 'Account.csv (account statement)',
+            'account-en': 'Account.csv, English (account statement)'
         },
         trading212: {
             standard: 'CSV history export',
@@ -145,14 +147,14 @@ export const fileImportEn: typeof fileImportDe = {
     },
     guides: {
         degiro: {
-            scope: 'flatexDEGIRO accounts; exports with German column names.',
+            scope: 'flatexDEGIRO accounts; exports with German or English column names.',
             steps: [
                 'Transactions (main menu or Inbox): choose the period → Export → CSV. Result: Transactions.csv with buys and sells.',
                 'Inbox → Account statement: choose the same period → Export → CSV. Result: Account.csv with dividends, taxes, fees, deposits and withdrawals.',
                 'Drop both files here together.'
             ],
             settings: [
-                'DEGIRO interface language: German. The columns are expected in German.',
+                'DEGIRO interface language: German or English. Other languages are not recognised.',
                 'Period ideally from account opening, so holdings and cash are complete.'
             ],
             accounts: 'Use one portfolio per DEGIRO account. Foreign currency sub-accounts are in the same Account.csv. Repeated or overlapping exports are not booked twice.',
@@ -163,12 +165,13 @@ export const fileImportEn: typeof fileImportDe = {
                 'Currency exchanges between sub-accounts and balances per currency'
             ],
             unsupported: [
-                'Corporate actions are not recognised as position bookings of their own.'
+                'Corporate actions are not recognised as position bookings of their own: their parts in Transactions.csv are booked as a sale and a purchase. Holdings and cash are right, but the cost basis starts anew and the difference shows as a realised gain or loss.'
             ],
             limits: [
                 'Unknown booking texts in Account.csv are booked as adjustments.',
                 'Buys and sells come from Transactions.csv. A trade listed only in Account.csv (file missing, shorter period, left out by the export) appears under “Not imported”.',
-                'DEGIRO exports in English are not recognised yet.'
+                'Exports with the older column layout (no AutoFX Fee column) are not recognised.',
+                'English exports are tested with synthetic files only. Do not switch the language between two exports: account rows of one booking would then be seen twice.'
             ]
         },
         trading212: {
