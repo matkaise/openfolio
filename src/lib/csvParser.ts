@@ -456,7 +456,7 @@ const parseCsvLine = (line: string, delimiter = ','): string[] => {
         }
     }
     result.push(current);
-    return result.map(c => c.trim().replace(/^"|"$/g, ''));
+    return result.map((cell) => cell.trim());
 };
 
 const parseCsvRows = (text: string, delimiter = ','): string[][] => {
