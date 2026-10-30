@@ -54,7 +54,7 @@ export const cashMovementKind = (movement: { type: CashMovement['type']; isInter
         case 'Tax': return isWithholdingTax(movement.description, movement.isin) ? 'withholding_tax' : 'tax';
         case 'Fee': return 'fee';
         case 'Interest': return 'interest';
-        case 'Transfer': return /w(a|ä)hrungswechsel/i.test(movement.description || '') ? 'fx' : 'transfer';
+        case 'Transfer': return /w(a|ä)hrungswechsel|^fx[ -]/i.test(movement.description || '') ? 'fx' : 'transfer';
         case 'Adjustment': return 'adjustment';
     }
 };
