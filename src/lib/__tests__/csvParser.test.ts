@@ -155,3 +155,17 @@ describe('parseDegiroTradesCsv', () => {
     expect(tx.amount).toBeCloseTo(-1234.57, 6);
   });
 });
+
+describe('DEGIRO CSV quoting', () => {
+  const header = 'Datum,Uhrzeit,Produkt,ISIN,Referenzbörse,Ausführungsort,Anzahl,Kurs,,Wert in Lokalwährung,,Wert EUR,Wechselkurs,AutoFX-Gebühr,Transaktionsgebühren und/oder Fremdkosten,Gesamt EUR,Order-ID,';
+  const tradeWithName = (name: string) => `${header}\n15-03-2024,15:30,${name},US0000000001,NDQ,XNAS,1,"1,5",USD,"-1,5",USD,"-1,5",,,,"-1,5",,11111111-1111-4111-8111-111111111111`;
+
+  it('keeps quotes that belong to the value', () => {
+    expect(parseDegiroTradesCsv(tradeWithName('"ACME ""A"""'))[0].name).toBe('ACME "A"');
+    expect(parseDegiroTradesCsv(tradeWithName('"""A"" ACME"'))[0].name).toBe('"A" ACME');
+  });
+
+  it('still reads commas inside quoted cells', () => {
+    expect(parseDegiroTradesCsv(tradeWithName('"ACME, INC"'))[0].name).toBe('ACME, INC');
+  });
+});
