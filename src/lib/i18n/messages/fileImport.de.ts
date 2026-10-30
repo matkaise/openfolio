@@ -142,6 +142,10 @@ export const fileImportDe = {
         yuh: {
             de: 'PDF-Transaktionsbeleg, Deutsch',
             en: 'PDF-Transaktionsbeleg, Englisch'
+        },
+        commsec: {
+            colon: 'PDF-Bestätigung (COMPANY: …)',
+            plain: 'PDF-Bestätigung (COMPANY … / SECURITY … KÜRZEL)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -690,6 +694,34 @@ export const fileImportDe = {
                 'Ein Beleg wird nur gebucht, wenn Betrag, Gebühren und Steuern genau den belasteten oder gutgeschriebenen Betrag ergeben; sonst erscheint er als nicht übernommen.',
                 'Der Weg in der App ist nur für Kauf, Verkauf und Dividende belegt. Wo Zahlungsbelege und Zinsabrechnungen abgelegt sind, ließ sich nicht öffentlich prüfen; vorhandene PDFs werden gelesen.',
                 'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Belegen.'
+            ]
+        },
+        commsec: {
+            scope: 'CommSec-Konten in Australien: Trade Confirmations (Contract Notes) für Käufe und Verkäufe am australischen Markt. Nicht für CommSec International und nicht für Bestandslisten.',
+            steps: [
+                'Bei CommSec anmelden.',
+                'Trade → Manage Orders → Confirmations öffnen. Bei Minor-Trust-Konten kann der Menüpunkt Trading → Confirmations heißen.',
+                'Die gewünschten Bestätigungen als PDF herunterladen.',
+                'Alle PDFs gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Original-PDFs verwenden, keine Scans: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Bestätigungen ab Depoteröffnung importieren.'
+            ],
+            accounts: 'Je CommSec-Konto ein eigenes Depot verwenden. Eine Bestätigung wird anhand ihrer Confirmation No erkannt und nicht doppelt gebucht; mehrere Bestätigungen in einer PDF werden einzeln gebucht.',
+            supported: [
+                'Käufe und Verkäufe in beiden bekannten Layouts: Consideration als Handelswert, Brokerage & Costs als Gebühr. Die GST ist in der Gebühr enthalten und wird nicht zusätzlich gebucht.'
+            ],
+            unsupported: [
+                'Dividenden, Kapitalmaßnahmen, Einzahlungen und Zinsen stehen nicht auf den Bestätigungen und fehlen daher.',
+                'Bestätigungen mit Application Money und andere CommSec-Dokumente werden gemeldet, nicht gebucht.',
+                'CommSec International (eigener Excel-Export) wird nicht gelesen.'
+            ],
+            limits: [
+                'Eine Bestätigung wird nur gebucht, wenn Consideration und Brokerage genau Total Cost beziehungsweise Net Proceeds ergeben.',
+                'Die Bestätigungen nennen nur den ASX-Code, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Code und Währung gesucht und kann dort nachgetragen werden.',
+                'Die Abrechnung läuft über das verknüpfte Bankkonto: Cash-Bewegungen im Depot sind daher nicht vollständig.',
+                'Die öffentlich bekannten Muster stammen aus dem Jahr 2020; nur mit synthetischen PDFs getestet, nicht mit aktuellen Original-Bestätigungen.'
             ]
         }
     } as Record<string, ImportGuide>

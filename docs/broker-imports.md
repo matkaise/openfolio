@@ -64,6 +64,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | Scalable Capital | PDF, je Dokument eine Datei: `de`, `en` (Scalable Capital GmbH/Bank GmbH), `baader` (Baader Bank für Scalable-Kunden bis 2024) | Wertpapierabrechnung Kauf/Verkauf/Sparplan mit Ordergebühren, Steuern und Finanztransaktionssteuer als Steuerbuchung; Dividenden brutto mit Quellensteuer und deutschen Steuern; Vorabpauschale; Steuerneuberechnung; Baader: Kauf/Verkauf mit Provision und Steuern, Fondsausschüttung/Ausschüttung/Dividende(nabrechnung) | Verrechnungskonto/Kontoauszug, Rechnungsabschluss, Reklassifizierung (Belastung), Kapitalrückzahlung, Zinszahlung, Laufzeitende/Knock-out, Stornos; Baader: Thesaurierung, Vorabpauschale, Steuerausgleich, Kontoauszüge, englische Dokumente; Niederländisch/Italienisch/Französisch. Kosteninformation und Auftragsbestätigung werden ohne Buchung übersprungen |
 | flatex | PDF, je Dokument eine Datei: `flatex` (flatex Bank AG, flatexDEGIRO Bank AG/SE, Deutschland und Österreich), `fintech` (FinTech Group Bank AG, älteres Layout „Kurswert EUR 1.050,00“) | Wertpapierabrechnung Kauf/Verkauf und Sammelabrechnung mit Provision und Spesen als Gebühr, einbehaltene Steuer/KESt als Steuerbuchung (Erstattung positiv); Dividendengutschrift und Ertragsmitteilung brutto in Kontowährung mit Quellensteuer, Steuer und Gebühren; Steuer thesaurierender Fonds; Vorabpauschale; Depotservicegebühr | Anleihen (Prozentkurs, Stückzinsen), Krypto, Devisen, Stornos, Kontoauszüge, Depotein-/-ausgänge, Kapitalmaßnahmen, Stockdividenden, Gutschrifts-/Belastungsanzeigen. Auftrags-, Änderungs- und Streichungsbestätigungen sowie Kosteninformationen werden ohne Buchung übersprungen |
 | Yuh | PDF, je Aktivität eine Datei (Transaktionsbeleg der Swissquote Bank für Yuh Accounts): `de`, `en` | Kauf/Verkauf (de/en) mit Kommission abzüglich Trading Credit als Gebühr, Stempelsteuer als Steuerbuchung; Dividende und Kapitalgewinn (de) brutto mit Quellen-/Verrechnungssteuer; Zahlungsverkehr Gutschrift/Belastung (de); Zinsabrechnung (de) je Währung | Titelumbuchungen, Kapitalmaßnahmen, Krypto, Kontoauszüge, englische Dividenden und Zahlungsbelege, Französisch/Italienisch; normale Swissquote-PDFs werden nicht erkannt |
+| CommSec | PDF-Bestätigung (Contract Note) Commonwealth Securities Limited: `colon`, `plain`; mehrere Bestätigungen je Datei möglich | Käufe/Verkäufe in AUD mit Brokerage als Gebühr, Wertpapier unter dem ASX-Code | Dividenden und Cash (nicht auf den Bestätigungen), Application Money, andere CommSec-Dokumente, CommSec International |
 
 ## Quellen und Lizenzen
 
@@ -103,6 +104,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | flatex | [Parqet FAQ](https://faq.parqet.com/de/articles/871917-flatex-pdf-import) | 29.10.2026 | – (Dokumentation) | Downloadweg Post → Dokumentenarchiv → Zeitraum, unterstützte und nicht importierte Dokumentarten |
 | Yuh | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/SwissquotePDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/swissquote/` (`Kauf05`, `Sell01`, `Dividende05/06`, `Zahlungsverkehr01–04`, `Zinsabrechnung01`, `Titelumbuchung01`) | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Dokumenttitel, Referenzzeile, Tabellenaufbau, Feldnamen, Trading Credit, Spalten der Zinsabrechnung. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
 | Yuh | [Parqet FAQ](https://faq.parqet.com/de/articles/871931-yuh-pdf-import) | 30.10.2026 | – (Dokumentation) | Downloadweg in der App (Investieren → Anlage → Transaktionen → Aktivität → Transaktionsbenachrichtigung als PDF), unterstützte Dokumentarten |
+| CommSec | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/CommSecPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/commsec/` (`Kauf01/02`, `Verkauf01`, 2020) | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: beide Layouts, Feldnamen, Reihenfolge der Blöcke. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
+| CommSec | [CommSec Help: Trade confirmations](https://www.commsec.com.au/support/help-centre/managing-your-account/Trade_preferences.html), [Statements Minor Trust](https://www.commsec.com.au/support/help-centre/documents-and-statements/statements-and-reports-minor-trust.html) | 30.10.2026 | – (Dokumentation) | Downloadweg Trade → Manage Orders → Confirmations; Abweichung Trading → Confirmations bei Minor-Trust-Konten |
 
 ### Abweichungen von der Vorlage (Swissquote)
 
@@ -384,3 +387,13 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 - Handel in Fremdwährung: Die Abstimmung läuft in der Abrechnungswährung; `fxRate` wird aus beiden Beträgen errechnet, weil
   Swissquote Kurse teils skaliert druckt. Nur am deutschen Swissquote-Layout belegt, nicht an einem Yuh-Original.
 - Englische Dividenden- und Zahlungsbelege: PP kennt nur die deutschen Bezeichnungen. Sie werden gemeldet, nicht erraten.
+
+### Abweichungen von der Vorlage (CommSec)
+
+- Dokumentart: PP kennt nur Bestätigungen („WE HAVE BOUGHT/SOLD“). Die Klasse deckt keine Dividenden, Bestände oder CommSec
+  International ab; deshalb behauptet Openfolio dafür nichts.
+- GST: PP bucht `TOTAL GST` als Steuer zusätzlich zur Gebühr und drückt damit den Bruttowert. `BROKERAGE & COSTS INCL GST` enthält
+  die GST bereits; Openfolio bucht Consideration plus Brokerage, was genau `TOTAL COST` beziehungsweise `NET PROCEEDS` ergibt.
+- Stückzahl aus `TOTAL UNITS`, damit Teilausführungen mit mehreren Kurszeilen stimmen; PP liest die erste Kurszeile.
+- `APPLICATION MONEY` ungleich 0 wird gemeldet; PP bucht es als Gebühr, die Bedeutung ist aber nicht belegt.
+- Wertpapier unter dem ASX-Code im Feld `isin` wie bei XTB oder Schwab; keine ISIN und kein geratener Yahoo-Suffix.
