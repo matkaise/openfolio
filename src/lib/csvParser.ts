@@ -57,6 +57,17 @@ const collectCells = (rows: string[][], columns: number[]): string[] => (
     rows.slice(1).flatMap((row) => columns.map((index) => row[index] || ''))
 );
 
+// DEGIRO writes column names in the account language. German and English are supported; both
+// have the same columns in the same order. The older layout (a currency column after every
+// amount, no AutoFX column) has other positions and is not read.
+export const isDegiroTradesHeader = (header: string): boolean => (
+    header.includes('AutoFX') && ((header.includes('Referenzbörse') && header.includes('Anzahl')) || (header.includes('Reference exchange') && header.includes('Quantity')))
+);
+
+export const isDegiroAccountHeader = (header: string): boolean => (
+    (header.includes('Valutadatum') && header.includes('Beschreibung')) || (header.includes('Value date') && header.includes('Description'))
+);
+
 const parseDate = (dateStr: string): string => {
     // Input: "21-01-2026" (DD-MM-YYYY)
     // Output: "2026-01-21" (ISO)
@@ -104,18 +115,18 @@ export const readDegiroTradesCsv = (text: string): DegiroFileRead => {
     const result = () => ({ entries, rows: Math.max(0, rows.length - 1), notes });
     if (!rows.length) return result();
 
-    // Columns: 0 Datum, 1 Uhrzeit, 2 Produkt, 3 ISIN, 4 Referenzbörse, 5 Ausführungsort, 6 Anzahl,
+    // Columns (German names): 0 Datum, 1 Uhrzeit, 2 Produkt, 3 ISIN, 4 Referenzbörse, 5 Ausführungsort, 6 Anzahl,
     // 7 Kurs, 8 Kurswährung, 9 Wert in Lokalwährung, 10 Lokalwährung, 11 Wert <Konto>, 12 Wechselkurs,
     // 13 AutoFX-Gebühr, 14 Transaktionsgebühren, 15 Gesamt <Konto>, 16/17 Order-ID.
     // Fees (13, 14) are in the account currency named in the "Gesamt XXX" header.
     // "Gesamt" = "Wert" + transaction fees; the AutoFX fee is reported on top.
     const header = rows[0].join(',');
-    if (!(header.includes('Referenzbörse') && header.includes('Anzahl'))) return result();
+    if (!isDegiroTradesHeader(header)) return result();
 
     const decimal = detectDecimalSeparator(collectCells(rows, [6, 7, 9, 11, 12, 13, 14, 15]));
     const num = (value: string) => parseNumberWithSeparator(value, decimal);
-    const accountCurrency = /Gesamt\s+([A-Z]{3})/.exec(header)?.[1]
-        || /Wert\s+([A-Z]{3})/.exec(header)?.[1];
+    const accountCurrency = /(?:Gesamt|Total)\s+([A-Z]{3})/.exec(header)?.[1]
+        || /(?:Wert|Value)\s+([A-Z]{3})/.exec(header)?.[1];
     const seenKeys = new Map<string, number>();
 
     for (let i = 1; i < rows.length; i++) {
@@ -161,7 +172,7 @@ export const parseFlatexCashBalancesCsv = (text: string): CashBalanceImportPoint
     if (rows.length === 0) return [];
 
     const header = rows[0].join(',');
-    if (!(header.includes('Valutadatum') && header.includes('Beschreibung'))) {
+    if (!isDegiroAccountHeader(header)) {
         return [];
     }
     const decimal = detectDecimalSeparator(collectCells(rows, [6, 8, 10]));
@@ -307,11 +318,11 @@ const foldText = (value: string): string => {
 };
 
 /**
- * Classifies a DEGIRO Account.csv description. Order matters: "Dividendensteuer" must be
- * checked before "Dividende", and "Zinsen" (often negative debit interest) is interest.
+ * Classifies a DEGIRO Account.csv description, German or English. Order matters: "Dividendensteuer"
+ * must be checked before "Dividende", and "Zinsen" (often negative debit interest) is interest.
  * Returns null for trade rows, which come from Transactions.csv. That includes the legs of
- * corporate actions ("Aktiensplit: Verkauf 10 zu je 5 USD", "Fusion: Kauf ..."): Transactions.csv
- * lists them too, without an order id.
+ * corporate actions ("Aktiensplit: Verkauf 10 zu je 5 USD", "MERGER: Buy 2 ACME@25 EUR"):
+ * Transactions.csv lists them too, without an order id.
  */
 export const classifyDegiroAccountDescription = (
     description: string
@@ -319,30 +330,32 @@ export const classifyDegiroAccountDescription = (
     const normalized = foldText(description.trim());
     if (!normalized) return null;
 
-    if (normalized.startsWith('kauf ') || normalized.startsWith('verkauf ')) {
+    if (/^(kauf|verkauf|buy|sell) /.test(normalized)) {
         return null;
     }
-    if (normalized.includes('wahrungswechsel')) {
+    if (normalized.includes('wahrungswechsel') || /^fx[ -](credit|debit|gutschrift|belastung)/.test(normalized)) {
         return { type: 'Transfer', isInternal: true };
     }
     if (
         normalized.includes('cash sweep transfer')
         || normalized.includes('uberweisung auf ihr geldkonto')
+        || /^transfer (from|to) /.test(normalized)
         || normalized.includes('geldmarktfonds')
+        || normalized.includes('money market')
         || normalized.includes('reservation ideal')
     ) {
         return { type: 'Transfer', isInternal: true };
     }
-    if (/\b(kauf|verkauf)\b.*\bzu je\b/.test(normalized)) {
+    if (/\b(kauf|verkauf)\b.*\bzu je\b/.test(normalized) || /\b(buy|sell)\b.*@/.test(normalized)) {
         return null;
     }
-    if (normalized.includes('einzahlung')) {
+    if (normalized.includes('einzahlung') || normalized.includes('deposit')) {
         return { type: 'Deposit' };
     }
-    if (normalized.includes('auszahlung von ihrem geldkonto')) {
+    if (normalized.includes('auszahlung von ihrem geldkonto') || normalized === 'auszahlung' || normalized === 'withdrawal') {
         return { type: 'Withdrawal' };
     }
-    if (normalized.includes('dividendensteuer') || normalized.includes('steuer')) {
+    if (normalized.includes('dividendensteuer') || normalized.includes('steuer') || /\btax\b|stamp duty/.test(normalized)) {
         return { type: 'Tax' };
     }
     if (
@@ -351,13 +364,14 @@ export const classifyDegiroAccountDescription = (
         || normalized.includes('zahlungsgebuhr')
         || normalized.includes('handelsmodalitaten')
         || normalized.startsWith('gebuhr')
+        || /\bfees?\b/.test(normalized)
     ) {
         return { type: 'Fee' };
     }
     if (normalized.includes('zinsen') || normalized.includes('interest')) {
         return { type: 'Interest' };
     }
-    if (normalized.includes('dividende') || normalized.includes('kapitalruckzahlung')) {
+    if (normalized.includes('dividend') || normalized.includes('kapitalruckzahlung') || normalized.includes('fund distribution')) {
         return { type: 'Dividend' };
     }
 
@@ -392,7 +406,7 @@ const parseAccountRowWith = (row: string[], num: (value: string) => number): Par
     if (!Number.isFinite(amount) || (row[8] || '').trim() === '') {
         // Transfers leave the amount column empty and name it in the text. A price ("Geldmarktfonds
         // Umwandlung: Kauf 0.1 zu je 100 EUR") is no amount: such rows do not change the balance.
-        const matches = /\bzu je\b/i.test(description) ? null : description.match(/[-+]?\d[\d'’.,]*/g);
+        const matches = /\bzu je\b|@|geldmarkt|money market/i.test(description) ? null : description.match(/[-+]?\d[\d'’.,]*/g);
         const fromDescription = matches ? num(matches[matches.length - 1]) : NaN;
         if (Number.isFinite(fromDescription)) {
             amount = fromDescription;
@@ -430,7 +444,7 @@ export const readDegiroAccountCsv = (text: string): DegiroFileRead => {
     if (!rows.length) return result();
 
     const header = rows[0].join(',');
-    if (!(header.includes('Valutadatum') && header.includes('Beschreibung'))) return result();
+    if (!isDegiroAccountHeader(header)) return result();
     const decimal = detectDecimalSeparator(collectCells(rows, [6, 8, 10]));
     const num = (value: string) => parseNumberWithSeparator(value, decimal);
 

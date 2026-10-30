@@ -10,6 +10,8 @@ Never copy rows from a real export into this folder.
   negative interest ("Zinsen"), interest income, cash sweep transfers and a wrapped order ID continuation line.
 - `degiro-transactions.csv`: DEGIRO "Transactions.csv" with the four trades booked in the account fixture.
   `Gesamt CHF` = `Wert CHF` + transaction fees; the AutoFX fee is reported separately, as in real exports.
+- `degiro-account-en.csv`, `degiro-transactions-en.csv`: the same bookings in the English layout, built from the
+  German fixtures with the column names and row texts documented by public parsers. Not taken from a real English export.
 - `swissquote-en.csv`: Swissquote transaction export, English, 13 columns, newest row first. One account with
   CHF and USD; balances are consistent and end at CHF 1576.33 and USD 45.00. Covers a deposit (Payment),
   a withdrawal with transfer costs (Debit), FX pairs (Forex credit/debit), a buy order filled in two rows,
