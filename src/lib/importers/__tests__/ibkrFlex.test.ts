@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { readImportFiles } from '../fileImporters';
 import { parseFlexStatementResponse, parseIbkrFlexXml } from '../ibkrFlex';
 import { applyImportBatch, type ImportBatch } from '../importBatch';
 import { isTradeEntry } from '../entries';
@@ -159,6 +160,34 @@ describe('parseIbkrFlexXml', () => {
 
   it('rejects documents that are not Flex statements', () => {
     expect(() => parseIbkrFlexXml('<html>nope</html>')).toThrow(/Flex/);
+  });
+});
+
+describe('Flex XML as a file import', () => {
+  it('is recognised by content and reported like every other file', () => {
+    const { importer, result } = readImportFiles([{ name: 'statement.xml', text: xml }]);
+    expect(importer.id).toBe('ibkr');
+    expect(result.report).toMatchObject({ variant: 'activity', period: { from: '2024-01-01', to: '2024-12-31' }, rows: 14 });
+    expect(result.report.unsupported.map((note) => note.label)).toEqual(['OPT ACME 240621C00110000', 'CorporateAction FS ACME', 'Transfer ACATS WDG']);
+    expect(result.batch.entries).toEqual(parseIbkrFlexXml(xml).batch.entries);
+  });
+
+  it('adds nothing on top of the Flex connection', () => {
+    const target = { id: 'ib', name: 'IBKR', isNew: true };
+    const synced = applyImportBatch(createEmptyProject(), parseIbkrFlexXml(xml).batch, target);
+    const file = readImportFiles([{ name: 'statement.xml', text: xml }]).result;
+    const again = applyImportBatch(synced.project, file.batch, { ...target, isNew: false });
+    expect(again.summary).toMatchObject({ addedTransactions: 0, addedMovements: 0 });
+  });
+
+  it('refuses a file with several accounts and other Flex reports', () => {
+    const statement = (account: string) => `<FlexStatement accountId="${account}" fromDate="20240101" toDate="20240131"></FlexStatement>`;
+    expect(() => readImportFiles([{ name: 'x.xml', text: `<FlexQueryResponse type="AF">${statement('U1')}${statement('U2')}</FlexQueryResponse>` }]))
+      .toThrow(expect.objectContaining({ code: 'severalAccounts' }));
+    expect(() => readImportFiles([{ name: 'x.xml', text: `<FlexQueryResponse type="TCF">${statement('U1')}</FlexQueryResponse>` }]))
+      .toThrow(expect.objectContaining({ code: 'unknownFormat' }));
+    expect(() => readImportFiles([{ name: 'x.xml', text: '<FlexStatementResponse><Status>Fail</Status></FlexStatementResponse>' }]))
+      .toThrow(expect.objectContaining({ code: 'unknownFormat' }));
   });
 });
 
