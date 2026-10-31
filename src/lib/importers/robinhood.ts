@@ -54,7 +54,9 @@ const tradeRow = (lines: DocLine[], index: number, match: RegExpExecArray, accou
     const date = isoDate(month, day, year);
     const previous = lines[index - 1]?.text || '';
     const name = ownName || (ROW.test(previous) || /^(CUSIP:|Account Activity|Description |Page \d)/.test(previous) ? undefined : previous);
-    const cusip = /^CUSIP: ([A-Z0-9]{9})$/.exec(lines[index + 1]?.text || '')?.[1];
+    // Usually the next line; a page break can put the page footer and table head in between
+    const nextRow = lines.findIndex((line, position) => position > index && ROW.test(line.text));
+    const cusip = findLine(lines, /^CUSIP: ([A-Z0-9]{9})$/, index + 1, Math.min(index + 6, nextRow < 0 ? lines.length : nextRow))?.match[1];
     return {
         debit: side === 'buy' ? amount : 0,
         credit: side === 'sell' ? amount : 0,

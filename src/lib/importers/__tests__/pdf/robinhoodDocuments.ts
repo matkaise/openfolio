@@ -19,8 +19,8 @@ const row = (description: string, symbol: string, code: string, date: string, ..
     [270, symbol],
     [310, 'Cash'],
     [340, code],
-    [380, date],
-    ...values.map((value, index): [number, string] => [420 + (4 - values.length + index) * 40, value])
+    [365, date],
+    ...values.map((value, index): [number, string] => [[425, 470, 530][3 - values.length + index], value])
 ];
 
 export const defaultRows: Line[] = [
