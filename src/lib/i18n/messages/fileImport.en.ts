@@ -168,6 +168,11 @@ export const fileImportEn: typeof fileImportDe = {
         },
         zerodha: {
             tradebook: 'Tradebook CSV (Console)'
+        },
+        fidelity: {
+            confirmation: 'PDF transaction confirmation (Fidelity Brokerage Services)',
+            'stock-plan': 'PDF confirmation Fidelity Stock Plan Services',
+            other: 'Other Fidelity document'
         }
     },
     guides: {
@@ -1031,6 +1036,37 @@ export const fileImportEn: typeof fileImportDe = {
                 'Zerodha does not document the columns; they come from public sample exports.',
                 'If the ISIN is missing, the symbol is used and resolved at the next price update.',
                 'Only tested with synthetic files, not with your own original exports.'
+            ]
+        },
+        fidelity: {
+            scope: 'Only two document types from the US: transaction confirmations of Fidelity Brokerage Services and confirmations of Fidelity Stock Plan Services. This is not a full Fidelity integration: statements, the CSV export, NetBenefits plans and Fidelity International (UK) are not covered.',
+            steps: [
+                'Log in to Fidelity.com and open the "Statements" area. Trade confirmations are kept there, according to Fidelity also for stock plan sales.',
+                'Find the confirmation; it can be filtered by symbol, CUSIP, SEDOL or ISIN.',
+                'Open the PDF link next to the document and save the PDF.',
+                'Drop all PDFs here together.'
+            ],
+            settings: [
+                'Fidelity keeps confirmations online for ten years.',
+                'Use original PDFs, no scans: Openfolio only reads the text layer and runs no text recognition.'
+            ],
+            accounts: 'Use one portfolio per Fidelity account. A confirmation is recognised by its reference number and never booked twice; several trades in one PDF are booked one by one.',
+            supported: [
+                'Transaction confirmation: buys and sells with activity assessment fee as fee, fractions and several trades per PDF too.',
+                'Stock Plan Services: sales with total fees; ESPP purchases at the amount of accumulated contributions.'
+            ],
+            unsupported: [
+                'Other Fidelity documents are reported, not booked: statements, tax forms, dividends.',
+                'Options, bonds and confirmations with other cost lines, such as commission or accrued interest, are reported.',
+                'ESPP purchases book only the amount paid, not a discount to market value; its tax effects are left out.',
+                'RSU grants are not confirmations of this kind and are missing.'
+            ],
+            limits: [
+                'A confirmation is only booked if its amounts add up exactly.',
+                'US securities have no ISIN: they are booked under the symbol and resolved at the next price update; the CUSIP stays in the raw data.',
+                'The name "Fidelity" alone is not enough for detection: only the two issuers above are read.',
+                'Fidelity\'s help pages name the "Statements" area but no current click path; labels may differ.',
+                'Only tested with synthetic PDFs based on public samples from 2021 to 2023, not with current originals.'
             ]
         }
     } satisfies Record<string, ImportGuide>
