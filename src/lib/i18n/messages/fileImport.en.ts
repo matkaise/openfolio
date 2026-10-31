@@ -147,6 +147,10 @@ export const fileImportEn: typeof fileImportDe = {
         dkb: {
             dkb: 'DKB PDF settlement'
         },
+        wealthsimple: {
+            'performance-report': 'PDF performance report',
+            other: 'Other Wealthsimple document'
+        },
         hargreaveslansdown: {
             'contract-note': 'PDF contract note'
         }
@@ -825,6 +829,38 @@ export const fileImportEn: typeof fileImportDe = {
                 'A settlement is only booked if market value, fees and taxes add up exactly to the final amount; otherwise it is listed as not imported.',
                 'The financial transaction tax is booked as a tax, not as a fee.',
                 'Only tested with synthetic PDFs based on publicly documented formats, not with current original settlements.'
+            ]
+        },
+        wealthsimple: {
+            scope: 'Managed Wealthsimple accounts in Canada (Wealthsimple Inc.): monthly and yearly performance reports as PDF. Not confirmed for self-directed accounts (Wealthsimple Trade), crypto or chequing.',
+            steps: [
+                'Log in to Wealthsimple on the web; statements of managed accounts are only available there.',
+                'Open the Profile menu at the bottom left and choose "Documents".',
+                'Open the statement in the "Statements" folder as PDF and save it. For many months: "Generate document" > "Bulk download monthly statements", format PDF, then choose the period and account.',
+                'Drop all PDFs here together; unzip the ZIP file first.'
+            ],
+            settings: [
+                'Choose PDF, not CSV: the CSV statement is not read here.',
+                'Use original PDFs, no scans: Openfolio only reads the text layer and runs no text recognition.',
+                'For a complete position history, import all statements since the account was opened.'
+            ],
+            accounts: 'Use one portfolio per account (for example TFSA and RRSP); a report with several accounts is refused. Monthly and yearly reports of the same period book nothing twice.',
+            supported: [
+                'Electronic funds transfers in and out as deposit and withdrawal.',
+                'Buys and sells under the symbol, in fractions, with no fee per trade.',
+                'Dividends in CAD under the symbol, non-resident tax as withholding tax.',
+                'Management fee, discounts and sales tax as separate fee bookings.'
+            ],
+            unsupported: [
+                'Dividends that only name a fund and no symbol are reported; assigning them would be a guess, so that cash is missing.',
+                'Sections or rows that are not among the known ones, such as interest or transfers, are reported.',
+                'Other Wealthsimple documents, such as trade confirmations of self-directed accounts, are reported.'
+            ],
+            limits: [
+                'A section is only booked if its rows add up to the "Total - …" line. Trade rows must match the Total column.',
+                'Reports name symbols, no ISIN. The security is looked up by symbol and currency at the next price update and can be completed there.',
+                'The public samples date from 2020. Whether current statements still look like this is not confirmed; a different PDF is reported, not booked.',
+                'Only tested with synthetic PDFs, not with current originals.'
             ]
         },
         hargreaveslansdown: {

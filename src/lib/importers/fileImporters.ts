@@ -20,6 +20,7 @@ import { trading212FileImporter } from './trading212Csv';
 import { xtbFileImporter } from './xtb';
 import { yuhFileImporter } from './yuh';
 import { commSecFileImporter } from './commsec';
+import { wealthsimpleFileImporter } from './wealthsimple';
 import { hargreavesLansdownFileImporter } from './hargreavesLansdown';
 import { hasTextLayer, type PdfDocumentText } from '@/lib/pdf/pdfText';
 import {
@@ -57,6 +58,7 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     yuhFileImporter,
     commSecFileImporter,
     dkbFileImporter,
+    wealthsimpleFileImporter,
     hargreavesLansdownFileImporter
 ];
 
