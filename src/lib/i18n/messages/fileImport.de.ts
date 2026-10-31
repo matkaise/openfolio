@@ -158,6 +158,9 @@ export const fileImportDe = {
         dkb: {
             dkb: 'PDF-Abrechnung DKB'
         },
+        consorsbank: {
+            consorsbank: 'PDF-Abrechnung Consorsbank / Cortal Consors'
+        },
         wealthsimple: {
             'performance-report': 'PDF-Performance-Report',
             other: 'Anderes Wealthsimple-Dokument'
@@ -835,6 +838,39 @@ export const fileImportDe = {
             ],
             limits: [
                 'Eine Abrechnung wird nur gebucht, wenn Kurswert, Gebühren und Steuern genau den ausmachenden Betrag ergeben; sonst erscheint sie als nicht übernommen.',
+                'Die Finanztransaktionssteuer wird als Steuer gebucht, nicht als Gebühr.',
+                'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
+            ]
+        },
+        consorsbank: {
+            scope: 'Depots bei der Consorsbank (BNP Paribas), auch Abrechnungen aus der Zeit von Cortal Consors.',
+            steps: [
+                'Im Browser auf der Website der Consorsbank anmelden, nicht in der App.',
+                'Unter „Mein Konto & Depot“ das „OnlineArchiv“ öffnen.',
+                'Als Dokumententyp „Orderabrechnungen“ wählen und „Suchen“ klicken; für Dividenden und Erträge die passenden Dokumente ebenso suchen.',
+                'Alle Dateien auswählen, speichern und die PDFs gemeinsam hier ablegen; jedes PDF ist ein Dokument.'
+            ],
+            settings: [
+                'PDFs aus dem Orderarchiv der App sind laut Parqet nicht lesbar: dieselben Dokumente im Browser herunterladen.',
+                'Original-PDFs verwenden, nicht ausdrucken, scannen oder fotografieren: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Abrechnungen ab Depoteröffnung importieren.'
+            ],
+            accounts: 'Je Depot importieren. Bereits importierte Abrechnungen werden an der Ordernummer erkannt, Teilausführungen (…001, …002) bleiben getrennt.',
+            supported: [
+                'Orderabrechnung und Wertpapierabrechnung Kauf, Verkauf, Bezug, Verkauf von Bezugsrechten und Sparplan: Betrag in Kontowährung, Provision und Entgelte als Gebühr, Steuern als eigene Buchung.',
+                'Einlösung in Stück als Verkauf.',
+                'Dividenden- und Ertragsgutschrift brutto in Kontowährung mit Quellensteuer und Steuern, Zinsgutschrift als Zinsen.',
+                'Vorabpauschale und Ertragsthesaurierung: nur die Steuer. Nachträgliche Verlustverrechnung als Steuerbuchung.'
+            ],
+            unsupported: [
+                'Abrechnungen ohne ISIN (ältere Dokumente nennen nur die WKN): Käufe und Verkäufe werden gemeldet, weil Openfolio keine ISIN erfindet. Erträge werden mit Name und Betrag gebucht, aber keinem Wertpapier zugeordnet.',
+                'Anleihen (Nominale, Stückzinsen); Zinsgutschriften werden dagegen gebucht.',
+                'Stornos und Neuabrechnungen: Eine bereits importierte Gutschrift muss von Hand korrigiert werden, sonst stünde sie doppelt im Depot.',
+                'Gutschriften auf Fremdwährungskonten, Überträge, Umtausch, Anschaffungsdaten, Kontoauszüge und Kontoabschlüsse.',
+                'Order- und Änderungsbestätigungen sowie Kosteninformationen werden ohne Buchung übersprungen; erst die Abrechnung belegt eine Ausführung.'
+            ],
+            limits: [
+                'Eine Abrechnung wird nur gebucht, wenn Kurswert, Gebühren und Steuern genau den Endbetrag ergeben; sonst erscheint sie als nicht übernommen.',
                 'Die Finanztransaktionssteuer wird als Steuer gebucht, nicht als Gebühr.',
                 'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
             ]

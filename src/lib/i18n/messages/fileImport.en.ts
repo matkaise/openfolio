@@ -147,6 +147,9 @@ export const fileImportEn: typeof fileImportDe = {
         dkb: {
             dkb: 'DKB PDF settlement'
         },
+        consorsbank: {
+            consorsbank: 'Consorsbank / Cortal Consors PDF settlement'
+        },
         wealthsimple: {
             'performance-report': 'PDF performance report',
             other: 'Other Wealthsimple document'
@@ -821,6 +824,39 @@ export const fileImportEn: typeof fileImportDe = {
                 'Cancellations, capital repayments, securities transfers and depot statements with custody fees.',
                 'Account and credit card statements (deposits, withdrawals, interest).',
                 'Cost information and notices about the key information document are skipped without a booking, and so is a Vorabpauschale without tax withheld.'
+            ],
+            limits: [
+                'A settlement is only booked if market value, fees and taxes add up exactly to the final amount; otherwise it is listed as not imported.',
+                'The financial transaction tax is booked as a tax, not as a fee.',
+                'Only tested with synthetic PDFs based on publicly documented formats, not with current original settlements.'
+            ]
+        },
+        consorsbank: {
+            scope: 'Securities accounts at Consorsbank (BNP Paribas), including settlements from the Cortal Consors era.',
+            steps: [
+                'Log in on the Consorsbank website in a browser, not in the app.',
+                'Under "Mein Konto & Depot", open the "OnlineArchiv".',
+                'Choose the document type "Orderabrechnungen" and click "Suchen"; search for the matching dividend and income documents the same way.',
+                'Select all files, save them and drop the PDFs here together; each PDF is one document.'
+            ],
+            settings: [
+                'According to Parqet, PDFs from the order archive in the app cannot be read: download the same documents in a browser.',
+                'Use the original PDFs; do not print, scan or photograph them: Openfolio only reads the text layer, without text recognition.',
+                'For complete holdings, import all settlements since the account was opened.'
+            ],
+            accounts: 'Import per securities account. Settlements that were already imported are recognised by their order number; partial executions (…001, …002) stay separate.',
+            supported: [
+                'Orderabrechnung and Wertpapierabrechnung for buys, sells, subscriptions, sales of subscription rights and savings plans: amount in account currency, commission and charges as a fee, taxes as a separate booking.',
+                'Einlösung in units, as a sale.',
+                'Dividendengutschrift and Ertragsgutschrift gross in account currency with withholding tax and taxes; Zinsgutschrift as interest.',
+                'Vorabpauschale and Ertragsthesaurierung: the tax only. Nachträgliche Verlustverrechnung (later loss offset) as a tax booking.'
+            ],
+            unsupported: [
+                'Settlements without an ISIN (older documents only state the WKN): buys and sells are reported, because Openfolio does not make up an ISIN. Income is booked with name and amount, but not assigned to a security.',
+                'Bonds (nominal value, accrued interest); interest credits are booked, though.',
+                'Cancellations and reissued credits (Neuabrechnung): a credit that was already imported must be corrected by hand, otherwise it would be booked twice.',
+                'Credits to foreign currency accounts, transfers, exchanges, acquisition data, account statements and account closings.',
+                'Order and change confirmations and cost information are skipped without a booking; only the settlement proves an execution.'
             ],
             limits: [
                 'A settlement is only booked if market value, fees and taxes add up exactly to the final amount; otherwise it is listed as not imported.',
