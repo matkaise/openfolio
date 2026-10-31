@@ -164,6 +164,11 @@ export const fileImportDe = {
         wealthsimple: {
             'performance-report': 'PDF-Performance-Report',
             other: 'Anderes Wealthsimple-Dokument'
+        },
+        fidelity: {
+            confirmation: 'PDF-Transaction-Confirmation (Fidelity Brokerage Services)',
+            'stock-plan': 'PDF-Bestätigung Fidelity Stock Plan Services',
+            other: 'Anderes Fidelity-Dokument'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -905,6 +910,37 @@ export const fileImportDe = {
                 'Die Reports nennen nur Symbole, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Symbol und Währung gesucht und kann dort nachgetragen werden.',
                 'Die öffentlichen Muster stammen aus dem Jahr 2020. Ob aktuelle Auszüge noch so aufgebaut sind, ist nicht belegt; ein abweichendes PDF wird gemeldet, nicht gebucht.',
                 'Nur mit synthetischen PDFs getestet, nicht mit aktuellen Originalen.'
+            ]
+        },
+        fidelity: {
+            scope: 'Nur zwei Dokumentarten aus den USA: Transaction Confirmations von Fidelity Brokerage Services und Bestätigungen von Fidelity Stock Plan Services. Das ist keine vollständige Fidelity-Anbindung: Kontoauszüge, der CSV-Export, NetBenefits-Pläne und Fidelity International (UK) sind nicht abgedeckt.',
+            steps: [
+                'Bei Fidelity.com anmelden und den Bereich „Statements“ öffnen. Dort stehen die Handelsbestätigungen, laut Fidelity auch für Stock-Plan-Verkäufe.',
+                'Die Bestätigung suchen; sie lässt sich nach Symbol, CUSIP, SEDOL oder ISIN filtern.',
+                'Den PDF-Link neben dem Dokument öffnen und das PDF speichern.',
+                'Alle PDFs gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Fidelity hält Bestätigungen zehn Jahre online bereit.',
+                'Original-PDFs verwenden, keine Scans: Openfolio liest nur die Textschicht, ohne Texterkennung.'
+            ],
+            accounts: 'Je Fidelity-Konto ein eigenes Depot verwenden. Eine Bestätigung wird anhand ihrer Referenznummer erkannt und nicht doppelt gebucht; mehrere Trades in einer PDF werden einzeln gebucht.',
+            supported: [
+                'Transaction Confirmation: Käufe und Verkäufe mit Activity Assessment Fee als Gebühr, auch Bruchteile und mehrere Trades je PDF.',
+                'Stock Plan Services: Verkäufe mit Total Fees; ESPP-Käufe zum Betrag der Accumulated Contributions.'
+            ],
+            unsupported: [
+                'Andere Fidelity-Dokumente werden gemeldet, nicht gebucht: Kontoauszüge, Steuerformulare, Dividenden.',
+                'Optionen, Anleihen und Bestätigungen mit weiteren Kostenzeilen, etwa Kommission oder Stückzinsen, werden gemeldet.',
+                'Bei ESPP-Käufen wird nur der gezahlte Betrag gebucht, nicht ein Abschlag zum Marktwert; dessen Steuerfolgen bleiben außen vor.',
+                'RSU-Zuteilungen sind keine Bestätigungen dieser Art und fehlen.'
+            ],
+            limits: [
+                'Eine Bestätigung wird nur gebucht, wenn die Beträge genau aufgehen.',
+                'US-Wertpapiere tragen keine ISIN: Sie laufen unter dem Symbol und werden beim nächsten Kursabruf aufgelöst, die CUSIP bleibt in den Rohdaten.',
+                'Der Name „Fidelity“ allein reicht nicht zur Erkennung: Nur die beiden Aussteller oben werden gelesen.',
+                'Die Fidelity-Hilfeseiten nennen den Bereich „Statements“, aber keinen aktuellen Klickpfad; die Beschriftung kann abweichen.',
+                'Nur mit synthetischen PDFs nach öffentlichen Mustern von 2021 bis 2023 getestet, nicht mit aktuellen Originalen.'
             ]
         }
     } as Record<string, ImportGuide>

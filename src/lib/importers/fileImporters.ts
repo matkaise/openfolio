@@ -22,6 +22,7 @@ import { xtbFileImporter } from './xtb';
 import { yuhFileImporter } from './yuh';
 import { commSecFileImporter } from './commsec';
 import { wealthsimpleFileImporter } from './wealthsimple';
+import { fidelityFileImporter } from './fidelity';
 import { hasTextLayer, type PdfDocumentText } from '@/lib/pdf/pdfText';
 import {
     FileImportError,
@@ -59,7 +60,8 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     commSecFileImporter,
     dkbFileImporter,
     consorsbankFileImporter,
-    wealthsimpleFileImporter
+    wealthsimpleFileImporter,
+    fidelityFileImporter
 ];
 
 export const findFileImporter = (id: string): BrokerFileImporter | undefined => (
