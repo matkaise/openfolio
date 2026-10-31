@@ -10,6 +10,8 @@ Never copy rows from a real export into this folder.
   negative interest ("Zinsen"), interest income, cash sweep transfers and a wrapped order ID continuation line.
 - `degiro-transactions.csv`: DEGIRO "Transactions.csv" with the four trades booked in the account fixture.
   `Gesamt CHF` = `Wert CHF` + transaction fees; the AutoFX fee is reported separately, as in real exports.
+- `degiro-account-en.csv`, `degiro-transactions-en.csv`: the same bookings in the English layout, built from the
+  German fixtures with the column names and row texts documented by public parsers. Not taken from a real English export.
 - `swissquote-en.csv`: Swissquote transaction export, English, 13 columns, newest row first. One account with
   CHF and USD; balances are consistent and end at CHF 1576.33 and USD 45.00. Covers a deposit (Payment),
   a withdrawal with transfer costs (Debit), FX pairs (Forex credit/debit), a buy order filled in two rows,
@@ -88,3 +90,6 @@ Never copy rows from a real export into this folder.
   reported row.
 - `finpension-bvg.csv`: Finpension vested benefits (BVG) report: transfer of vested benefits, two buys and one sell as
   "Portfolio Transaction", fee, interest and a distribution. Cash ends at CHF 70.35.
+- `ibkr-flex.xml`: Activity Flex Query (XML) of one account. Covers stock trades, a currency conversion with
+  commission, an option trade (not supported), cash transactions in detail and as summary, a sales tax, open positions,
+  a corporate action and a transfer (both not supported, must be reported). Ends at USD 2414.99 and EUR -3.00 without the option.
