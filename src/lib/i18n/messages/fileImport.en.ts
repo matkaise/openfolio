@@ -153,6 +153,9 @@ export const fileImportEn: typeof fileImportDe = {
         wealthsimple: {
             'performance-report': 'PDF performance report',
             other: 'Other Wealthsimple document'
+        },
+        hargreaveslansdown: {
+            'contract-note': 'PDF contract note'
         }
     },
     guides: {
@@ -894,6 +897,33 @@ export const fileImportEn: typeof fileImportDe = {
                 'Reports name symbols, no ISIN. The security is looked up by symbol and currency at the next price update and can be completed there.',
                 'The public samples date from 2020. Whether current statements still look like this is not confirmed; a different PDF is reported, not booked.',
                 'Only tested with synthetic PDFs, not with current originals.'
+            ]
+        },
+        hargreaveslansdown: {
+            scope: 'Hargreaves Lansdown accounts in the UK (Fund & Share Account, ISA, SIPP): contract notes as PDF, one document per deal.',
+            steps: [
+                'Log in to your HL account online. HL provides contract notes there and lists them as online documents in its service terms.',
+                'Open the contract note of the deal and save it as PDF.',
+                'Drop all PDFs here together.'
+            ],
+            settings: [
+                'HL does not publish the exact menu item for contract notes, so none is named here. If you cannot find it, the HL helpdesk can help.',
+                'Use the PDF HL generates, not a web page print or scan: Openfolio only reads the text layer and runs no text recognition.'
+            ],
+            accounts: 'Use one portfolio per HL account (for example ISA and SIPP). A contract note is recognised by its number and never booked twice.',
+            supported: [
+                'Buys and sells of funds, ETFs and shares: consideration in GBP, commission as fee. The price in pence is not used; the quantity is on the note.',
+                'Stamp duty and PTM levy as their own tax booking when they are on the note and the total adds up.'
+            ],
+            unsupported: [
+                'Dividends, deposits, withdrawals, interest and fees are not on contract notes. Users report that HL issues no PDF for dividends.',
+                'Investment reports and other HL documents are reported, not booked.',
+                'Notes with unknown cost lines, such as FX charges, are reported.'
+            ],
+            limits: [
+                'A note is only booked when consideration and costs add up exactly to the settlement amount.',
+                'Stamp duty and PTM levy do not appear in the public samples; their labels are not confirmed by originals.',
+                'Only tested with synthetic PDFs based on publicly documented formats, not with current original notes.'
             ]
         }
     } satisfies Record<string, ImportGuide>

@@ -164,6 +164,9 @@ export const fileImportDe = {
         wealthsimple: {
             'performance-report': 'PDF-Performance-Report',
             other: 'Anderes Wealthsimple-Dokument'
+        },
+        hargreaveslansdown: {
+            'contract-note': 'PDF-Contract-Note'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -905,6 +908,33 @@ export const fileImportDe = {
                 'Die Reports nennen nur Symbole, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Symbol und Währung gesucht und kann dort nachgetragen werden.',
                 'Die öffentlichen Muster stammen aus dem Jahr 2020. Ob aktuelle Auszüge noch so aufgebaut sind, ist nicht belegt; ein abweichendes PDF wird gemeldet, nicht gebucht.',
                 'Nur mit synthetischen PDFs getestet, nicht mit aktuellen Originalen.'
+            ]
+        },
+        hargreaveslansdown: {
+            scope: 'Hargreaves-Lansdown-Konten im Vereinigten Königreich (Fund & Share Account, ISA, SIPP): Contract Notes als PDF, je Abschluss ein Dokument.',
+            steps: [
+                'Online im HL-Konto anmelden. HL stellt Contract Notes dort bereit und nennt sie in seinen Service-Bedingungen ausdrücklich als Online-Dokumente.',
+                'Die Contract Note des jeweiligen Abschlusses öffnen und als PDF speichern.',
+                'Alle PDFs gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Den genauen Menüpunkt für Contract Notes nennt HL nicht öffentlich, deshalb steht er hier nicht. Falls er nicht auffindbar ist, hilft das HL-Helpdesk.',
+                'Das von HL erzeugte PDF verwenden, keinen Webseitenausdruck und keinen Scan: Openfolio liest nur die Textschicht, ohne Texterkennung.'
+            ],
+            accounts: 'Je HL-Konto (zum Beispiel ISA und SIPP) ein eigenes Depot verwenden. Eine Contract Note wird anhand ihrer Nummer erkannt und nicht doppelt gebucht.',
+            supported: [
+                'Käufe und Verkäufe von Fonds, ETFs und Aktien: Consideration in GBP, Commission als Gebühr. Der Kurs in Pence wird nicht verwendet, die Stückzahl steht auf der Note.',
+                'Stamp Duty und PTM Levy als eigene Steuerbuchung, wenn sie auf der Note stehen und die Summe aufgeht.'
+            ],
+            unsupported: [
+                'Dividenden, Ein- und Auszahlungen, Zinsen und Gebühren stehen nicht auf Contract Notes. Laut Nutzerberichten gibt HL für Dividenden kein PDF aus.',
+                'Investment Reports und andere HL-Dokumente werden gemeldet, nicht gebucht.',
+                'Notes mit unbekannten Kostenzeilen, etwa Fremdwährungsgebühren, werden gemeldet.'
+            ],
+            limits: [
+                'Eine Note wird nur gebucht, wenn Consideration und Kosten genau den Abrechnungsbetrag ergeben.',
+                'Stamp Duty und PTM Levy kommen in den öffentlichen Mustern nicht vor; ihre Bezeichnungen sind nicht an Originalen belegt.',
+                'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Notes.'
             ]
         }
     } as Record<string, ImportGuide>
