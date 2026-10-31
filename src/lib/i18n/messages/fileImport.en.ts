@@ -156,6 +156,11 @@ export const fileImportEn: typeof fileImportDe = {
         },
         hargreaveslansdown: {
             'contract-note': 'PDF contract note'
+        },
+        questrade: {
+            statement: 'PDF monthly statement',
+            'trade-confirmation': 'PDF trade confirmation report',
+            other: 'Other Questrade document'
         }
     },
     guides: {
@@ -924,6 +929,37 @@ export const fileImportEn: typeof fileImportDe = {
                 'A note is only booked when consideration and costs add up exactly to the settlement amount.',
                 'Stamp duty and PTM levy do not appear in the public samples; their labels are not confirmed by originals.',
                 'Only tested with synthetic PDFs based on publicly documented formats, not with current original notes.'
+            ]
+        },
+        questrade: {
+            scope: 'Questrade accounts in Canada (self-directed, Questwealth): monthly account statements and trade confirmation reports as PDF. The Excel export of the transaction history is not read here.',
+            steps: [
+                'Log in to Questrade.',
+                'Monthly statements: open the "Documents" page and save the statements under "Recent statements" as PDF.',
+                'Or trade confirmations: open the "Reports" page, choose "Trade confirmation", search by symbol or date and save the report as PDF.',
+                'Drop all PDFs here together.'
+            ],
+            settings: [
+                'Prefer monthly statements: only they hold distributions and contributions besides trades.',
+                'Use original PDFs, no scans: Openfolio only reads the text layer and runs no text recognition.',
+                'For a complete position history, import all statements since the account was opened.'
+            ],
+            accounts: 'Use one portfolio per Questrade account. The same booking in a statement and a report gets the same key if date, quantity and amount match. A statement may combine partial fills, though, so import only one of the two document types for the same period.',
+            supported: [
+                'Monthly statement: buys and sells in CAD and USD with commission, distributions (UNIT DIST) and contributions.',
+                'Trade confirmation report: buys and sells with commission and SEC fees as fee.'
+            ],
+            unsupported: [
+                'In statements, withdrawals, deposits other than "Contribution", withholding tax, interest, FX, transfers, corporate actions and fees are reported, not booked: no public sample exists for these rows.',
+                'Options and bonds (accrued interest) are reported.',
+                'Trades settling after month end are skipped and reported; they appear in the next statement.'
+            ],
+            limits: [
+                'A statement table is only booked if opening balance and rows add up exactly to the closing balance; otherwise the table is listed as not imported.',
+                'In a report, the rows must add up to the "Totals" row.',
+                'Statements and reports name symbols, no ISIN. The security is looked up by symbol and currency at the next price update and can be completed there.',
+                'Questrade documents where the documents are kept, not the download button; the guide dates from 2022.',
+                'Sales and USD rows in statements do not appear in the public samples; only tested with synthetic PDFs.'
             ]
         }
     } satisfies Record<string, ImportGuide>

@@ -71,6 +71,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | CommSec | PDF-Bestätigung (Contract Note) Commonwealth Securities Limited: `colon`, `plain`; mehrere Bestätigungen je Datei möglich | Käufe/Verkäufe in AUD mit Brokerage als Gebühr, Wertpapier unter dem ASX-Code | Dividenden und Cash (nicht auf den Bestätigungen), Application Money, andere CommSec-Dokumente, CommSec International |
 | Wealthsimple | PDF-Performance-Report verwalteter Konten (`performance-report`, monatlich oder jährlich), `other` (nur Meldung) | Transfer In/Out, Bought/Sold unter dem Symbol, Dividenden in CAD, Non-resident tax als Quellensteuer, Management Fee, Rabatt und Sales Tax als Gebühren | Dividenden ohne Symbol, unbekannte Abschnitte und Zeilen, andere Dokumente; Reports mit mehreren Konten werden abgelehnt |
 | Hargreaves Lansdown | PDF-Contract-Note (`contract-note`), je Abschluss eine Datei | Käufe/Verkäufe in GBP aus der Consideration mit Commission als Gebühr, Stamp Duty und PTM Levy als Steuerbuchung, sofern die Summe aufgeht | Dividenden und Cash (nicht auf Contract Notes), Investment Reports, unbekannte Kostenzeilen |
+| Questrade | PDF: `statement` (Monatsauszug, Abschnitt „04. ACTIVITY DETAILS“), `trade-confirmation` (Trade Confirmation Report), `other` (nur Meldung) | Auszug: Buy/Sell in CAD/USD mit Kommission, UNIT DIST als Ausschüttung, Contribution als Einzahlung; Report: Buy/Sell mit Kommission und SEC-Gebühren. Wertpapier unter dem Symbol | Alle anderen Zeilen der Tabellen (Auszahlungen, Quellensteuer, Zinsen, Devisen, Überträge, Kapitalmaßnahmen, Gebühren), Optionen, Anleihen; Trades mit Abwicklung nach Monatsende werden übersprungen |
 
 ## Quellen und Lizenzen
 
@@ -125,6 +126,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | Wealthsimple | [Find your monthly statements](https://help.wealthsimple.com/hc/en-ca/articles/360056580894-Find-your-monthly-statements) (Stand 16.10.2026), [View your trading account documents](https://help.wealthsimple.com/hc/en-ca/articles/360058452853-View-your-trading-account-documents) (Stand 22.09.2026); im Browser gelesen | 30.10.2026 | – (Dokumentation) | Web: Profilmenü → Documents → Statements, PDF und CSV, Bulk download, verwaltete Konten nur im Web. Ob der dort angebotene heutige Auszug dem Muster von 2020 entspricht, ist nicht belegt. |
 | Hargreaves Lansdown | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/HargreavesLansdownPlcExtractor.java` (Klasse `HargreavesLansdownPlcExtractor`) mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/hargreaveslansdownplc/` | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Wertpapierblock, Datums- und Summenzeile, gesperrte Schrift in neueren Notes, Preis in Pence. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
 | Hargreaves Lansdown | [HL Service Terms reference guide](https://www.hl.co.uk/terms-and-conditions/hl-service-terms-and-conditions-reference-guide), [Sharesight](https://www.sharesight.com/partners/hargreaves-lansdown/), [PP-Forum](https://forum.portfolio-performance.info/t/pdf-import-from-hargreaves-landsdown/21726) | 30.10.2026 | – (Dokumentation) | Contract Notes sind online verfügbar und als PDF ladbar; kein PDF für Dividenden laut Forum. **Kein öffentlicher Menüweg gefunden**, die Anleitung nennt deshalb keinen. Die offizielle Anleitung für Investment Reports (Portfolio history) gilt nicht nachweislich für Contract Notes. |
+| Questrade | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/QuestradeGroupPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/questradegroup/` (`AccountStatement01`, `Buy01–08`, `Dividend01–03`, `Sell01`) | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Abschnitte, Tabellenspalten CAD/USD, Zeilenaufbau, Datumsformate beider Dokumente, Spalten des Reports. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
+| Questrade | [Introduction to your account](https://www.questrade.com/learning/using-questrade/introduction-to-your-account) (Stand 17.10.2022, im Browser gelesen) | 30.10.2026 | – (Dokumentation) | Seite Documents → Recent statements (monatlich oder quartalsweise, Self-directed und Questwealth), Seite Reports → Trade confirmation (Suche nach Symbol oder Datum) |
 
 ### Abweichungen von der Vorlage (Swissquote)
 
@@ -511,3 +514,16 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 - Pence: Die Kurszeile druckt je nach Wertpapier Pence (`2267.4179`), nur die Consideration ist in GBP. Der Kurs wird nicht verwendet.
 - Name wie bei PP aus Emittent und Rest der Mengenzeile. `STOCK CODE` bleibt in den Rohdaten, das Wertpapier läuft unter der ISIN.
 - Handelsdatum aus der Datumszeile, Settlement Date in den Rohdaten.
+
+### Abweichungen von der Vorlage (Questrade)
+
+- Abstimmung: Der Auszug führt je Aktivität eine Tabelle zwischen Opening und Closing balance. Openfolio prüft je Tabelle und Währung,
+  ob die Netto-Spalte aufgeht, und meldet sonst die Tabelle. PP liest Zeilen einzeln. Einige PP-Testdokumente sind zusammengesetzt und
+  gehen deshalb nicht auf; `AccountStatement01`, `Buy01/02`, `Dividend01–03` stimmen.
+- Währung: PP nimmt für jede Zeile die Summenwährung des Auszugs. Openfolio liest die Spaltengruppe CAD oder USD der Zeile; USD-Zeilen
+  sind nur aus dem Tabellenkopf abgeleitet.
+- Verkäufe im Auszug: PP bucht nur `Buy`. Openfolio bucht `Sell` spiegelbildlich und prüft das Vorzeichen; nicht an einem Original belegt.
+- Offene Trades (Abschnitt 05): PP bucht sie; Openfolio überspringt sie mit Meldung, sie stehen im Folgemonat in den Transaktionen.
+- Kennung: Report und Auszug tragen keine gemeinsame Nummer, deshalb Konto, Datum, Richtung, Symbol, Stückzahl und Nettobetrag, bei Wiederholung
+  im Dokument mit Zähler. Fasst der Auszug Teilausführungen zusammen, greift das nicht; die Anleitung rät zu einer Dokumentart je Zeitraum.
+- Report-Datum `TT-MM-JJ` wie bei PP, im Auszug `MM-TT-JJJJ`. Der Punkt vor kanadischen Symbolen entfällt, die Währung geht an die Suche.
