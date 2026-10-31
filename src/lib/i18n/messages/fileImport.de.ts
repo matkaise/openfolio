@@ -160,6 +160,10 @@ export const fileImportDe = {
         },
         consorsbank: {
             consorsbank: 'PDF-Abrechnung Consorsbank / Cortal Consors'
+        },
+        wealthsimple: {
+            'performance-report': 'PDF-Performance-Report',
+            other: 'Anderes Wealthsimple-Dokument'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -869,6 +873,38 @@ export const fileImportDe = {
                 'Eine Abrechnung wird nur gebucht, wenn Kurswert, Gebühren und Steuern genau den Endbetrag ergeben; sonst erscheint sie als nicht übernommen.',
                 'Die Finanztransaktionssteuer wird als Steuer gebucht, nicht als Gebühr.',
                 'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
+            ]
+        },
+        wealthsimple: {
+            scope: 'Verwaltete Wealthsimple-Konten in Kanada (Wealthsimple Inc.): monatliche und jährliche Performance Reports als PDF. Nicht belegt für Self-directed-Konten (Wealthsimple Trade), Krypto und Chequing.',
+            steps: [
+                'Im Web bei Wealthsimple anmelden; Auszüge verwalteter Konten gibt es nur im Web.',
+                'Unten links das Profilmenü öffnen und „Documents“ wählen.',
+                'Im Ordner „Statements“ den Auszug als PDF öffnen und speichern. Für viele Monate: „Generate document“ → „Bulk download monthly statements“, Format PDF, Zeitraum und Konto wählen.',
+                'Alle PDFs gemeinsam hier ablegen; die ZIP-Datei vorher entpacken.'
+            ],
+            settings: [
+                'PDF wählen, nicht CSV: Der CSV-Auszug wird hier nicht gelesen.',
+                'Original-PDFs verwenden, keine Scans: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Auszüge ab Kontoeröffnung importieren.'
+            ],
+            accounts: 'Je Konto (zum Beispiel TFSA und RRSP) ein eigenes Depot verwenden; ein Report mit mehreren Konten wird abgelehnt. Monats- und Jahresreport desselben Zeitraums buchen nichts doppelt.',
+            supported: [
+                'Electronic Funds Transfer In und Out als Ein- und Auszahlung.',
+                'Käufe und Verkäufe unter dem Symbol, in Bruchteilen, ohne Gebühr je Trade.',
+                'Dividenden in CAD unter dem Symbol, Non-resident tax als Quellensteuer.',
+                'Management Fee, Rabatte und Sales Tax als einzelne Gebührenbuchungen.'
+            ],
+            unsupported: [
+                'Dividenden, die nur einen Fondsnamen und kein Symbol nennen, werden gemeldet; ihre Zuordnung wäre geraten, das Cash fehlt dann.',
+                'Abschnitte oder Zeilen, die nicht zu den bekannten gehören, etwa Zinsen oder Überträge, werden gemeldet.',
+                'Andere Wealthsimple-Dokumente, zum Beispiel Handelsbestätigungen von Self-directed-Konten, werden gemeldet.'
+            ],
+            limits: [
+                'Ein Abschnitt wird nur gebucht, wenn seine Zeilen die Zeile „Total - …“ ergeben. Handelszeilen müssen im Betrag mit der Spalte Total übereinstimmen.',
+                'Die Reports nennen nur Symbole, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Symbol und Währung gesucht und kann dort nachgetragen werden.',
+                'Die öffentlichen Muster stammen aus dem Jahr 2020. Ob aktuelle Auszüge noch so aufgebaut sind, ist nicht belegt; ein abweichendes PDF wird gemeldet, nicht gebucht.',
+                'Nur mit synthetischen PDFs getestet, nicht mit aktuellen Originalen.'
             ]
         }
     } as Record<string, ImportGuide>

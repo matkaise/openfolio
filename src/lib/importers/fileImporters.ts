@@ -21,6 +21,7 @@ import { trading212FileImporter } from './trading212Csv';
 import { xtbFileImporter } from './xtb';
 import { yuhFileImporter } from './yuh';
 import { commSecFileImporter } from './commsec';
+import { wealthsimpleFileImporter } from './wealthsimple';
 import { hasTextLayer, type PdfDocumentText } from '@/lib/pdf/pdfText';
 import {
     FileImportError,
@@ -57,7 +58,8 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     yuhFileImporter,
     commSecFileImporter,
     dkbFileImporter,
-    consorsbankFileImporter
+    consorsbankFileImporter,
+    wealthsimpleFileImporter
 ];
 
 export const findFileImporter = (id: string): BrokerFileImporter | undefined => (
