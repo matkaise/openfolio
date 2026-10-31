@@ -22,6 +22,10 @@ import { xtbFileImporter } from './xtb';
 import { yuhFileImporter } from './yuh';
 import { commSecFileImporter } from './commsec';
 import { wealthsimpleFileImporter } from './wealthsimple';
+import { hargreavesLansdownFileImporter } from './hargreavesLansdown';
+import { questradeFileImporter } from './questrade';
+import { robinhoodFileImporter } from './robinhood';
+import { zerodhaFileImporter } from './zerodha';
 import { fidelityFileImporter } from './fidelity';
 import { hasTextLayer, type PdfDocumentText } from '@/lib/pdf/pdfText';
 import {
@@ -61,6 +65,10 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     dkbFileImporter,
     consorsbankFileImporter,
     wealthsimpleFileImporter,
+    hargreavesLansdownFileImporter,
+    questradeFileImporter,
+    robinhoodFileImporter,
+    zerodhaFileImporter,
     fidelityFileImporter
 ];
 

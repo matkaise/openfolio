@@ -93,3 +93,5 @@ Never copy rows from a real export into this folder.
 - `ibkr-flex.xml`: Activity Flex Query (XML) of one account. Covers stock trades, a currency conversion with
   commission, an option trade (not supported), cash transactions in detail and as summary, a sales tax, open positions,
   a corporate action and a transfer (both not supported, must be reported). Ends at USD 2414.99 and EUR -3.00 without the option.
+- `zerodha.csv`: Zerodha Console tradebook, comma separated. Two fills of one order, a buy on BSE with a price
+  carrying float noise, a sale, a mutual fund (MF) row and an F&O row (not supported, must be reported).

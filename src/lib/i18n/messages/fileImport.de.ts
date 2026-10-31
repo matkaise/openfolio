@@ -165,6 +165,21 @@ export const fileImportDe = {
             'performance-report': 'PDF-Performance-Report',
             other: 'Anderes Wealthsimple-Dokument'
         },
+        hargreaveslansdown: {
+            'contract-note': 'PDF-Contract-Note'
+        },
+        questrade: {
+            statement: 'PDF-Monatsauszug',
+            'trade-confirmation': 'PDF-Trade-Confirmation-Report',
+            other: 'Anderes Questrade-Dokument'
+        },
+        robinhood: {
+            statement: 'PDF-Monatsauszug',
+            other: 'Anderes Robinhood-Dokument'
+        },
+        zerodha: {
+            tradebook: 'Tradebook-CSV (Console)'
+        },
         fidelity: {
             confirmation: 'PDF-Transaction-Confirmation (Fidelity Brokerage Services)',
             'stock-plan': 'PDF-Bestätigung Fidelity Stock Plan Services',
@@ -910,6 +925,128 @@ export const fileImportDe = {
                 'Die Reports nennen nur Symbole, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Symbol und Währung gesucht und kann dort nachgetragen werden.',
                 'Die öffentlichen Muster stammen aus dem Jahr 2020. Ob aktuelle Auszüge noch so aufgebaut sind, ist nicht belegt; ein abweichendes PDF wird gemeldet, nicht gebucht.',
                 'Nur mit synthetischen PDFs getestet, nicht mit aktuellen Originalen.'
+            ]
+        },
+        hargreaveslansdown: {
+            scope: 'Hargreaves-Lansdown-Konten im Vereinigten Königreich (Fund & Share Account, ISA, SIPP): Contract Notes als PDF, je Abschluss ein Dokument.',
+            steps: [
+                'Online im HL-Konto anmelden. HL stellt Contract Notes dort bereit und nennt sie in seinen Service-Bedingungen ausdrücklich als Online-Dokumente.',
+                'Die Contract Note des jeweiligen Abschlusses öffnen und als PDF speichern.',
+                'Alle PDFs gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Den genauen Menüpunkt für Contract Notes nennt HL nicht öffentlich, deshalb steht er hier nicht. Falls er nicht auffindbar ist, hilft das HL-Helpdesk.',
+                'Das von HL erzeugte PDF verwenden, keinen Webseitenausdruck und keinen Scan: Openfolio liest nur die Textschicht, ohne Texterkennung.'
+            ],
+            accounts: 'Je HL-Konto (zum Beispiel ISA und SIPP) ein eigenes Depot verwenden. Eine Contract Note wird anhand ihrer Nummer erkannt und nicht doppelt gebucht.',
+            supported: [
+                'Käufe und Verkäufe von Fonds, ETFs und Aktien: Consideration in GBP, Commission als Gebühr. Der Kurs in Pence wird nicht verwendet, die Stückzahl steht auf der Note.',
+                'Stamp Duty und PTM Levy als eigene Steuerbuchung, wenn sie auf der Note stehen und die Summe aufgeht.'
+            ],
+            unsupported: [
+                'Dividenden, Ein- und Auszahlungen, Zinsen und Gebühren stehen nicht auf Contract Notes. Laut Nutzerberichten gibt HL für Dividenden kein PDF aus.',
+                'Investment Reports und andere HL-Dokumente werden gemeldet, nicht gebucht.',
+                'Notes mit unbekannten Kostenzeilen, etwa Fremdwährungsgebühren, werden gemeldet.'
+            ],
+            limits: [
+                'Eine Note wird nur gebucht, wenn Consideration und Kosten genau den Abrechnungsbetrag ergeben.',
+                'Stamp Duty und PTM Levy kommen in den öffentlichen Mustern nicht vor; ihre Bezeichnungen sind nicht an Originalen belegt.',
+                'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Notes.'
+            ]
+        },
+        questrade: {
+            scope: 'Questrade-Konten in Kanada (Self-directed, Questwealth): Monatsauszüge („Account statement“) und Trade Confirmation Reports als PDF. Der Excel-Export der Transaktionshistorie wird hier nicht gelesen.',
+            steps: [
+                'Bei Questrade anmelden.',
+                'Monatsauszüge: Seite „Documents“ öffnen und unter „Recent statements“ die Auszüge als PDF speichern.',
+                'Oder Handelsbestätigungen: Seite „Reports“ öffnen, „Trade confirmation“ wählen, nach Symbol oder Datum suchen und den Bericht als PDF speichern.',
+                'Alle PDFs gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Monatsauszüge bevorzugen: Nur sie enthalten neben Käufen auch Ausschüttungen und Einzahlungen.',
+                'Original-PDFs verwenden, keine Scans: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Auszüge ab Kontoeröffnung importieren.'
+            ],
+            accounts: 'Je Questrade-Konto ein eigenes Depot verwenden. Dieselbe Buchung in Auszug und Report erhält dieselbe Kennung, wenn Datum, Stückzahl und Betrag gleich sind. Der Auszug kann Teilausführungen aber zusammenfassen: Für denselben Zeitraum daher nur eine der beiden Dokumentarten importieren.',
+            supported: [
+                'Monatsauszug: Käufe und Verkäufe in CAD und USD mit Kommission, Ausschüttungen (UNIT DIST) und Contributions.',
+                'Trade Confirmation Report: Käufe und Verkäufe mit Kommission und SEC-Gebühren als Gebühr.'
+            ],
+            unsupported: [
+                'Im Auszug werden Auszahlungen, Einzahlungen ohne „Contribution“, Quellensteuer, Zinsen, Devisen, Überträge, Kapitalmaßnahmen und Gebühren gemeldet, nicht gebucht: Für diese Zeilen ist kein Muster öffentlich.',
+                'Optionen und Anleihen (Stückzinsen) werden gemeldet.',
+                'Trades mit Abwicklung nach Monatsende werden übersprungen und gemeldet; sie stehen im Auszug des Folgemonats.'
+            ],
+            limits: [
+                'Der Auszug wird je Tabelle nur gebucht, wenn Anfangssaldo und Zeilen genau den Schlusssaldo ergeben; sonst wird die Tabelle als nicht übernommen gemeldet.',
+                'Beim Report müssen die Zeilen die Zeile „Totals“ ergeben.',
+                'Auszüge und Reports nennen nur Symbole, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Symbol und Währung gesucht und kann dort nachgetragen werden.',
+                'Questrade beschreibt den Ablageort, aber nicht die Download-Schaltfläche; die Anleitung ist von 2022.',
+                'Verkäufe im Auszug und USD-Zeilen im Auszug kommen in den öffentlichen Mustern nicht vor; nur mit synthetischen PDFs getestet.'
+            ]
+        },
+        robinhood: {
+            scope: 'Robinhood-Brokerage-Konten in den USA: Monatsauszüge (Monthly statements) als PDF. Der CSV-Bericht „Account activity report“ wird hier nicht gelesen.',
+            steps: [
+                'In der App oder im Web „Account“ öffnen; in der App zuerst das Menü (drei Striche).',
+                '„Reports and statements“ wählen, dann „Monthly statements“.',
+                'Den Kontotyp wählen und das PDF des gewünschten Monats herunterladen.',
+                'Alle Monate gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Der Auszug eines Monats steht innerhalb der ersten zwei Wochen des Folgemonats bereit. Ohne Aktivität gibt es stattdessen einen Quartalsauszug.',
+                'Original-PDFs verwenden, keine Scans: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Auszüge ab Kontoeröffnung importieren.'
+            ],
+            accounts: 'Je Robinhood-Konto (zum Beispiel Individual und IRA) ein eigenes Depot verwenden. Wiederholte Importe buchen nichts doppelt; gleich hohe Trades eines Auszugs bleiben getrennt.',
+            supported: [
+                'Käufe und Verkäufe (Cash-Konto) in USD.',
+                'Dividenden (CDIV) brutto und ausländische Quellensteuer (DTAX) als eigene Buchung.',
+                'ACH-Ein- und -Auszahlungen, interne Überträge (ITRF), Cashback der Kreditkarte (XENT_CC) als Einzahlung.',
+                'Zinsen auf das Sweep-Guthaben (INT).'
+            ],
+            unsupported: [
+                'Alle anderen Typcodes, etwa Splits, Optionen, Margin, Gebühren und Depotüberträge, werden mit ihrem Code gemeldet, nicht gebucht.',
+                'Trades, die noch nicht abgewickelt sind, werden übersprungen und gemeldet; sie stehen im Auszug des Folgemonats.',
+                'Die Sweep-Bewegungen (Deposit Sweep Activity) sind interne Umbuchungen und werden nicht gebucht.',
+                'Krypto, Futures und Ausgaben stehen nicht im Wertpapierauszug.'
+            ],
+            limits: [
+                'Ein Auszug wird nur gebucht, wenn die Zeilen die Zeile „Total Funds Paid and Received“ ergeben; nicht gebuchte Zeilen zählen dabei mit. Sonst erscheint die Tabelle als nicht übernommen.',
+                'Die Auszüge trennen Soll und Haben im Text nicht; die Richtung folgt aus dem Typcode.',
+                'Das Wertpapier läuft unter dem Ticker, weil Dividenden nur ihn nennen. Die CUSIP bleibt in den Rohdaten. Die ISIN wird nicht errechnet.',
+                'Überträge sind nur für das Individual-Konto belegt.',
+                'Nur mit synthetischen PDFs nach einem öffentlichen Muster von Januar 2026 getestet, nicht mit eigenen Original-Auszügen.'
+            ]
+        },
+        zerodha: {
+            scope: 'Zerodha-Konten in Indien: Tradebook aus Console für Aktien (Equity) und Fonds (Mutual Funds) als CSV. Nicht für F&O, Währungen und Rohstoffe.',
+            steps: [
+                'Bei Console anmelden.',
+                'Reports → Tradebook öffnen.',
+                'Segment wählen, den Zeitraum festlegen und auf den Pfeil klicken.',
+                'Über die Schaltfläche neben „Download“ die CSV-Datei speichern, nicht XLSX.',
+                'Alle Dateien gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Ein Tradebook-Download umfasst höchstens 365 Tage. Für längere Zeiträume mehrere Jahre einzeln herunterladen; überlappende Dateien werden nicht doppelt gebucht.',
+                'Equity und Mutual Funds sind getrennte Segmente und damit getrennte Downloads.',
+                'XLSX wird nicht gelesen. Die CSV-Datei nicht in Excel bearbeiten: Datum und Zahlen müssen unverändert bleiben.'
+            ],
+            accounts: 'Je Zerodha-Konto ein eigenes Depot verwenden. Jede Ausführung ist eine eigene Zeile mit Trade-ID und bleibt eine eigene Buchung; Teilausführungen einer Order werden nicht zusammengefasst.',
+            supported: [
+                'Käufe und Verkäufe der Segmente EQ und MF in INR, Wert aus Stückzahl mal Preis, Wertpapier unter der ISIN.'
+            ],
+            unsupported: [
+                'F&O, Währungen, Rohstoffe und unbekannte Segmente oder Handelsarten werden zeilenweise gemeldet.',
+                'Gebühren und Steuern (Brokerage, STT, Stempel) stehen nicht im Tradebook und fehlen; sie werden nicht geschätzt.',
+                'Dividenden und Ein- und Auszahlungen stehen nicht im Tradebook.'
+            ],
+            limits: [
+                'Externe Trades aus Kapitalmaßnahmen, IPOs, OFS, Rückkäufen und Depotüberträgen stehen laut Zerodha nur in eigenen externen Tradebooks. Ohne sie stimmt der Bestand nicht; ihr Dateiformat ließ sich nicht prüfen.',
+                'Zerodha dokumentiert die Spalten nicht; sie stammen aus öffentlichen Beispiel-Exporten.',
+                'Fehlt die ISIN, wird das Symbol verwendet und beim nächsten Kursabruf aufgelöst.',
+                'Nur mit synthetischen Dateien getestet, nicht mit eigenen Original-Exporten.'
             ]
         },
         fidelity: {
