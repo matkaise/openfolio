@@ -165,6 +165,9 @@ export const fileImportEn: typeof fileImportDe = {
         robinhood: {
             statement: 'PDF monthly statement',
             other: 'Other Robinhood document'
+        },
+        zerodha: {
+            tradebook: 'Tradebook CSV (Console)'
         }
     },
     guides: {
@@ -998,6 +1001,36 @@ export const fileImportEn: typeof fileImportDe = {
                 'Securities are booked under the ticker because dividends only name that. The CUSIP stays in the raw data. No ISIN is computed.',
                 'Transfers are only confirmed for the individual account.',
                 'Only tested with synthetic PDFs based on one public sample from January 2026, not with your own original statements.'
+            ]
+        },
+        zerodha: {
+            scope: 'Zerodha accounts in India: Console tradebook for equity and mutual funds as CSV. Not for F&O, currency and commodity.',
+            steps: [
+                'Log in to Console.',
+                'Open Reports > Tradebook.',
+                'Choose the segment, set the date range and click the arrow.',
+                'Use the button next to "Download" to save the CSV file, not XLSX.',
+                'Drop all files here together.'
+            ],
+            settings: [
+                'One tradebook download covers at most 365 days. For longer periods download each year separately; overlapping files are not booked twice.',
+                'Equity and mutual funds are separate segments and therefore separate downloads.',
+                'XLSX is not read. Do not edit the CSV in Excel: dates and numbers must stay unchanged.'
+            ],
+            accounts: 'Use one portfolio per Zerodha account. Each fill is a row with its own trade id and stays its own booking; partial fills of an order are not combined.',
+            supported: [
+                'Buys and sells of the EQ and MF segments in INR, value from quantity times price, security under the ISIN.'
+            ],
+            unsupported: [
+                'F&O, currency, commodity and unknown segments or trade types are reported row by row.',
+                'Charges and taxes (brokerage, STT, stamp duty) are not in the tradebook and are missing; they are not estimated.',
+                'Dividends, deposits and withdrawals are not in the tradebook.'
+            ],
+            limits: [
+                'According to Zerodha, external trades from corporate actions, IPOs, OFS, buybacks and transfers are only in separate external tradebooks. Without them positions will not match; their file format could not be checked.',
+                'Zerodha does not document the columns; they come from public sample exports.',
+                'If the ISIN is missing, the symbol is used and resolved at the next price update.',
+                'Only tested with synthetic files, not with your own original exports.'
             ]
         }
     } satisfies Record<string, ImportGuide>

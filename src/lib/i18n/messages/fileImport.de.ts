@@ -176,6 +176,9 @@ export const fileImportDe = {
         robinhood: {
             statement: 'PDF-Monatsauszug',
             other: 'Anderes Robinhood-Dokument'
+        },
+        zerodha: {
+            tradebook: 'Tradebook-CSV (Console)'
         }
     } as Record<string, Record<string, string>>,
     guides: {
@@ -1009,6 +1012,36 @@ export const fileImportDe = {
                 'Das Wertpapier läuft unter dem Ticker, weil Dividenden nur ihn nennen. Die CUSIP bleibt in den Rohdaten. Die ISIN wird nicht errechnet.',
                 'Überträge sind nur für das Individual-Konto belegt.',
                 'Nur mit synthetischen PDFs nach einem öffentlichen Muster von Januar 2026 getestet, nicht mit eigenen Original-Auszügen.'
+            ]
+        },
+        zerodha: {
+            scope: 'Zerodha-Konten in Indien: Tradebook aus Console für Aktien (Equity) und Fonds (Mutual Funds) als CSV. Nicht für F&O, Währungen und Rohstoffe.',
+            steps: [
+                'Bei Console anmelden.',
+                'Reports → Tradebook öffnen.',
+                'Segment wählen, den Zeitraum festlegen und auf den Pfeil klicken.',
+                'Über die Schaltfläche neben „Download“ die CSV-Datei speichern, nicht XLSX.',
+                'Alle Dateien gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Ein Tradebook-Download umfasst höchstens 365 Tage. Für längere Zeiträume mehrere Jahre einzeln herunterladen; überlappende Dateien werden nicht doppelt gebucht.',
+                'Equity und Mutual Funds sind getrennte Segmente und damit getrennte Downloads.',
+                'XLSX wird nicht gelesen. Die CSV-Datei nicht in Excel bearbeiten: Datum und Zahlen müssen unverändert bleiben.'
+            ],
+            accounts: 'Je Zerodha-Konto ein eigenes Depot verwenden. Jede Ausführung ist eine eigene Zeile mit Trade-ID und bleibt eine eigene Buchung; Teilausführungen einer Order werden nicht zusammengefasst.',
+            supported: [
+                'Käufe und Verkäufe der Segmente EQ und MF in INR, Wert aus Stückzahl mal Preis, Wertpapier unter der ISIN.'
+            ],
+            unsupported: [
+                'F&O, Währungen, Rohstoffe und unbekannte Segmente oder Handelsarten werden zeilenweise gemeldet.',
+                'Gebühren und Steuern (Brokerage, STT, Stempel) stehen nicht im Tradebook und fehlen; sie werden nicht geschätzt.',
+                'Dividenden und Ein- und Auszahlungen stehen nicht im Tradebook.'
+            ],
+            limits: [
+                'Externe Trades aus Kapitalmaßnahmen, IPOs, OFS, Rückkäufen und Depotüberträgen stehen laut Zerodha nur in eigenen externen Tradebooks. Ohne sie stimmt der Bestand nicht; ihr Dateiformat ließ sich nicht prüfen.',
+                'Zerodha dokumentiert die Spalten nicht; sie stammen aus öffentlichen Beispiel-Exporten.',
+                'Fehlt die ISIN, wird das Symbol verwendet und beim nächsten Kursabruf aufgelöst.',
+                'Nur mit synthetischen Dateien getestet, nicht mit eigenen Original-Exporten.'
             ]
         }
     } as Record<string, ImportGuide>

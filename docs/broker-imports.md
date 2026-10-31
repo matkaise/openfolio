@@ -73,6 +73,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | Hargreaves Lansdown | PDF-Contract-Note (`contract-note`), je Abschluss eine Datei | Käufe/Verkäufe in GBP aus der Consideration mit Commission als Gebühr, Stamp Duty und PTM Levy als Steuerbuchung, sofern die Summe aufgeht | Dividenden und Cash (nicht auf Contract Notes), Investment Reports, unbekannte Kostenzeilen |
 | Questrade | PDF: `statement` (Monatsauszug, Abschnitt „04. ACTIVITY DETAILS“), `trade-confirmation` (Trade Confirmation Report), `other` (nur Meldung) | Auszug: Buy/Sell in CAD/USD mit Kommission, UNIT DIST als Ausschüttung, Contribution als Einzahlung; Report: Buy/Sell mit Kommission und SEC-Gebühren. Wertpapier unter dem Symbol | Alle anderen Zeilen der Tabellen (Auszahlungen, Quellensteuer, Zinsen, Devisen, Überträge, Kapitalmaßnahmen, Gebühren), Optionen, Anleihen; Trades mit Abwicklung nach Monatsende werden übersprungen |
 | Robinhood | PDF-Monatsauszug (`statement`), `other` (nur Meldung) | Buy/Sell (Cash) in USD unter dem Ticker, CDIV brutto, DTAX als Quellensteuer, ACH, ITRF, XENT_CC als Ein-/Auszahlung, INT als Zinsen | Alle anderen Typcodes mit Code gemeldet (Splits, Optionen, Margin, Gebühren, Depotüberträge); Pending Settlement wird übersprungen; Sweep-Bewegungen sind intern; CSV-Bericht nicht gelesen |
+| Zerodha | Tradebook-CSV aus Console (`tradebook`), Spalten nach Namen, optional `auction` und `expiry_date` | Käufe/Verkäufe der Segmente EQ und MF in INR, je Ausführung eine Buchung unter der ISIN | F&O, CD, COM und unbekannte Segmente oder Typen; Gebühren, Dividenden und Cash stehen nicht in der Datei; XLSX; externe Tradebooks ungeprüft |
 
 ## Quellen und Lizenzen
 
@@ -131,6 +132,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | Questrade | [Introduction to your account](https://www.questrade.com/learning/using-questrade/introduction-to-your-account) (Stand 17.10.2022, im Browser gelesen) | 30.10.2026 | – (Dokumentation) | Seite Documents → Recent statements (monatlich oder quartalsweise, Self-directed und Questwealth), Seite Reports → Trade confirmation (Suche nach Symbol oder Datum) |
 | Robinhood | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/RobinhoodPDFExtractor.java` mit dem Testdokument `name.abuchen.portfolio.tests/…/pdf/robinhood/AccountStatement01.txt` | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Abschnitte, Zeilenaufbau, Typcodes, Name vor oder über dem Ticker, CUSIP-Zeile, Richtung je Typ, Pending Settlement und Sweep. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
 | Robinhood | [Finding your account documents](https://robinhood.com/us/en/support/articles/finding-your-account-documents/) | 30.10.2026 | – (Dokumentation) | Menüweg Account → Reports and statements → Monthly statements → Kontotyp, Bereitstellung innerhalb von zwei Wochen, Quartalsauszug ohne Aktivität |
+| Zerodha | [Zerodha Support: Tradebook](https://support.zerodha.com/category/console/reports/other-queries/articles/where-can-i-see-all-the-trades-i-ve-taken-for-a-particular-period) | 31.10.2026 | – (Dokumentation) | Menüweg Console → Reports → Tradebook → Segment → Zeitraum, CSV oder XLSX, Grenze 365 Tage, externe Tradebooks |
+| Zerodha | [paisa](https://github.com/ananthakumaran/paisa) `fixture/import/Zerodha/trade.csv`, [Discussion #46](https://github.com/ananthakumaran/paisa/discussions/46); [zerodha-fno-trade-journal](https://github.com/bsteps/zerodha-fno-trade-journal) `sample-trades.csv` (F&O, `expiry_date`); [fundlens](https://github.com/ashupuru/fundlens) `zerodha_csv.py` (Segment MF) | paisa Commit `18ecd7d502c91cd5695d18ee42ac51d35919a6dd` (geprüft 30.10.2026) | paisa AGPL-3.0, keine Lizenzpflicht, weil nur Spaltennamen als Fakten genutzt und kein Code übernommen | Nur Spaltennamen, Zahlen- und Datumsformat. Keine offizielle Spaltenbeschreibung gefunden. Die Fixture ist neu erzeugt. Es gibt keine Vorlage in Export-To-Ghostfolio oder Portfolio Performance. |
 
 ### Abweichungen von der Vorlage (Swissquote)
 
@@ -542,3 +545,11 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 - Wertpapier unter dem Ticker wie bei Schwab; die CUSIP steht nur bei Trades und bleibt in den Rohdaten. Eine ISIN ließe sich aus der CUSIP errechnen,
   wird aber nicht erfunden; die Dividenden hätten sonst einen anderen Schlüssel.
 - Kennung: Der Auszug hat keine Trade-Nummer, deshalb Konto, Datum, Richtung, Ticker, Stückzahl und Betrag, bei Wiederholung mit Zähler in Zeilenfolge.
+
+### Eigener Importer (Zerodha)
+
+- Keine Vorlage in E2G oder PP. Spalten aus mehreren voneinander unabhängigen öffentlichen Exporten; die Datei ist ein reines Handelsjournal.
+- Wert = Stückzahl × Preis, gerundet auf Paise, weil die Datei keinen Betrag hat. Der Preis trägt teils Gleitkomma-Rauschen (`106.040001`).
+- Keine Gebühren: Das Tradebook nennt weder Brokerage noch STT noch Stempel. Sie stehen im Contract Note beziehungsweise Ledger und werden nicht geschätzt.
+- Kennung: Börse, Segment und `trade_id`. Fehlt die ID, ein Fingerabdruck aus Datum, Richtung, Wertpapier, Menge, Preis und Zeit mit Zähler.
+- Segment MF ist nur aus einem öffentlichen Parser mit Beispielzeile belegt, nicht aus einer Datei.

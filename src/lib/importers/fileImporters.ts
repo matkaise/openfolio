@@ -25,6 +25,7 @@ import { wealthsimpleFileImporter } from './wealthsimple';
 import { hargreavesLansdownFileImporter } from './hargreavesLansdown';
 import { questradeFileImporter } from './questrade';
 import { robinhoodFileImporter } from './robinhood';
+import { zerodhaFileImporter } from './zerodha';
 import { hasTextLayer, type PdfDocumentText } from '@/lib/pdf/pdfText';
 import {
     FileImportError,
@@ -65,7 +66,8 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     wealthsimpleFileImporter,
     hargreavesLansdownFileImporter,
     questradeFileImporter,
-    robinhoodFileImporter
+    robinhoodFileImporter,
+    zerodhaFileImporter
 ];
 
 export const findFileImporter = (id: string): BrokerFileImporter | undefined => (
