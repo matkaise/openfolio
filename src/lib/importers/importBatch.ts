@@ -8,6 +8,7 @@ import { hash53 } from '@/lib/hash';
 import { dropDuplicateTradeFees, sortLedger } from '@/lib/domain/ledger/ledger';
 import { getLedger } from '@/lib/domain/ledger/store';
 import type { CashAccount, LedgerEntry, ProjectData, Security } from '@/types/domain';
+import { createComdirectOverlap } from './comdirectOverlap';
 import { isTradeEntry, type ImportEntry } from './entries';
 
 /** What an importer (CSV file, broker connection) hands to the app. */
@@ -77,7 +78,8 @@ const createKeyer = () => {
  * Merges an import into the project's ledger. Pure and deterministic (ids derive from the
  * dedupe keys), so it can run inside a React state updater and be repeated for a preview.
  * Bookings already in the target portfolio (same source and key) are skipped and counted as
- * duplicates, and so are DEGIRO statement fee rows that their trade already carries.
+ * duplicates, and so are DEGIRO statement fee rows that their trade already carries and
+ * comdirect bookings the other import path (API or PDF) already holds.
  */
 export const applyImportBatch = (
     project: ProjectData,
@@ -99,13 +101,14 @@ export const applyImportBatch = (
     });
 
     const keyIncoming = createKeyer();
+    const comdirect = createComdirectOverlap(ledger.filter((entry) => entry.portfolioId === target.id));
     const added: LedgerEntry[] = [];
     let duplicateTrades = 0;
     let duplicateOthers = 0;
     batch.entries.forEach((entry, index) => {
         const scope = `${target.id}|${entry.source}`;
         const key = keyIncoming(scope, entry);
-        if (key && known.has(`${scope}|${key}`)) {
+        if ((key && known.has(`${scope}|${key}`)) || comdirect.covers(entry)) {
             if (isTradeEntry(entry)) duplicateTrades += 1; else duplicateOthers += 1;
             return;
         }
