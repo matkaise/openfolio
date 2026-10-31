@@ -146,6 +146,9 @@ export const fileImportEn: typeof fileImportDe = {
         commsec: {
             colon: 'PDF confirmation (COMPANY: …)',
             plain: 'PDF confirmation (COMPANY … / SECURITY … CODE)'
+        },
+        dkb: {
+            dkb: 'DKB PDF settlement'
         }
     },
     guides: {
@@ -823,6 +826,38 @@ export const fileImportEn: typeof fileImportDe = {
                 'Confirmations name the ASX code, no ISIN. The security is looked up by code and currency at the next price update and can be completed there.',
                 'Settlement runs through the linked bank account, so cash movements in the portfolio are incomplete.',
                 'The publicly known samples date from 2020; only tested with synthetic PDFs, not with current original confirmations.'
+            ]
+        },
+        dkb: {
+            scope: 'Securities accounts at DKB (Deutsche Kreditbank AG).',
+            steps: [
+                'In the DKB mailbox, open the folder "Wertpapierdokumente".',
+                'Pick the PDF of each transaction: buy and sell settlements have titles like "Kauf - WKN … - Wertpapierabrechnung vom …", dividends are called "Ertragsabrechnung".',
+                'Download with "Speichern"; several documents can be selected together.',
+                'Drop all PDFs here together; each PDF is one document.'
+            ],
+            settings: [
+                'Use the original PDFs from the mailbox; do not print, scan or photograph them: Openfolio only reads the text layer, without text recognition.',
+                'For complete holdings, import all settlements since the account was opened, including the half-yearly savings plan statements.'
+            ],
+            accounts: 'Import per securities account. Settlements that were already imported are recognised by their invoice, statement or order number and not booked twice.',
+            supported: [
+                'Wertpapier Abrechnung Kauf, Ausgabe Investmentfonds, Verkauf and Rücknahme Investmentfonds (also Direkthandel): market value, commission and charges as a fee, taxes as a separate booking.',
+                'Steuerliche Ausgleichrechnung of a sale at a loss: the refund as a separate tax booking with its own date.',
+                'Halbjahresabrechnung Sparplan: each purchase on its own.',
+                'Dividendengutschrift, Ausschüttung, Gutschrift von Investmenterträgen: gross amount in account currency with withholding tax and taxes; Zinsgutschrift as interest.',
+                'Vorabpauschale with tax withheld.'
+            ],
+            unsupported: [
+                'Bonds (nominal value instead of units, accrued interest), including redemptions; interest credits are booked, though.',
+                'Cancellations, capital repayments, securities transfers and depot statements with custody fees.',
+                'Account and credit card statements (deposits, withdrawals, interest).',
+                'Cost information and notices about the key information document are skipped without a booking, and so is a Vorabpauschale without tax withheld.'
+            ],
+            limits: [
+                'A settlement is only booked if market value, fees and taxes add up exactly to the final amount; otherwise it is listed as not imported.',
+                'The financial transaction tax is booked as a tax, not as a fee.',
+                'Only tested with synthetic PDFs based on publicly documented formats, not with current original settlements.'
             ]
         }
     } satisfies Record<string, ImportGuide>
