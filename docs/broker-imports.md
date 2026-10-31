@@ -2,7 +2,7 @@
 
 Stand der Umsetzung von `OPENFOLIO_BROKER_IMPORT_AGENT_BRIEF.md`. Ein Broker gilt nur für die hier
 genannten Formate und Buchungsarten als unterstützt. Alle Tests verwenden synthetische Dateien unter
-`src/lib/__tests__/fixtures/`; eine Prüfung mit aktuellen Original-Exporten steht jeweils noch aus.
+`src/lib/__tests__/fixtures/`; eine Prüfung mit aktuellen Original-Exporten steht außer für deutsche DEGIRO-CSV noch aus.
 
 ## Aufbau
 
