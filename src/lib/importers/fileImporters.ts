@@ -1,5 +1,6 @@
 import { avanzaFileImporter } from './avanza';
 import { comdirectFileImporter } from './comdirectPdf';
+import { consorsbankFileImporter } from './consorsbank';
 import { degiroFileImporter } from './degiroFile';
 import { directaFileImporter } from './directa';
 import { disnatFileImporter } from './disnat';
@@ -55,7 +56,8 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     comdirectFileImporter,
     yuhFileImporter,
     commSecFileImporter,
-    dkbFileImporter
+    dkbFileImporter,
+    consorsbankFileImporter
 ];
 
 export const findFileImporter = (id: string): BrokerFileImporter | undefined => (
