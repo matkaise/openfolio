@@ -158,9 +158,24 @@ export const fileImportDe = {
         dkb: {
             dkb: 'PDF-Abrechnung DKB'
         },
+        consorsbank: {
+            consorsbank: 'PDF-Abrechnung Consorsbank / Cortal Consors'
+        },
         wealthsimple: {
             'performance-report': 'PDF-Performance-Report',
             other: 'Anderes Wealthsimple-Dokument'
+        },
+        hargreaveslansdown: {
+            'contract-note': 'PDF-Contract-Note'
+        },
+        questrade: {
+            statement: 'PDF-Monatsauszug',
+            'trade-confirmation': 'PDF-Trade-Confirmation-Report',
+            other: 'Anderes Questrade-Dokument'
+        },
+        robinhood: {
+            statement: 'PDF-Monatsauszug',
+            other: 'Anderes Robinhood-Dokument'
         },
         zerodha: {
             tradebook: 'Tradebook-CSV (Console)'
@@ -842,6 +857,39 @@ export const fileImportDe = {
                 'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
             ]
         },
+        consorsbank: {
+            scope: 'Depots bei der Consorsbank (BNP Paribas), auch Abrechnungen aus der Zeit von Cortal Consors.',
+            steps: [
+                'Im Browser auf der Website der Consorsbank anmelden, nicht in der App.',
+                'Unter „Mein Konto & Depot“ das „OnlineArchiv“ öffnen.',
+                'Als Dokumententyp „Orderabrechnungen“ wählen und „Suchen“ klicken; für Dividenden und Erträge die passenden Dokumente ebenso suchen.',
+                'Alle Dateien auswählen, speichern und die PDFs gemeinsam hier ablegen; jedes PDF ist ein Dokument.'
+            ],
+            settings: [
+                'PDFs aus dem Orderarchiv der App sind laut Parqet nicht lesbar: dieselben Dokumente im Browser herunterladen.',
+                'Original-PDFs verwenden, nicht ausdrucken, scannen oder fotografieren: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Abrechnungen ab Depoteröffnung importieren.'
+            ],
+            accounts: 'Je Depot importieren. Bereits importierte Abrechnungen werden an der Ordernummer erkannt, Teilausführungen (…001, …002) bleiben getrennt.',
+            supported: [
+                'Orderabrechnung und Wertpapierabrechnung Kauf, Verkauf, Bezug, Verkauf von Bezugsrechten und Sparplan: Betrag in Kontowährung, Provision und Entgelte als Gebühr, Steuern als eigene Buchung.',
+                'Einlösung in Stück als Verkauf.',
+                'Dividenden- und Ertragsgutschrift brutto in Kontowährung mit Quellensteuer und Steuern, Zinsgutschrift als Zinsen.',
+                'Vorabpauschale und Ertragsthesaurierung: nur die Steuer. Nachträgliche Verlustverrechnung als Steuerbuchung.'
+            ],
+            unsupported: [
+                'Abrechnungen ohne ISIN (ältere Dokumente nennen nur die WKN): Käufe und Verkäufe werden gemeldet, weil Openfolio keine ISIN erfindet. Erträge werden mit Name und Betrag gebucht, aber keinem Wertpapier zugeordnet.',
+                'Anleihen (Nominale, Stückzinsen); Zinsgutschriften werden dagegen gebucht.',
+                'Stornos und Neuabrechnungen: Eine bereits importierte Gutschrift muss von Hand korrigiert werden, sonst stünde sie doppelt im Depot.',
+                'Gutschriften auf Fremdwährungskonten, Überträge, Umtausch, Anschaffungsdaten, Kontoauszüge und Kontoabschlüsse.',
+                'Order- und Änderungsbestätigungen sowie Kosteninformationen werden ohne Buchung übersprungen; erst die Abrechnung belegt eine Ausführung.'
+            ],
+            limits: [
+                'Eine Abrechnung wird nur gebucht, wenn Kurswert, Gebühren und Steuern genau den Endbetrag ergeben; sonst erscheint sie als nicht übernommen.',
+                'Die Finanztransaktionssteuer wird als Steuer gebucht, nicht als Gebühr.',
+                'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Abrechnungen.'
+            ]
+        },
         wealthsimple: {
             scope: 'Verwaltete Wealthsimple-Konten in Kanada (Wealthsimple Inc.): monatliche und jährliche Performance Reports als PDF. Nicht belegt für Self-directed-Konten (Wealthsimple Trade), Krypto und Chequing.',
             steps: [
@@ -872,6 +920,98 @@ export const fileImportDe = {
                 'Die Reports nennen nur Symbole, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Symbol und Währung gesucht und kann dort nachgetragen werden.',
                 'Die öffentlichen Muster stammen aus dem Jahr 2020. Ob aktuelle Auszüge noch so aufgebaut sind, ist nicht belegt; ein abweichendes PDF wird gemeldet, nicht gebucht.',
                 'Nur mit synthetischen PDFs getestet, nicht mit aktuellen Originalen.'
+            ]
+        },
+        hargreaveslansdown: {
+            scope: 'Hargreaves-Lansdown-Konten im Vereinigten Königreich (Fund & Share Account, ISA, SIPP): Contract Notes als PDF, je Abschluss ein Dokument.',
+            steps: [
+                'Online im HL-Konto anmelden. HL stellt Contract Notes dort bereit und nennt sie in seinen Service-Bedingungen ausdrücklich als Online-Dokumente.',
+                'Die Contract Note des jeweiligen Abschlusses öffnen und als PDF speichern.',
+                'Alle PDFs gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Den genauen Menüpunkt für Contract Notes nennt HL nicht öffentlich, deshalb steht er hier nicht. Falls er nicht auffindbar ist, hilft das HL-Helpdesk.',
+                'Das von HL erzeugte PDF verwenden, keinen Webseitenausdruck und keinen Scan: Openfolio liest nur die Textschicht, ohne Texterkennung.'
+            ],
+            accounts: 'Je HL-Konto (zum Beispiel ISA und SIPP) ein eigenes Depot verwenden. Eine Contract Note wird anhand ihrer Nummer erkannt und nicht doppelt gebucht.',
+            supported: [
+                'Käufe und Verkäufe von Fonds, ETFs und Aktien: Consideration in GBP, Commission als Gebühr. Der Kurs in Pence wird nicht verwendet, die Stückzahl steht auf der Note.',
+                'Stamp Duty und PTM Levy als eigene Steuerbuchung, wenn sie auf der Note stehen und die Summe aufgeht.'
+            ],
+            unsupported: [
+                'Dividenden, Ein- und Auszahlungen, Zinsen und Gebühren stehen nicht auf Contract Notes. Laut Nutzerberichten gibt HL für Dividenden kein PDF aus.',
+                'Investment Reports und andere HL-Dokumente werden gemeldet, nicht gebucht.',
+                'Notes mit unbekannten Kostenzeilen, etwa Fremdwährungsgebühren, werden gemeldet.'
+            ],
+            limits: [
+                'Eine Note wird nur gebucht, wenn Consideration und Kosten genau den Abrechnungsbetrag ergeben.',
+                'Stamp Duty und PTM Levy kommen in den öffentlichen Mustern nicht vor; ihre Bezeichnungen sind nicht an Originalen belegt.',
+                'Nur mit synthetischen PDFs nach öffentlich dokumentierten Formaten getestet, nicht mit aktuellen Original-Notes.'
+            ]
+        },
+        questrade: {
+            scope: 'Questrade-Konten in Kanada (Self-directed, Questwealth): Monatsauszüge („Account statement“) und Trade Confirmation Reports als PDF. Der Excel-Export der Transaktionshistorie wird hier nicht gelesen.',
+            steps: [
+                'Bei Questrade anmelden.',
+                'Monatsauszüge: Seite „Documents“ öffnen und unter „Recent statements“ die Auszüge als PDF speichern.',
+                'Oder Handelsbestätigungen: Seite „Reports“ öffnen, „Trade confirmation“ wählen, nach Symbol oder Datum suchen und den Bericht als PDF speichern.',
+                'Alle PDFs gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Monatsauszüge bevorzugen: Nur sie enthalten neben Käufen auch Ausschüttungen und Einzahlungen.',
+                'Original-PDFs verwenden, keine Scans: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Auszüge ab Kontoeröffnung importieren.'
+            ],
+            accounts: 'Je Questrade-Konto ein eigenes Depot verwenden. Dieselbe Buchung in Auszug und Report erhält dieselbe Kennung, wenn Datum, Stückzahl und Betrag gleich sind. Der Auszug kann Teilausführungen aber zusammenfassen: Für denselben Zeitraum daher nur eine der beiden Dokumentarten importieren.',
+            supported: [
+                'Monatsauszug: Käufe und Verkäufe in CAD und USD mit Kommission, Ausschüttungen (UNIT DIST) und Contributions.',
+                'Trade Confirmation Report: Käufe und Verkäufe mit Kommission und SEC-Gebühren als Gebühr.'
+            ],
+            unsupported: [
+                'Im Auszug werden Auszahlungen, Einzahlungen ohne „Contribution“, Quellensteuer, Zinsen, Devisen, Überträge, Kapitalmaßnahmen und Gebühren gemeldet, nicht gebucht: Für diese Zeilen ist kein Muster öffentlich.',
+                'Optionen und Anleihen (Stückzinsen) werden gemeldet.',
+                'Trades mit Abwicklung nach Monatsende werden übersprungen und gemeldet; sie stehen im Auszug des Folgemonats.'
+            ],
+            limits: [
+                'Der Auszug wird je Tabelle nur gebucht, wenn Anfangssaldo und Zeilen genau den Schlusssaldo ergeben; sonst wird die Tabelle als nicht übernommen gemeldet.',
+                'Beim Report müssen die Zeilen die Zeile „Totals“ ergeben.',
+                'Auszüge und Reports nennen nur Symbole, keine ISIN. Das Wertpapier wird beim nächsten Kursabruf über Symbol und Währung gesucht und kann dort nachgetragen werden.',
+                'Questrade beschreibt den Ablageort, aber nicht die Download-Schaltfläche; die Anleitung ist von 2022.',
+                'Verkäufe im Auszug und USD-Zeilen im Auszug kommen in den öffentlichen Mustern nicht vor; nur mit synthetischen PDFs getestet.'
+            ]
+        },
+        robinhood: {
+            scope: 'Robinhood-Brokerage-Konten in den USA: Monatsauszüge (Monthly statements) als PDF. Der CSV-Bericht „Account activity report“ wird hier nicht gelesen.',
+            steps: [
+                'In der App oder im Web „Account“ öffnen; in der App zuerst das Menü (drei Striche).',
+                '„Reports and statements“ wählen, dann „Monthly statements“.',
+                'Den Kontotyp wählen und das PDF des gewünschten Monats herunterladen.',
+                'Alle Monate gemeinsam hier ablegen.'
+            ],
+            settings: [
+                'Der Auszug eines Monats steht innerhalb der ersten zwei Wochen des Folgemonats bereit. Ohne Aktivität gibt es stattdessen einen Quartalsauszug.',
+                'Original-PDFs verwenden, keine Scans: Openfolio liest nur die Textschicht, ohne Texterkennung.',
+                'Für einen vollständigen Bestand alle Auszüge ab Kontoeröffnung importieren.'
+            ],
+            accounts: 'Je Robinhood-Konto (zum Beispiel Individual und IRA) ein eigenes Depot verwenden. Wiederholte Importe buchen nichts doppelt; gleich hohe Trades eines Auszugs bleiben getrennt.',
+            supported: [
+                'Käufe und Verkäufe (Cash-Konto) in USD.',
+                'Dividenden (CDIV) brutto und ausländische Quellensteuer (DTAX) als eigene Buchung.',
+                'ACH-Ein- und -Auszahlungen, interne Überträge (ITRF), Cashback der Kreditkarte (XENT_CC) als Einzahlung.',
+                'Zinsen auf das Sweep-Guthaben (INT).'
+            ],
+            unsupported: [
+                'Alle anderen Typcodes, etwa Splits, Optionen, Margin, Gebühren und Depotüberträge, werden mit ihrem Code gemeldet, nicht gebucht.',
+                'Trades, die noch nicht abgewickelt sind, werden übersprungen und gemeldet; sie stehen im Auszug des Folgemonats.',
+                'Die Sweep-Bewegungen (Deposit Sweep Activity) sind interne Umbuchungen und werden nicht gebucht.',
+                'Krypto, Futures und Ausgaben stehen nicht im Wertpapierauszug.'
+            ],
+            limits: [
+                'Ein Auszug wird nur gebucht, wenn die Zeilen die Zeile „Total Funds Paid and Received“ ergeben; nicht gebuchte Zeilen zählen dabei mit. Sonst erscheint die Tabelle als nicht übernommen.',
+                'Die Auszüge trennen Soll und Haben im Text nicht; die Richtung folgt aus dem Typcode.',
+                'Das Wertpapier läuft unter dem Ticker, weil Dividenden nur ihn nennen. Die CUSIP bleibt in den Rohdaten. Die ISIN wird nicht errechnet.',
+                'Überträge sind nur für das Individual-Konto belegt.',
+                'Nur mit synthetischen PDFs nach einem öffentlichen Muster von Januar 2026 getestet, nicht mit eigenen Original-Auszügen.'
             ]
         },
         zerodha: {
