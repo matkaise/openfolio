@@ -1,4 +1,5 @@
 import { avanzaFileImporter } from './avanza';
+import { comdirectFileImporter } from './comdirectPdf';
 import { degiroFileImporter } from './degiroFile';
 import { directaFileImporter } from './directa';
 import { disnatFileImporter } from './disnat';
@@ -52,6 +53,7 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     scalableFileImporter,
     flatexFileImporter,
     ingFileImporter,
+    comdirectFileImporter,
     yuhFileImporter,
     commSecFileImporter
 ];

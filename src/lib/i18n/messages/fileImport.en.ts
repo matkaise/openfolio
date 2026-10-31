@@ -136,6 +136,9 @@ export const fileImportEn: typeof fileImportDe = {
         ing: {
             ing: 'ING Germany PDF settlement'
         },
+        comdirect: {
+            comdirect: 'comdirect PDF documents'
+        },
         yuh: {
             de: 'PDF transaction notice, German',
             en: 'PDF transaction notice, English'
@@ -727,6 +730,40 @@ export const fileImportEn: typeof fileImportDe = {
             limits: [
                 'A settlement is only booked if market value, fees and taxes add up exactly to the final amount; otherwise it is listed as not imported.',
                 'The French financial transaction tax is booked as a tax, not as a fee.',
+                'Only tested with synthetic PDFs based on publicly documented formats, not with current original settlements.'
+            ]
+        },
+        comdirect: {
+            scope: 'PDF documents from the comdirect PostBox, in addition to the connection under "Brokers". Both may feed the same depot, but they are not equivalent: only the PDFs contain fees and taxes on securities transactions.',
+            steps: [
+                'In the PostBox, select the Wertpapierabrechnungen and the Steuermitteilungen (subject "Steuermitteilung" with the WKN).',
+                'Use the bulk download at the bottom of the PostBox and choose "herunterladen"; comdirect delivers a ZIP archive.',
+                'Unpack the ZIP: Openfolio reads the PDFs themselves, not a ZIP.',
+                'Drop all PDFs here together; a settlement and its Steuermitteilung belong together.'
+            ],
+            settings: [
+                'Use the original PDFs from the PostBox; do not print, scan or photograph them: Openfolio only reads the text layer, without text recognition.',
+                'For dividends, import the Steuermitteilung. A Dividendengutschrift or Ertragsgutschrift alone books nothing.'
+            ],
+            accounts: 'Import per depot. Documents that were already imported are recognised and not booked twice, even if both documents are in one PDF. If the depot already holds bookings from the comdirect connection, buys and sells (same day, security and quantity) and dividends (same net amount within 5 days) are not booked again.',
+            supported: [
+                'Wertpapierabrechnung Kauf and Verkauf, including partial executions, foreign currency and fixed prices: market value in account currency, commission and charges as a fee; discounts on the sales charge reduce the purchase amount.',
+                'Steuermitteilung for a buy or sell: taxes paid or refunded as a separate booking.',
+                'Steuermitteilung for domestic and foreign dividends and fund distributions: the dividend with credited withholding tax and taxes.',
+                'Steuermitteilung for the Vorabpauschale: the tax only.',
+                'Dividendengutschriften from before 2009, for which there is no Steuermitteilung, in account currency.'
+            ],
+            unsupported: [
+                'Dividendengutschriften and Ertragsgutschriften showing "vor Steuern" are deliberately not booked: the Steuermitteilung of the same dividend states the amount that reached the account.',
+                'Bonds, exchanges (Wertpapierumtausch), redemptions, distributions in kind, older foreign-currency credits and sales with negative proceeds.',
+                'Finanzreport (deposits, withdrawals, interest) and Abrechnung Verwahrentgelt.',
+                'Execution notices and cost information are skipped without a booking; only the settlement proves an execution.'
+            ],
+            limits: [
+                'The gross amount of a dividend is the amount before taxes plus credited withholding tax. Withholding tax that cannot be credited appears only in the Gutschrift and reduces the gross amount here; cash is still correct.',
+                'Without the Steuermitteilung a sale lacks its tax, without the settlement the sale itself is missing: import both documents for a correct balance.',
+                'When bookings overlap with the connection, the booking that was there first stays. There is no shared id: the Vorabpauschale and taxes from the connection are not matched.',
+                'A settlement is only booked if market value and fees add up exactly to the amount before taxes; otherwise it is listed as not imported.',
                 'Only tested with synthetic PDFs based on publicly documented formats, not with current original settlements.'
             ]
         },
