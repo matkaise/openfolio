@@ -161,6 +161,10 @@ export const fileImportEn: typeof fileImportDe = {
             statement: 'PDF monthly statement',
             'trade-confirmation': 'PDF trade confirmation report',
             other: 'Other Questrade document'
+        },
+        robinhood: {
+            statement: 'PDF monthly statement',
+            other: 'Other Robinhood document'
         }
     },
     guides: {
@@ -960,6 +964,40 @@ export const fileImportEn: typeof fileImportDe = {
                 'Statements and reports name symbols, no ISIN. The security is looked up by symbol and currency at the next price update and can be completed there.',
                 'Questrade documents where the documents are kept, not the download button; the guide dates from 2022.',
                 'Sales and USD rows in statements do not appear in the public samples; only tested with synthetic PDFs.'
+            ]
+        },
+        robinhood: {
+            scope: 'Robinhood brokerage accounts in the US: monthly statements as PDF. The CSV "account activity report" is not read here.',
+            steps: [
+                'Open "Account" in the app or on the web; in the app, open the menu (three bars) first.',
+                'Choose "Reports and statements", then "Monthly statements".',
+                'Choose the account type and download the PDF of the month you want.',
+                'Drop all months here together.'
+            ],
+            settings: [
+                'A month\'s statement is available within the first two weeks of the next month. Accounts without activity get a quarterly statement instead.',
+                'Use original PDFs, no scans: Openfolio only reads the text layer and runs no text recognition.',
+                'For a complete position history, import all statements since the account was opened.'
+            ],
+            accounts: 'Use one portfolio per Robinhood account (for example individual and IRA). Repeated imports book nothing twice; equal trades of one statement stay separate.',
+            supported: [
+                'Buys and sells (cash account) in USD.',
+                'Dividends (CDIV) gross and foreign withholding tax (DTAX) as its own booking.',
+                'ACH deposits and withdrawals, internal transfers (ITRF), credit card cash back (XENT_CC) as deposit.',
+                'Interest on swept cash (INT).'
+            ],
+            unsupported: [
+                'All other type codes, such as splits, options, margin, fees and account transfers, are reported with their code, not booked.',
+                'Trades pending settlement are skipped and reported; they appear in the next statement.',
+                'Sweep movements (Deposit Sweep Activity) are internal and not booked.',
+                'Crypto, futures and spending are not on the securities statement.'
+            ],
+            limits: [
+                'A statement is only booked if the rows add up to the "Total Funds Paid and Received" line, counting rows that were not booked. Otherwise the table is listed as not imported.',
+                'The statements do not separate debit and credit in the text; the direction follows from the type code.',
+                'Securities are booked under the ticker because dividends only name that. The CUSIP stays in the raw data. No ISIN is computed.',
+                'Transfers are only confirmed for the individual account.',
+                'Only tested with synthetic PDFs based on one public sample from January 2026, not with your own original statements.'
             ]
         }
     } satisfies Record<string, ImportGuide>

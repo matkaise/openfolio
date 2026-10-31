@@ -72,6 +72,7 @@ Variantennamen in beiden Sprachdateien, synthetische Fixture mit README-Eintrag,
 | Wealthsimple | PDF-Performance-Report verwalteter Konten (`performance-report`, monatlich oder jährlich), `other` (nur Meldung) | Transfer In/Out, Bought/Sold unter dem Symbol, Dividenden in CAD, Non-resident tax als Quellensteuer, Management Fee, Rabatt und Sales Tax als Gebühren | Dividenden ohne Symbol, unbekannte Abschnitte und Zeilen, andere Dokumente; Reports mit mehreren Konten werden abgelehnt |
 | Hargreaves Lansdown | PDF-Contract-Note (`contract-note`), je Abschluss eine Datei | Käufe/Verkäufe in GBP aus der Consideration mit Commission als Gebühr, Stamp Duty und PTM Levy als Steuerbuchung, sofern die Summe aufgeht | Dividenden und Cash (nicht auf Contract Notes), Investment Reports, unbekannte Kostenzeilen |
 | Questrade | PDF: `statement` (Monatsauszug, Abschnitt „04. ACTIVITY DETAILS“), `trade-confirmation` (Trade Confirmation Report), `other` (nur Meldung) | Auszug: Buy/Sell in CAD/USD mit Kommission, UNIT DIST als Ausschüttung, Contribution als Einzahlung; Report: Buy/Sell mit Kommission und SEC-Gebühren. Wertpapier unter dem Symbol | Alle anderen Zeilen der Tabellen (Auszahlungen, Quellensteuer, Zinsen, Devisen, Überträge, Kapitalmaßnahmen, Gebühren), Optionen, Anleihen; Trades mit Abwicklung nach Monatsende werden übersprungen |
+| Robinhood | PDF-Monatsauszug (`statement`), `other` (nur Meldung) | Buy/Sell (Cash) in USD unter dem Ticker, CDIV brutto, DTAX als Quellensteuer, ACH, ITRF, XENT_CC als Ein-/Auszahlung, INT als Zinsen | Alle anderen Typcodes mit Code gemeldet (Splits, Optionen, Margin, Gebühren, Depotüberträge); Pending Settlement wird übersprungen; Sweep-Bewegungen sind intern; CSV-Bericht nicht gelesen |
 
 ## Quellen und Lizenzen
 
@@ -128,6 +129,8 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 | Hargreaves Lansdown | [HL Service Terms reference guide](https://www.hl.co.uk/terms-and-conditions/hl-service-terms-and-conditions-reference-guide), [Sharesight](https://www.sharesight.com/partners/hargreaves-lansdown/), [PP-Forum](https://forum.portfolio-performance.info/t/pdf-import-from-hargreaves-landsdown/21726) | 30.10.2026 | – (Dokumentation) | Contract Notes sind online verfügbar und als PDF ladbar; kein PDF für Dividenden laut Forum. **Kein öffentlicher Menüweg gefunden**, die Anleitung nennt deshalb keinen. Die offizielle Anleitung für Investment Reports (Portfolio history) gilt nicht nachweislich für Contract Notes. |
 | Questrade | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/QuestradeGroupPDFExtractor.java` mit den Testdokumenten unter `name.abuchen.portfolio.tests/…/pdf/questradegroup/` (`AccountStatement01`, `Buy01–08`, `Dividend01–03`, `Sell01`) | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Abschnitte, Tabellenspalten CAD/USD, Zeilenaufbau, Datumsformate beider Dokumente, Spalten des Reports. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
 | Questrade | [Introduction to your account](https://www.questrade.com/learning/using-questrade/introduction-to-your-account) (Stand 17.10.2022, im Browser gelesen) | 30.10.2026 | – (Dokumentation) | Seite Documents → Recent statements (monatlich oder quartalsweise, Self-directed und Questwealth), Seite Reports → Trade confirmation (Suche nach Symbol oder Datum) |
+| Robinhood | [Portfolio Performance](https://github.com/portfolio-performance/portfolio) `name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/pdf/RobinhoodPDFExtractor.java` mit dem Testdokument `name.abuchen.portfolio.tests/…/pdf/robinhood/AccountStatement01.txt` | Commit `de1e4645b68b76f33b577a187295c4f4304d0204` (geprüft 30.10.2026) | EPL-1.0 (Lizenztext im Repository geprüft) | Nur Formatwissen: Abschnitte, Zeilenaufbau, Typcodes, Name vor oder über dem Ticker, CUSIP-Zeile, Richtung je Typ, Pending Settlement und Sweep. Kein Code und keine Testdokumente übernommen; die Test-PDFs sind neu erzeugt. |
+| Robinhood | [Finding your account documents](https://robinhood.com/us/en/support/articles/finding-your-account-documents/) | 30.10.2026 | – (Dokumentation) | Menüweg Account → Reports and statements → Monthly statements → Kontotyp, Bereitstellung innerhalb von zwei Wochen, Quartalsauszug ohne Aktivität |
 
 ### Abweichungen von der Vorlage (Swissquote)
 
@@ -527,3 +530,15 @@ Buchungstypen, Exportwege), das in eigenem Code umgesetzt ist.
 - Kennung: Report und Auszug tragen keine gemeinsame Nummer, deshalb Konto, Datum, Richtung, Symbol, Stückzahl und Nettobetrag, bei Wiederholung
   im Dokument mit Zähler. Fasst der Auszug Teilausführungen zusammen, greift das nicht; die Anleitung rät zu einer Dokumentart je Zeitraum.
 - Report-Datum `TT-MM-JJ` wie bei PP, im Auszug `MM-TT-JJJJ`. Der Punkt vor kanadischen Symbolen entfällt, die Währung geht an die Suche.
+
+### Abweichungen von der Vorlage (Robinhood)
+
+- Abstimmung: PP liest Zeilen einzeln. Openfolio verlangt, dass Debit- und Credit-Summe zur Zeile `Total Funds Paid and Received` passen. Beträge
+  nicht gebuchter Typcodes zählen mit, weil ihre Richtung unbekannt ist; passt die Lücke nicht genau, wird die Tabelle gemeldet.
+- Unbekannte Zeilen: PP überspringt sie still. Openfolio meldet jeden Typcode mit Zeile, auch Zeilen ohne Betrag.
+- Dividende und Quellensteuer: PP verrechnet DTAX mit der Dividende, wenn die Zuordnung eindeutig ist. Openfolio bucht immer brutto mit eigener
+  Steuerbuchung und braucht keine Zuordnung.
+- Datum: Transaktionsdatum der Tabelle, bei Dividenden stimmt es im Muster mit P/D überein.
+- Wertpapier unter dem Ticker wie bei Schwab; die CUSIP steht nur bei Trades und bleibt in den Rohdaten. Eine ISIN ließe sich aus der CUSIP errechnen,
+  wird aber nicht erfunden; die Dividenden hätten sonst einen anderen Schlüssel.
+- Kennung: Der Auszug hat keine Trade-Nummer, deshalb Konto, Datum, Richtung, Ticker, Stückzahl und Betrag, bei Wiederholung mit Zähler in Zeilenfolge.
