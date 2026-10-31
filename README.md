@@ -1,6 +1,6 @@
 # Openfolio
 
-Lokaler Portfolio-Tracker: Depots, Dividenden und Performance aus Broker-Exporten (DEGIRO/flatex, Swissquote, Trade Republic, Trading 212, XTB, Saxo, Schwab, Revolut, eToro, Freetrade, InvestEngine, Avanza, Directa, Disnat, Finpension, Scalable Capital, flatex, ING Deutschland, comdirect, DKB und Yuh als PDF, generische CSV), ohne Cloud. Projekte werden als `.openfolio`-Datei auf dem eigenen Rechner gespeichert, auf Wunsch mit Passwort verschlüsselt (AES-256-GCM).
+Lokaler Portfolio-Tracker: Depots, Dividenden und Performance aus Broker-Exporten (DEGIRO/flatex, Interactive Brokers als Flex-XML, Swissquote, Trade Republic, Trading 212, XTB, Saxo, Schwab, Revolut, eToro, Freetrade, InvestEngine, Avanza, Directa, Disnat, Finpension, Scalable Capital, flatex, ING Deutschland, comdirect, DKB und Yuh als PDF, generische CSV), ohne Cloud. Projekte werden als `.openfolio`-Datei auf dem eigenen Rechner gespeichert, auf Wunsch mit Passwort verschlüsselt (AES-256-GCM).
 
 ## Entwicklung
 

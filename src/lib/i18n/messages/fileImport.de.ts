@@ -73,6 +73,9 @@ export const fileImportDe = {
             account: 'Account.csv (Kontoübersicht)',
             'account-en': 'Account.csv, Englisch (Kontoübersicht)'
         } as Record<string, string>,
+        ibkr: {
+            activity: 'Aktivitäts-Flex-Abfrage (XML)'
+        },
         trading212: {
             standard: 'CSV-Verlaufsexport',
             utc: 'CSV-Verlaufsexport (Zeit in UTC)'
@@ -186,6 +189,39 @@ export const fileImportDe = {
                 'Käufe und Verkäufe kommen aus der Transactions.csv. Steht ein Trade nur in der Account.csv (Datei fehlt, kürzerer Zeitraum, vom Export ausgelassen), erscheint er unter „Nicht übernommen“.',
                 'Exporte mit der älteren Spaltenfolge (ohne Spalte AutoFX-Gebühr) werden nicht erkannt.',
                 'Englische Exporte sind nur mit synthetischen Dateien getestet. Die Sprache nicht zwischen zwei Exporten wechseln: Kontozeilen derselben Buchung werden sonst doppelt erkannt.'
+            ]
+        },
+        ibkr: {
+            scope: 'Interactive-Brokers-Konten (auch CapTrader, Lynx und andere IBKR-Partner, ungeprüft). Datei aus einer Aktivitäts-Flex-Abfrage im Format XML. CSV-Flex-Dateien und Handelsbestätigungen (Trade Confirmation Flex) werden nicht gelesen.',
+            steps: [
+                'Client Portal: Performance & Berichte → Flex-Abfragen (oder Menü → Berichte → Flex-Abfragen).',
+                'Im Bereich Aktivitäts-Flex-Abfrage auf das Pluszeichen klicken und einen Namen vergeben.',
+                'Unter Abschnitte (Sections) Trades, Cash Transactions, Open Positions, Corporate Actions, Transfers und Sales Tax Details anklicken und die Felder unten auswählen.',
+                'Unter Lieferkonfiguration (Delivery Configuration) als Format XML und einen Zeitraum wählen, dann Weiter → Erstellen.',
+                'Beim gespeicherten Bericht auf den blauen Pfeil Ausführen (Run) klicken, Zeitraum und Format XML bestätigen und die Datei speichern. Eine ZIP-Datei zuerst entpacken.'
+            ],
+            settings: [
+                'Trades, Ebene Execution: currency, assetCategory, symbol, description, conid, isin, transactionID, tradeID, ibOrderID, tradeDate, dateTime, quantity, tradePrice, proceeds, ibCommission, ibCommissionCurrency, taxes, buySell, levelOfDetail, fxRateToBase.',
+                'Cash Transactions, Ebene Detail: currency, symbol, isin, description, type, amount, transactionID, settleDate, dateTime, reportDate, levelOfDetail.',
+                'Open Positions, Ebene Summary: assetCategory, symbol, isin, position, levelOfDetail.',
+                'Corporate Actions und Transfers: type, symbol, description. Sales Tax Details: currency, date, salesTax, taxableDescription, transactionID.',
+                'In allen Abschnitten zusätzlich accountId auswählen.',
+                'Datumsformat in der allgemeinen Konfiguration: yyyyMMdd oder yyyy-MM-dd. Andere Formate sind nicht eindeutig; solche Zeilen erscheinen unter „Nicht übernommen“.'
+            ],
+            accounts: 'Je IBKR-Konto eine eigene Datei und ein eigenes Depot; eine Datei mit mehreren Konten wird abgelehnt. Eine Abfrage deckt höchstens ein Jahr ab: für die ganze Historie je Jahr einen Lauf importieren (gespeicherte Daten reichen laut IBKR vier Kalenderjahre zurück). Wiederholte oder überlappende Dateien werden nicht doppelt gebucht, auch nicht gegenüber der Flex-Verbindung.',
+            supported: [
+                'Käufe und Verkäufe von Aktien, ETFs, Fonds und Anleihen je Ausführung mit Kommission und Steuern; Stornos als Gegenbuchung',
+                'Währungswechsel (assetCategory CASH) als interne Buchungen mit Kommission',
+                'Dividenden und Ersatzzahlungen, Quellensteuer, Zinsen, Gebühren, Ein- und Auszahlungen, Sales Tax'
+            ],
+            unsupported: [
+                'Optionen, Futures, CFD, Optionsscheine und andere Instrumente: erscheinen unter „Nicht übernommen“ und ihr Geldeffekt fehlt.',
+                'Corporate Actions (Splits, Fusionen, Spin-offs) und Transfers (Depotüberträge): erscheinen unter „Nicht übernommen“, Bestände bitte manuell anpassen.'
+            ],
+            limits: [
+                'Der Datei-Import gleicht Bestände nicht mit Open Positions ab; das macht nur die Flex-Verbindung.',
+                'Kontostände aus dem Cash Report werden nicht gelesen. Unbekannte Typen der Cash Transactions werden als Korrektur gebucht.',
+                'Wertpapiere ohne ISIN laufen unter dem IBKR-Symbol. Getestet nur mit synthetischen Dateien, nicht mit einem Original-Export.'
             ]
         },
         trading212: {
