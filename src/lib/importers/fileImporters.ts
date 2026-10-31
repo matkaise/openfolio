@@ -1,8 +1,10 @@
 import { avanzaFileImporter } from './avanza';
 import { comdirectFileImporter } from './comdirectPdf';
+import { consorsbankFileImporter } from './consorsbank';
 import { degiroFileImporter } from './degiroFile';
 import { directaFileImporter } from './directa';
 import { disnatFileImporter } from './disnat';
+import { dkbFileImporter } from './dkb';
 import { etoroFileImporter } from './etoro';
 import { finpensionFileImporter } from './finpension';
 import { flatexFileImporter } from './flatex';
@@ -19,6 +21,9 @@ import { trading212FileImporter } from './trading212Csv';
 import { xtbFileImporter } from './xtb';
 import { yuhFileImporter } from './yuh';
 import { commSecFileImporter } from './commsec';
+import { wealthsimpleFileImporter } from './wealthsimple';
+import { hargreavesLansdownFileImporter } from './hargreavesLansdown';
+import { questradeFileImporter } from './questrade';
 import { robinhoodFileImporter } from './robinhood';
 import { hasTextLayer, type PdfDocumentText } from '@/lib/pdf/pdfText';
 import {
@@ -55,6 +60,11 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     comdirectFileImporter,
     yuhFileImporter,
     commSecFileImporter,
+    dkbFileImporter,
+    consorsbankFileImporter,
+    wealthsimpleFileImporter,
+    hargreavesLansdownFileImporter,
+    questradeFileImporter,
     robinhoodFileImporter
 ];
 
