@@ -88,7 +88,7 @@ export default function PortfolioApp() {
   const [shellNow] = useState(() => new Date());
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [timeRange, setTimeRange] = useState('1J');
-  const [selectedPortfolioIds, setSelectedPortfolioIds] = useState<string[]>([]);
+  const [rawSelectedPortfolioIds, setSelectedPortfolioIds] = useState<string[]>([]);
   const [selectedSecurity, setSelectedSecurity] = useState<{ isin: string; currency?: string } | null>(null);
   const [analysisCache, setAnalysisCache] = useState<AnalysisCache | null>(null);
   const [includeDividendsInPerformance, setIncludeDividendsInPerformance] = useState(false);
@@ -100,6 +100,14 @@ export default function PortfolioApp() {
   const holdingsCount = useMemo(() => (
     project ? calculateProjectHoldings(project, selectCalculationTransactions(project, [])).holdings.length : 0
   ), [project]);
+
+  // A deleted depot drops out of the selection; an empty selection means "all"
+  const portfolios = project?.portfolios;
+  const selectedPortfolioIds = useMemo(() => {
+    const valid = new Set((portfolios || []).map((portfolio) => portfolio.id));
+    const kept = rawSelectedPortfolioIds.filter((id) => valid.has(id));
+    return kept.length === rawSelectedPortfolioIds.length ? rawSelectedPortfolioIds : kept;
+  }, [portfolios, rawSelectedPortfolioIds]);
 
   const themePreference = resolveThemePreference(project?.settings);
 
@@ -165,6 +173,7 @@ export default function PortfolioApp() {
 
   const handleCloseProject = useCallback(async () => {
     if (!(await closeProject())) return;
+    setSelectedPortfolioIds([]);
     setActiveTab('Dashboard');
     setVisitedTabs(['Dashboard']);
   }, [closeProject]);

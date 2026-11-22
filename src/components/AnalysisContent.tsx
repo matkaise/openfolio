@@ -436,7 +436,9 @@ export const AnalysisContent = ({
       if (monthKey !== currentMonth) {
         flushMonth();
         currentMonth = monthKey;
-        startIndex = index;
+        // Like the TWR tiles: a month runs from the previous month's last index, so the move
+        // into its first day counts. Only the very first month starts at its own first point.
+        startIndex = endIndex ?? index;
         endIndex = index;
       } else {
         endIndex = index;
@@ -688,16 +690,26 @@ export const AnalysisContent = ({
     return aligned;
   }, []);
 
+  // Looks up the currency of benchmarks added without one. Every symbol is tried once; the
+  // results go into the list even if the list changed meanwhile (that re-runs this effect, and
+  // a cleanup flag would otherwise drop the remaining lookups and leave the hint spinning).
+  const benchmarkLookupsInFlight = useRef(0);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
   useEffect(() => {
     const missingCurrency = benchmarkList.filter(b => !b.currency && !benchmarkCurrencyAttempts.current.has(b.symbol));
-    if (missingCurrency.length === 0 || isBenchmarkCurrencyLoading) return;
+    if (missingCurrency.length === 0) return;
+    missingCurrency.forEach((b) => benchmarkCurrencyAttempts.current.add(b.symbol));
 
-    let isActive = true;
     const fetchCurrencies = async () => {
+      benchmarkLookupsInFlight.current += 1;
       setIsBenchmarkCurrencyLoading(true);
       try {
         for (const b of missingCurrency) {
-          benchmarkCurrencyAttempts.current.add(b.symbol);
           try {
             const res = await fetch('/api/yahoo', {
               method: 'POST',
@@ -708,7 +720,7 @@ export const AnalysisContent = ({
             if (!res.ok || data.error) continue;
 
             const currency = data.currency;
-            if (currency && isActive) {
+            if (currency && isMountedRef.current) {
               setBenchmarkList(prev => prev.map(item => item.symbol === b.symbol ? { ...item, currency } : item));
             }
           } catch {
@@ -716,15 +728,13 @@ export const AnalysisContent = ({
           }
         }
       } finally {
-        if (isActive) setIsBenchmarkCurrencyLoading(false);
+        benchmarkLookupsInFlight.current -= 1;
+        if (isMountedRef.current && benchmarkLookupsInFlight.current === 0) setIsBenchmarkCurrencyLoading(false);
       }
     };
 
-    fetchCurrencies();
-    return () => {
-      isActive = false;
-    };
-  }, [benchmarkList, isBenchmarkCurrencyLoading]);
+    void fetchCurrencies();
+  }, [benchmarkList]);
 
   const buildBenchmarkMwrHistory = useCallback((
     history: Record<string, number>,

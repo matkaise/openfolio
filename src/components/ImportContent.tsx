@@ -12,7 +12,11 @@ export const ImportContent = ({ onContinue }: ImportContentProps) => {
     const project = useProjectData();
     const t = useT();
     const initialPortfolioId = project?.portfolios?.[0]?.id || '';
-    const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>(initialPortfolioId);
+    const [chosenPortfolioId, setSelectedPortfolioId] = useState<string>(initialPortfolioId);
+    // The page stays mounted: if the chosen depot was deleted meanwhile, fall back to the first one
+    const selectedPortfolioId = project?.portfolios?.some((p) => p.id === chosenPortfolioId)
+        ? chosenPortfolioId
+        : (project?.portfolios?.[0]?.id || '');
     const [isNewPortfolio, setIsNewPortfolio] = useState(!(project?.portfolios && project.portfolios.length > 0));
     const [newPortfolioName, setNewPortfolioName] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -29,7 +33,7 @@ export const ImportContent = ({ onContinue }: ImportContentProps) => {
     };
 
     const handleContinue = () => {
-        if (isNewPortfolio) {
+        if (isNewPortfolio || !selectedPortfolioId) {
             const validationError = validateName(newPortfolioName);
             if (validationError) {
                 setError(validationError);

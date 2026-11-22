@@ -33,6 +33,18 @@ describe('ledger store', () => {
     expect(removeTransaction(updated, 'unknown')).toBe(updated);
   });
 
+  it('drops fields cleared in the form: a fee reset to 0, the quantity of a former buy', () => {
+    const one = addTransactions(createEmptyProject(), [{ ...tx('a'), fee: -5, feeCurrency: 'EUR' }]);
+    const noFee = updateTransaction(one, { ...getTransactions(one)[0], fee: 0, feeCurrency: undefined });
+    expect(getTransactions(noFee)[0].fee).toBeUndefined();
+    expect(getLedger(noFee)[0].feeCurrency).toBeUndefined();
+
+    const dividend = updateTransaction(noFee, { ...getTransactions(noFee)[0], type: 'Dividend', shares: undefined, amount: 3 });
+    expect(getTransactions(dividend)[0]).toMatchObject({ type: 'Dividend', amount: 3 });
+    expect(getTransactions(dividend)[0].shares).toBeUndefined();
+    expect(getLedger(dividend)[0].portfolioId).toBe('p1');
+  });
+
   it('removes the bookings of a portfolio', () => {
     const project = addTransactions({ ...createEmptyProject(), ledger: [entryFromCashMovement(movement('m', 'p2'))] }, [tx('a', 'p1'), tx('b', 'p2')]);
     expect(bookingPortfolioIds(project)).toEqual(['p2', 'p1']);

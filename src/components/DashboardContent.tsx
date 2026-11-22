@@ -18,6 +18,7 @@ import { annualizedReturnFromHistory } from '@/lib/domain/performance/xirr';
 import { getBrokerConnections } from '@/lib/brokers/connections';
 import type { BrokerConnection } from '@/types/domain';
 import { parseDateOnlyUTC } from '@/lib/dateUtils';
+import { currencySymbol, parseTypedAmount } from '@/lib/format';
 import { type DividendHistoryEntry, type EventEntry, type TransactionLike, type UpcomingDividendEntry } from '@/types/portfolioView';
 
 const EMPTY_HISTORY: { date: string; value: number; invested: number; dividend: number }[] = [];
@@ -272,7 +273,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
 
   const saveGoalEdit = () => {
     if (!project) return;
-    const numericGoal = Number(goalInput.replace(/[^\d]/g, ''));
+    const numericGoal = parseTypedAmount(goalInput);
     if (!Number.isFinite(numericGoal) || numericGoal < 1000) return;
 
     updateProject((prev) => ({
@@ -589,7 +590,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
       </GlassCard>
 
       <div className="dash-kpis anim-in anim-in-2">
-        <Kpi label={t.dashboard.invested} value={formatters.money(investedCapital, { decimals: 0 })} sub={t.dashboard.investedSub} icon="€" tone="accent" />
+        <Kpi label={t.dashboard.invested} value={formatters.money(investedCapital, { decimals: 0 })} sub={t.dashboard.investedSub} icon={currencySymbol(baseCurrency)} tone="accent" />
         <Kpi
           label={t.dashboard.gain}
           value={formatters.money(totalReturn, { decimals: 0, sign: true })}

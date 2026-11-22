@@ -18,7 +18,7 @@ import { summarizeCashMovements, summarizeTransactions } from '@/lib/transaction
 import { type DeletedTxEntry, type TransactionLike } from '@/types/portfolioView';
 import { type CashMovement, type Transaction } from '@/types/domain';
 import { addTransactions, getCashMovements, getTransactions, hasTransaction, removeTransaction, updateTransaction } from '@/lib/domain/ledger/store';
-import { resolveEditedAmount } from '@/lib/transactionEdit';
+import { initialPricePerShare, resolveEditedAmount } from '@/lib/transactionEdit';
 
 const EDITABLE_TYPES: Transaction['type'][] = ['Buy', 'Sparplan_Buy', 'Sell', 'Dividend', 'Tax', 'Fee', 'Interest', 'Deposit', 'Withdrawal'];
 
@@ -80,8 +80,8 @@ const TransactionEditModal = ({
     return rawShares !== undefined && rawShares !== null ? Math.abs(rawShares).toString() : '';
   });
   const [pricePerShare, setPricePerShare] = useState(() => {
-    const rawPrice = transaction?.pricePerShare ?? transaction?.price;
-    return rawPrice !== undefined && rawPrice !== null ? Number(rawPrice).toString() : '';
+    const rawPrice = transaction ? initialPricePerShare(transaction) : undefined;
+    return rawPrice !== undefined ? String(rawPrice) : '';
   });
   const [currency, setCurrency] = useState(() => transaction?.currency || 'EUR');
 
@@ -90,23 +90,27 @@ const TransactionEditModal = ({
   const amount = resolveEditedAmount({ type, shares, pricePerShare, storedAmount: transaction.amount });
 
   const handleSave = () => {
+    if (!/^\d{4}-\d{2}-\d{2}/.test(date)) return;
     const parsedShares = shares === '' ? (transaction.shares ?? transaction.quantity ?? undefined) : Number(shares);
-    const parsedPrice = pricePerShare === '' ? (transaction.pricePerShare ?? transaction.price ?? undefined) : Number(pricePerShare);
+    const parsedPrice = pricePerShare === '' ? undefined : Number(pricePerShare);
 
     let finalShares = parsedShares;
     if (parsedShares !== undefined && !Number.isNaN(parsedShares)) {
       if (type === 'Sell') finalShares = -Math.abs(parsedShares);
       else if (type === 'Buy' || type === 'Sparplan_Buy') finalShares = Math.abs(parsedShares);
     }
-    const shareKey = transaction.shares !== undefined ? 'shares' : (transaction.quantity !== undefined ? 'quantity' : 'shares');
 
+    // Quantity and price belong to trades only; a dividend, fee or deposit drops them
+    const { quantity: _quantity, price: _price, ...rest } = transaction;
+    void _quantity;
+    void _price;
     onSave({
-      ...transaction,
+      ...rest,
       type,
       date,
       currency,
-      pricePerShare: parsedPrice,
-      [shareKey]: finalShares,
+      shares: isTrade ? finalShares : undefined,
+      pricePerShare: isTrade && parsedPrice !== undefined && Number.isFinite(parsedPrice) ? parsedPrice : undefined,
       amount
     });
   };
@@ -133,7 +137,7 @@ const TransactionEditModal = ({
         <>
           <Button variant="danger" icon={<Trash2 size={15} />} onClick={handleDelete} className="ui-foot-start">{t.transactions.delete}</Button>
           <Button variant="ghost" onClick={onClose}>{t.common.cancel}</Button>
-          <Button variant="primary" onClick={handleSave}>{t.common.save}</Button>
+          <Button variant="primary" onClick={handleSave} disabled={!/^\d{4}-\d{2}-\d{2}/.test(date)}>{t.common.save}</Button>
         </>
       )}
     >
@@ -144,7 +148,7 @@ const TransactionEditModal = ({
           </SelectInput>
         </Field>
         <Field label={t.transactions.date}>
-          <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <TextInput type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
         {isTrade && (
           <>
@@ -301,8 +305,9 @@ export const TransactionsContent = ({ selectedPortfolioIds }: { selectedPortfoli
     project ? summarizeCashMovements(visibleCashMovements, project.fxData, baseCurrency) : { count: 0, internalCount: 0, externalCount: 0, net: 0 }
   ), [visibleCashMovements, project, baseCurrency]);
 
+  // The type filter is hidden on the account tab and does not apply there
   const activeFilterCount = (txSearch ? 1 : 0)
-    + (txType !== ALL_TYPES ? 1 : 0)
+    + (txType !== ALL_TYPES && activeTab === 'transactions' ? 1 : 0)
     + (txDateFrom ? 1 : 0)
     + (txDateTo ? 1 : 0);
 

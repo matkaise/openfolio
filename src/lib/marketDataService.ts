@@ -188,6 +188,15 @@ const resolveSecuritySymbol = async (input: string, currency?: string, isin?: st
 
 export type SecurityPatches = Record<string, Partial<Security>>;
 
+const isEmptyValue = (value: unknown): boolean => (
+    Array.isArray(value) ? value.length === 0
+        : value !== null && typeof value === 'object' ? Object.keys(value).length === 0
+            : false
+);
+
+/** Same reference, or both empty containers (a reset security gets fresh `{}` / `[]` each time). */
+const sameValue = (a: unknown, b: unknown): boolean => a === b || (isEmptyValue(a) && isEmptyValue(b) && Array.isArray(a) === Array.isArray(b));
+
 /**
  * Applies sync results to the *current* project. A field that changed since the sync
  * started (baseline) was edited meanwhile and is kept; securities deleted meanwhile stay deleted.
@@ -205,7 +214,7 @@ export const applySecurityPatches = (
         const next: Security = { ...target };
         let changed = false;
         (Object.keys(patch) as (keyof Security)[]).forEach((key) => {
-            if (base && target[key] !== base[key]) return; // edited during the sync
+            if (base && !sameValue(target[key], base[key])) return; // edited during the sync
             (next as unknown as Record<string, unknown>)[key] = patch[key];
             changed = true;
         });

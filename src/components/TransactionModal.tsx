@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Upload, Calendar, Hash, DollarSign, Tag, Search, Briefcase, Check, ChevronDown } from 'lucide-react';
 import { useProjectActions, useProjectData, useProjectStoreShallow } from '@/contexts/ProjectContext';
 import { useNotifications } from '@/components/ui/notifications';
@@ -68,6 +68,11 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     const [cashType, setCashType] = useState<ManualCashType>('Deposit');
     const [identifier, setIdentifier] = useState(''); // ISIN/WKN/Ticker
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    // Auto-close after an import; cleared when the dialog goes away, so it cannot close a newly opened one
+    const closeTimerRef = useRef<number | null>(null);
+    useEffect(() => () => {
+        if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+    }, []);
     const [shares, setShares] = useState('');
     const [price, setPrice] = useState('');
     const [cashAmount, setCashAmount] = useState('');
@@ -209,15 +214,16 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
 
         // Resolve the target once so every run of the updater below uses the same portfolio id.
         const target = getTargetPortfolioId(project.portfolios || []);
-        const { project: nextProject, summary } = applyImportBatch(project, batch, target);
+        const { summary } = applyImportBatch(project, batch, target);
         // applyImportBatch is pure: safe to run again on the latest state inside the updater.
         updateProject(prev => applyImportBatch(prev, batch, target).project);
-        void syncMarket(true, { full: true, projectOverride: nextProject });
+        void syncMarket(true, { full: true });
 
         const duplicates = summary.duplicateTransactions + summary.duplicateMovements;
         setImportResult({ added: summary.addedTransactions + summary.addedMovements, duplicates });
         setImportStatus('success');
-        setTimeout(() => {
+        closeTimerRef.current = window.setTimeout(() => {
+            closeTimerRef.current = null;
             onClose();
         }, duplicates > 0 ? 2500 : 1000);
     };
@@ -270,11 +276,13 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             if (!project) return;
             const cashTarget = getTargetPortfolioId(project.portfolios || []);
             const cashBatch: ImportBatch = { ...emptyImportBatch('CSV'), entries, cashBalances: cashPoints };
+            const { summary: cashSummary } = applyImportBatch(project, cashBatch, cashTarget);
             updateProject(prev => applyImportBatch(prev, cashBatch, cashTarget).project);
 
             setGenericImportSummary({
                 imported: cashPoints.length,
-                importedMovements: entries.length,
+                // Only what is new: rows already in the ledger are skipped by the batch
+                importedMovements: cashSummary.addedMovements,
                 skipped: Math.max(0, genericRows.length - processedRows),
                 errors: errors.slice(0, 3)
             });
@@ -294,9 +302,9 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
         if (!project) return;
         const target = getTargetPortfolioId(project.portfolios || []);
         const batch: ImportBatch = { ...emptyImportBatch('CSV'), entries: entries.filter((entry) => Boolean(entry.isin)) };
-        const { project: nextProject, summary } = applyImportBatch(project, batch, target);
+        const { summary } = applyImportBatch(project, batch, target);
         updateProject(prev => applyImportBatch(prev, batch, target).project);
-        void syncMarket(true, { full: true, projectOverride: nextProject });
+        void syncMarket(true, { full: true });
         setGenericImportSummary({
             imported: summary.addedTransactions,
             skipped: genericRows.length - summary.addedTransactions,
@@ -392,8 +400,10 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
             const updatedSecurities = {
                 ...prev.securities,
                 [securityKey]: {
+                    // Keep what the security already has (splits, last sync, fundamentals)
+                    ...existing,
                     isin: securityKey,
-                    symbol: symbolValue,
+                    symbol: options.resolvedSymbol || existing?.symbol || symbolValue,
                     name: options.resolvedName || existing?.name || newTransaction.name || securityKey,
                     currency: options.resolvedCurrency || existing?.currency || newTransaction.currency,
                     quoteType: existing?.quoteType || 'Stock',
@@ -402,7 +412,9 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                         ? 'ignored'
                         : options.resolvedSymbol
                             ? 'resolved'
-                            : 'unresolved') as Security['symbolStatus'],
+                            : existing?.symbolStatus && existing.symbolStatus !== 'ignored'
+                                ? existing.symbolStatus
+                                : 'unresolved') as Security['symbolStatus'],
                     symbolSource: options.ignoreMarketData ? 'manual' : (options.resolvedSource || existing?.symbolSource),
                     symbolLastTried: new Date().toISOString(),
                     ignoreMarketData: Boolean(options.ignoreMarketData),
@@ -420,6 +432,8 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
                 modified: new Date().toISOString()
             };
         });
+        // Fetch prices for a new security right away (only what needs a sync)
+        if (!options.ignoreMarketData) void syncMarket(false);
 
         onClose();
     };
@@ -478,6 +492,7 @@ export const TransactionModal = ({ isOpen, onClose, targetPortfolio }: Transacti
     };
 
     const handleSaveManual = async () => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return; // an emptied date field
         let newTransaction: Transaction | null = null;
 
         if (manualHoldingType === 'security') {

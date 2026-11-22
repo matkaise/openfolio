@@ -327,9 +327,8 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         if (!pending || !current) return;
         const now = new Date().toISOString();
         const apply = (prev: ProjectData) => importFromConnection(prev, pending.connection, pending.batch, pending.source, now).project;
-        const next = apply(current);
         updateProject(apply);
-        void syncMarket(true, { full: true, projectOverride: next });
+        void syncMarket(true, { full: true });
         setStatus(pending.connection.id, {
             state: 'ok',
             message: getT().brokers.sync.imported(describeSummary(pending.summary)),
