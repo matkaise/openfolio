@@ -147,7 +147,7 @@ export function calculateAnalysisMetrics(
         const daysDiff = (endDate.getTime() - startDate.getTime()) / msPerDay;
         const yearsElapsed = daysDiff / annualizationDays;
 
-        if (yearsElapsed > 0 && startValue > 0) {
+        if (yearsElapsed > 0 && startValue > 0 && endValue > 0) {
             const annualizedReturn = Math.pow(endValue / startValue, 1 / yearsElapsed) - 1;
             const excessReturn = annualizedReturn - riskFreeRate;
             sharpeRatio = volatility > 0 ? excessReturn / (volatility / 100) : 0;
@@ -160,59 +160,22 @@ export function calculateAnalysisMetrics(
     let maxDrawdownDate = '';
     const drawdownHistory: { date: string; value: number }[] = [];
 
-    // TWR Index Tracking
-    let peakIndex = 1.0;
-    let currentIndex = 1.0;
-
-    // Check if we have data
-    if (historyData.length > 0) {
-        // Handle Day 1 Alpha for TWR:
-        // Day 1 Return = (Value - Invested) / Invested
-        if (historyData[0].invested > 0) {
-            const day1Return = (historyData[0].value - historyData[0].invested) / historyData[0].invested;
-            currentIndex = 1.0 * (1 + day1Return);
-            peakIndex = Math.max(peakIndex, currentIndex);
+    // Same TWR index as the performance chart and the monthly tiles (with or without dividends),
+    // so the drawdown always matches what the chart shows.
+    let peakIndex = indexSeries.length > 0 && indexSeries[0].index > 0 ? indexSeries[0].index : 1.0;
+    for (let i = 1; i < indexSeries.length; i++) {
+        const { date, index } = indexSeries[i];
+        if (!Number.isFinite(index)) continue;
+        if (index > peakIndex) {
+            peakIndex = index;
+            drawdownHistory.push({ date, value: 0 });
+            continue;
         }
-
-        for (let i = 1; i < historyData.length; i++) {
-            const prev = historyData[i - 1];
-            const curr = historyData[i];
-
-            // Calculate Cashflow
-            const prevInvested = prev.invested || 0;
-            const currInvested = curr.invested || 0;
-            const cashFlow = currInvested - prevInvested;
-
-            // Daily Return (Total Return)
-            // Use standard Start-of-Day Cashflow assumption
-            // Daily Return (Total Return)
-            // Use standard Start-of-Day Cashflow assumption
-
-            const costBasis = prev.value + cashFlow;
-            let dailyReturn = 0;
-
-            if (costBasis > 0) {
-                dailyReturn = (curr.value - costBasis) / costBasis;
-            }
-
-            currentIndex *= (1 + dailyReturn);
-
-            // Update Peak and Drawdown
-            if (currentIndex > peakIndex) {
-                peakIndex = currentIndex;
-                drawdownHistory.push({ date: curr.date, value: 0 });
-            } else {
-                const drawdown = (peakIndex - currentIndex) / peakIndex; // Positive value representing drop
-                const drawdownPercent = drawdown * 100;
-
-                // Store negative value for chart (0 to -X%)
-                drawdownHistory.push({ date: curr.date, value: -drawdownPercent });
-
-                if (drawdownPercent > maxDrawdown) {
-                    maxDrawdown = drawdownPercent;
-                    maxDrawdownDate = curr.date;
-                }
-            }
+        const drawdownPercent = peakIndex > 0 ? ((peakIndex - index) / peakIndex) * 100 : 0;
+        drawdownHistory.push({ date, value: -drawdownPercent });
+        if (drawdownPercent > maxDrawdown) {
+            maxDrawdown = drawdownPercent;
+            maxDrawdownDate = date;
         }
     }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getRangeStartDate, parseDateOnlyUTC, toDateKeyLocal, toDateKeyUTC, toUtcTime } from '../dateUtils';
+import { getRangeStartDate, parseDateOnlyUTC, toDateKeyLocal, toDateKeyUTC, toUtcTime, parseCalendarDay, splitFactorAfter } from '../dateUtils';
 
 describe('dateUtils', () => {
   it('parses date-only strings in UTC', () => {
@@ -44,5 +44,24 @@ describe('getRangeStartDate (B19)', () => {
 
   it('returns null for MAX and unknown ranges', () => {
     expect(getRangeStartDate('MAX', new Date(2026, 9, 24))).toBeNull();
+  });
+});
+
+describe('parseCalendarDay', () => {
+  it('reads a day as local midnight, also from a timestamp', () => {
+    const day = parseCalendarDay('2026-01-01');
+    expect([day.getFullYear(), day.getMonth(), day.getDate(), day.getHours()]).toEqual([2026, 0, 1, 0]);
+    expect(parseCalendarDay('2026-03-07T22:00:00Z').getDate()).toBe(7);
+  });
+});
+
+describe('splitFactorAfter', () => {
+  it('multiplies the splits after the day, optionally skipping some', () => {
+    const splits = { '2020-01-10': 2, '2022-06-01': 10 };
+    expect(splitFactorAfter(splits, '2019-12-31')).toBe(20);
+    expect(splitFactorAfter(splits, '2020-01-10')).toBe(10);
+    expect(splitFactorAfter(splits, '2023-01-01')).toBe(1);
+    expect(splitFactorAfter(splits, '2019-01-01', new Set(['2022-06-01']))).toBe(2);
+    expect(splitFactorAfter(undefined, '2019-01-01')).toBe(1);
   });
 });

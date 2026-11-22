@@ -8,6 +8,30 @@ export const toDateKeyUTC = (date: Date): string => (
   `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`
 );
 
+/**
+ * A calendar day ("2026-03-07", also the date part of an ISO timestamp) as local midnight.
+ * `new Date("2026-03-07")` is UTC midnight and lands on the previous day west of UTC.
+ */
+export const parseCalendarDay = (value: string): Date => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+    return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(value);
+};
+
+/**
+ * Factor that brings a share count from `date` to today's basis: the product of all splits
+ * after that day. Yahoo's dividend amounts (and prices) are adjusted for those splits, so a
+ * historic dividend per share × historic shares must be scaled by it.
+ */
+export const splitFactorAfter = (splits: Record<string, number> | undefined, date: string, ignored?: Set<string>): number => {
+    if (!splits) return 1;
+    const day = date.slice(0, 10);
+    let factor = 1;
+    Object.entries(splits).forEach(([splitDay, ratio]) => {
+        if (splitDay > day && ratio > 0 && !ignored?.has(splitDay)) factor *= ratio;
+    });
+    return factor;
+};
+
 export const toUtcTime = (dateStr: string): number => parseDateOnlyUTC(dateStr).getTime();
 
 export const toDateKeyLocal = (date: Date): string => (

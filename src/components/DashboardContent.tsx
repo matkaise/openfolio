@@ -1,6 +1,6 @@
 ﻿import React, { useMemo, useState } from 'react';
 import { Check, PenLine, X } from 'lucide-react';
-import { calculateTWRSeries } from '@/lib/portfolioUtils';
+import { buildSplitIgnoreDates, calculateTWRSeries } from '@/lib/portfolioUtils';
 import { createHistoryInput } from '@/lib/calculations/portfolioCalculations';
 import { useWorkerComputation } from '@/lib/calculations/useWorkerComputation';
 import { buildMwrSeries, normalizeInvestedForExplicitCash, smoothPerformanceSeries } from '@/lib/performanceUtils';
@@ -16,8 +16,8 @@ import { quoteTypeLabel } from '@/lib/labels';
 import { HeroChart } from '@/components/dashboard/HeroChart';
 import { annualizedReturnFromHistory } from '@/lib/domain/performance/xirr';
 import { getBrokerConnections } from '@/lib/brokers/connections';
-import type { BrokerConnection } from '@/types/domain';
-import { parseDateOnlyUTC } from '@/lib/dateUtils';
+import type { BrokerConnection, Security, Transaction } from '@/types/domain';
+import { parseCalendarDay, parseDateOnlyUTC, splitFactorAfter } from '@/lib/dateUtils';
 import { currencySymbol, parseTypedAmount } from '@/lib/format';
 import { type DividendHistoryEntry, type EventEntry, type TransactionLike, type UpcomingDividendEntry } from '@/types/portfolioView';
 
@@ -336,7 +336,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
 
     if (dividendsTx.length > 0) {
       dividendsTx.forEach(t => {
-        const d = new Date(t.date);
+        const d = parseCalendarDay(t.date);
         const key = `${d.getFullYear()}-${d.getMonth()}`;
         // Signed: a reversal (negative dividend) reduces the total
         const amount = convertToBaseAtDate(t.amount, t.currency, t.date);
@@ -355,17 +355,30 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
         txByIsin[t.isin].push(t);
       });
 
+      // Like the dividends page: split days the broker booked as sell + buy are not applied twice
+      const splitsByIsin: Record<string, Record<string, number>> = {};
+      const securityByIsin: Record<string, Security> = {};
+      Object.keys(txByIsin).forEach((isin) => {
+        const sec = project.securities?.[isin];
+        if (!sec) return;
+        securityByIsin[isin] = sec;
+        if (sec.splits) splitsByIsin[isin] = sec.splits;
+      });
+      const splitIgnoreDates = buildSplitIgnoreDates(txByIsin as unknown as Record<string, Transaction[]>, splitsByIsin, securityByIsin);
+
       Object.keys(txByIsin).forEach(isin => {
         const sec = project.securities?.[isin];
         if (!sec || !sec.dividendHistory) return;
-        const secTx = (txByIsin[isin] || []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const secTx = (txByIsin[isin] || []).sort((a, b) => parseCalendarDay(a.date).getTime() - parseCalendarDay(b.date).getTime());
         const events: EventEntry[] = [];
         secTx.forEach(t => {
-          events.push({ time: new Date(t.date).getTime(), type: 'Tx', data: t });
+          events.push({ time: parseCalendarDay(t.date).getTime(), type: 'Tx', data: t });
         });
         if (sec.splits) {
+          const ignoredDates = splitIgnoreDates[isin];
           Object.entries(sec.splits).forEach(([d, r]) => {
-            events.push({ time: new Date(d).getTime(), type: 'Split', ratio: r as number });
+            if (ignoredDates && ignoredDates.has(d)) return;
+            events.push({ time: parseCalendarDay(d).getTime(), type: 'Split', ratio: r as number });
           });
         }
         events.sort((a, b) => {
@@ -376,7 +389,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
         });
 
         sec.dividendHistory.forEach((dh: DividendHistoryEntry) => {
-          const dDate = new Date(dh.date);
+          const dDate = parseCalendarDay(dh.date);
           if (dDate > today) return;
 
           let sharesAtDate = 0;
@@ -395,7 +408,8 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
           }
           if (sharesAtDate <= 0.0001) return;
 
-          const amount = convertToBaseAtDate(dh.amount * sharesAtDate, sec.currency || 'EUR', dh.date);
+          // Yahoo's amounts are adjusted for later splits; the share count is the historic one
+          const amount = convertToBaseAtDate(dh.amount * sharesAtDate * splitFactorAfter(sec.splits, dh.date), sec.currency || 'EUR', dh.date);
           const key = `${dDate.getFullYear()}-${dDate.getMonth()}`;
           if (dDate.getFullYear() === currentYear) {
             ytdValue += amount;
@@ -420,7 +434,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
 
       if (sec.upcomingDividends && Array.isArray(sec.upcomingDividends)) {
         sec.upcomingDividends.forEach((ud: UpcomingDividendEntry) => {
-          const exDate = new Date(ud.exDate);
+          const exDate = parseCalendarDay(ud.exDate);
           if (exDate.getFullYear() === currentYear && exDate > today) {
             let amount = ud.amount;
             if (!amount && sec.dividendHistory?.length) {
@@ -441,7 +455,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
 
       if (sec.dividendHistory && Array.isArray(sec.dividendHistory)) {
         sec.dividendHistory.forEach((dh: DividendHistoryEntry) => {
-          const dDate = new Date(dh.date);
+          const dDate = parseCalendarDay(dh.date);
           if (dDate.getFullYear() !== currentYear - 1) return;
           const thisYearDate = new Date(currentYear, dDate.getMonth(), dDate.getDate());
           if (thisYearDate <= today) return;
