@@ -100,6 +100,16 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const sqliteSessionRef = useRef<SqliteProjectSession | null>(null);
     // Derived AES key (non-extractable). The password itself is never kept.
     const encryptionKeyRef = useRef<ProjectEncryptionKey | null>(null);
+    // Bumped whenever another project is loaded or the project is closed: async work that
+    // started for the previous one (save, FX sync) must not touch the new one.
+    const sessionRef = useRef(0);
+    // Saves run one after another, so an older state can never overwrite a newer one on disk
+    const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+    const enqueueSave = useCallback(<T,>(task: () => Promise<T>): Promise<T> => {
+        const run = saveChainRef.current.then(task, task);
+        saveChainRef.current = run.catch(() => undefined);
+        return run;
+    }, []);
 
     // Ask before closing the tab with unsaved changes. No autosave draft in browser storage:
     // it would keep a plain-text copy of encrypted projects.
@@ -153,15 +163,18 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         store.getState().setStatus({ encryptionStatus: encryptionKeyRef.current ? 'encrypted' : 'none' });
     }, [serializeForSave, store]);
 
+    const fxSyncsRunning = useRef(0);
     const performSync = useCallback(async (currentProject: ProjectData) => {
         const { setStatus, updateProject } = store.getState();
+        fxSyncsRunning.current += 1;
         setStatus({ isSyncing: true });
         try {
             log.info('Auto-syncing FX rates...');
             const newFxData = await CurrencyService.syncRates(currentProject.fxData);
 
             if (newFxData.lastUpdated !== currentProject.fxData.lastUpdated) {
-                updateProject((prev) => ({ ...prev, fxData: newFxData, modified: new Date().toISOString() }));
+                // Only into the project the sync was started for (another may be open by now)
+                updateProject((prev) => (prev.id !== currentProject.id ? prev : { ...prev, fxData: newFxData, modified: new Date().toISOString() }));
                 log.info('FX Sync completed. Updated to:', newFxData.lastUpdated);
             } else {
                 log.info('FX Sync completed. No new data.');
@@ -169,12 +182,15 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         } catch (e) {
             log.error('FX Sync failed', e);
         } finally {
-            setStatus({ isSyncing: false });
+            fxSyncsRunning.current -= 1;
+            if (fxSyncsRunning.current === 0) setStatus({ isSyncing: false });
         }
     }, [store]);
 
+    const marketSyncsRunning = useRef(0);
     const performMarketSync = useCallback(async (currentProject: ProjectData, force: boolean = false, full: boolean = false) => {
         const { setStatus, updateProject } = store.getState();
+        marketSyncsRunning.current += 1;
         setStatus({ isMarketSyncing: true, marketSyncProgress: { current: 0, total: 0, stage: 'start' } });
         try {
             log.info('Auto-syncing market data...');
@@ -195,16 +211,20 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         } catch (e) {
             log.error('Market sync failed', e);
         } finally {
-            setStatus({ isMarketSyncing: false, marketSyncProgress: null });
+            marketSyncsRunning.current -= 1;
+            if (marketSyncsRunning.current === 0) setStatus({ isMarketSyncing: false, marketSyncProgress: null });
         }
     }, [store]);
 
     const newProject = useCallback(async (options?: { name?: string; password?: string; data?: ProjectData; fileName?: string }) => {
         const created = options?.data ?? createEmptyProject(options?.name || 'Mein Portfolio');
-        const password = options?.password?.trim();
+        // Not trimmed: opening does not trim either, and " secret " must unlock what it locked.
+        // An empty string means "no password"; spaces alone are a (weak) password, not "none".
+        const password = options?.password;
         encryptionKeyRef.current = password ? await createProjectKey(password) : null;
         fileHandleRef.current = null;
         setSqliteSession(null);
+        sessionRef.current += 1;
         store.getState().loadProject(created, {
             fileName: options?.fileName || 'Unbenannt.openfolio',
             isModified: true,
@@ -269,6 +289,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             setSqliteSession(opened.sqliteSession);
             encryptionKeyRef.current = opened.encryptionKey;
             fileHandleRef.current = handle;
+            sessionRef.current += 1;
             store.getState().loadProject(data, {
                 fileName: file.name,
                 lastSavedAt: new Date(file.lastModified).toISOString(),
@@ -352,20 +373,33 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         });
     }, [store]);
 
-    const saveProjectAs = useCallback(async () => {
-        const { project, fileName, revisions, setStatus } = store.getState();
+    /** Writes the store's current project; reports false if another project was loaded meanwhile. */
+    const writeCurrent = useCallback(async (write: (data: ProjectData) => Promise<void>) => {
+        const { project, revisions } = store.getState();
+        if (!project) return null;
+        const session = sessionRef.current;
+        const modified = new Date().toISOString();
+        // The project is read right before writing (not before a file dialog), and the
+        // revision count starts at the same moment, so "clean" is exact.
+        const { clean } = await revisions.save(() => write({ ...project, modified }));
+        return { modified, clean, sameProject: session === sessionRef.current };
+    }, [store]);
+
+    const saveAsNow = useCallback(async () => {
+        const { project, fileName, setStatus } = store.getState();
         if (!project) return;
+        const session = sessionRef.current;
         try {
             if (!supportsFileSystemAccess()) {
                 // Firefox/Safari: save as a download
                 const suggested = fileName || 'Portfolio.openfolio';
                 const downloadName = isSqliteFileName(suggested) ? suggested : `${suggested.replace(/\.[^.]+$/, '')}.openfolio`;
-                const modified = new Date().toISOString();
-                const { clean } = await revisions.save(async () => {
-                    downloadFile(await serializeForSave(downloadName, { ...project, modified }), downloadName);
+                const result = await writeCurrent(async (data) => {
+                    downloadFile(await serializeForSave(downloadName, data), downloadName);
                 });
+                if (!result?.sameProject) return;
                 setStatus({ encryptionStatus: encryptionKeyRef.current ? 'encrypted' : 'none' });
-                markSaved(modified, clean, { name: downloadName });
+                markSaved(result.modified, result.clean, { name: downloadName });
                 return;
             }
 
@@ -380,11 +414,13 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                 excludeAcceptAllOption: true,
                 suggestedName: fileName || 'Portfolio.openfolio'
             });
+            // Closed or replaced while the dialog was open: nothing to save into this file
+            if (session !== sessionRef.current) return;
 
-            const modified = new Date().toISOString();
-            const { clean } = await revisions.save(() => writeToHandle(handle, { ...project, modified }));
+            const result = await writeCurrent((data) => writeToHandle(handle, data));
+            if (!result?.sameProject) return;
             fileHandleRef.current = handle;
-            markSaved(modified, clean, { name: handle.name });
+            markSaved(result.modified, result.clean, { name: handle.name });
         } catch (err: unknown) {
             if (err && typeof err === 'object' && 'name' in err && (err as { name?: string }).name === 'AbortError') {
                 return;
@@ -393,33 +429,34 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             log.error('Failed to save project:', err);
             notify({ tone: 'error', title: getT().services.project.saveFailed, message });
         }
-    }, [markSaved, notify, serializeForSave, store, writeToHandle]);
+    }, [markSaved, notify, serializeForSave, store, writeCurrent, writeToHandle]);
 
-    const saveProject = useCallback(async () => {
-        const { project, revisions } = store.getState();
-        if (!project) return;
+    const saveNow = useCallback(async () => {
+        if (!store.getState().project) return;
 
         const fileHandle = fileHandleRef.current;
         if (!fileHandle) {
-            return saveProjectAs();
+            return saveAsNow();
         }
 
         try {
-            const modified = new Date().toISOString();
-            const { clean } = await revisions.save(() => writeToHandle(fileHandle, { ...project, modified }));
-            markSaved(modified, clean);
+            const result = await writeCurrent((data) => writeToHandle(fileHandle, data));
+            if (result?.sameProject) markSaved(result.modified, result.clean);
         } catch (err) {
             log.error('Failed to save directly:', err);
             const name = err && typeof err === 'object' && 'name' in err ? (err as { name?: string }).name : '';
             if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'NotFoundError' || name === 'InvalidStateError') {
                 // Permission lost or file moved: ask for a new location
-                void saveProjectAs();
+                await saveAsNow();
                 return;
             }
             const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
             notify({ tone: 'error', title: getT().services.project.saveFailed, message });
         }
-    }, [markSaved, notify, saveProjectAs, store, writeToHandle]);
+    }, [markSaved, notify, saveAsNow, store, writeCurrent, writeToHandle]);
+
+    const saveProjectAs = useCallback(() => enqueueSave(saveAsNow), [enqueueSave, saveAsNow]);
+    const saveProject = useCallback(() => enqueueSave(saveNow), [enqueueSave, saveNow]);
 
     const closeProject = useCallback(async () => {
         if (store.getState().isModified) {
@@ -434,6 +471,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         fileHandleRef.current = null;
         encryptionKeyRef.current = null;
         setSqliteSession(null);
+        sessionRef.current += 1;
         store.getState().closeProject();
         return true;
     }, [confirm, setSqliteSession, store]);

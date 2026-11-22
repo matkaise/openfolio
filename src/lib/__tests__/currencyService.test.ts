@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { chooseEcbSyncMode } from '../currencyService';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CurrencyService, chooseEcbSyncMode } from '../currencyService';
 import { parseEcbXml } from '../ecbXml';
 
 describe('chooseEcbSyncMode', () => {
@@ -40,5 +40,36 @@ describe('parseEcbXml', () => {
       { date: '2026-10-23', rates: { EUR: 1, USD: 1.085, CHF: 0.942 } },
       { date: '2026-10-22', rates: { EUR: 1, USD: 1.08 } }
     ]);
+  });
+});
+
+describe('parseEcbXml with single quotes (daily feed)', () => {
+  it('reads the daily feed, which quotes with apostrophes', () => {
+    const xml = `<Cube><Cube time='2026-11-20'><Cube currency='USD' rate='1.0990'/><Cube currency='JPY' rate='174.35'/></Cube></Cube>`;
+    expect(parseEcbXml(xml)).toEqual([{ date: '2026-11-20', rates: { EUR: 1, USD: 1.099, JPY: 174.35 } }]);
+  });
+});
+
+describe('CurrencyService.syncRates', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = realFetch; });
+  const answer = (data: unknown[]) => {
+    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ success: true, count: data.length, data }) } as Response)) as unknown as typeof fetch;
+  };
+
+  it('does not change the stored histories in place', async () => {
+    const usd = { '2026-11-19': 1.09 };
+    const current = { baseCurrency: 'EUR' as const, rates: { USD: usd }, lastUpdated: '2026-11-19' };
+    answer([{ date: '2026-11-20', rates: { EUR: 1, USD: 1.1 } }]);
+    const next = await CurrencyService.syncRates(current);
+    expect(next.rates.USD).toEqual({ '2026-11-19': 1.09, '2026-11-20': 1.1 });
+    expect(usd).toEqual({ '2026-11-19': 1.09 });
+    expect(next.lastUpdated).toBe('2026-11-20');
+  });
+
+  it('keeps lastUpdated when the feed is empty', async () => {
+    const current = { baseCurrency: 'EUR' as const, rates: {}, lastUpdated: '' };
+    answer([]);
+    expect(await CurrencyService.syncRates(current)).toBe(current);
   });
 });

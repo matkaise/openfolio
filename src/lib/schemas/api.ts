@@ -26,6 +26,8 @@ const datedAmounts = <T extends z.ZodRawShape>(extra: T) => z.preprocess(
 );
 
 const yahooQuoteResponseSchema = z.object({
+    quoteOk: z.boolean().optional(),
+    summaryOk: z.boolean().optional(),
     history: numberRecord,
     splits: numberRecord.default({}),
     currency: optionalString,

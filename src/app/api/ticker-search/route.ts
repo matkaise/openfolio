@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ matches });
   } catch (error: unknown) {
+    if (error instanceof SyntaxError) return NextResponse.json({ matches: [], error: 'Invalid request' }, { status: 400 });
     const message = error instanceof Error ? error.message : 'Search failed';
     return NextResponse.json({ matches: [], error: message }, { status: 500 });
   }
