@@ -199,17 +199,16 @@ describe('buildMwrSeries', () => {
     ]);
   });
 
-  it('includes dividends in the performance calculation when enabled', () => {
+  it('counts received dividends once: they are already in the value (as cash)', () => {
     const history = [
       { date: '2024-01-01', value: 100, invested: 100, dividend: 0 },
       { date: '2024-01-02', value: 102, invested: 100, dividend: 2 }
     ];
 
-    const result = buildMwrSeries(history, '2024-01-01', '2024-01-02', {
-      includeDividends: true,
-      isFullRange: true
-    });
+    const withDividends = buildMwrSeries(history, '2024-01-01', '2024-01-02', { includeDividends: true, isFullRange: true });
+    const priceOnly = buildMwrSeries(history, '2024-01-01', '2024-01-02', { includeDividends: false, isFullRange: true });
 
-    expect(result[1].value).toBeCloseTo(4, 4);
+    expect(withDividends[1].value).toBeCloseTo(2, 4);
+    expect(priceOnly[1].value).toBeCloseTo(0, 4);
   });
 });

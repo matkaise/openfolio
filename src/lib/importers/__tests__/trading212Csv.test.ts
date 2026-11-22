@@ -91,3 +91,13 @@ describe('Trading 212 CSV errors', () => {
     expect(report.unsupported).toEqual([{ line: 2, label: 'Market buy' }]);
   });
 });
+
+describe('Trading 212 CSV import into a project (K3)', () => {
+  it('keeps a fee in a second currency that shares the order id with its trade', () => {
+    const { batch } = trading212FileImporter.parse(csv);
+    const { project, summary } = applyImportBatch(createEmptyProject(), batch, target);
+    const fee = project.ledger.find((entry) => entry.kind === 'fee' && entry.orderId === 'EOF0000000002');
+    expect(fee).toMatchObject({ amount: -0.04, currency: 'EUR' });
+    expect(summary.duplicateMovements).toBe(0);
+  });
+});

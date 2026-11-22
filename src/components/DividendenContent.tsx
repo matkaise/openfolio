@@ -3,7 +3,7 @@ import { Activity, CalendarCheck, Coins, PiggyBank, Timer } from 'lucide-react';
 import { selectCalculationTransactions, calculateProjectHoldings } from '@/lib/portfolioSelectors';
 import { buildSplitIgnoreDates } from '@/lib/portfolioUtils';
 import { convertCurrency } from '@/lib/fxUtils';
-import { getRangeStartDate, toDateKeyLocal } from '@/lib/dateUtils';
+import { getRangeStartDate, parseCalendarDay, splitFactorAfter, toDateKeyLocal } from '@/lib/dateUtils';
 import { useProjectData } from '@/contexts/ProjectContext';
 import { SimpleAreaChart } from '@/components/SimpleAreaChart';
 import { useFormatters } from '@/components/ui/useFormatters';
@@ -108,16 +108,20 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     };
 
     // Group actual dividends (converted to base currency)
+    let hasCurrentActual = false;
+    let hasLastActual = false;
     dividends.forEach(d => {
-      const date = new Date(d.date);
+      const date = parseCalendarDay(d.date);
       const year = date.getFullYear();
       const month = date.getMonth();
       const amount = convertDividendToBase(d.amount, d.currency, d.date);
 
       if (year === currentYear) {
         sumCurrentActual += amount;
+        hasCurrentActual = true;
       } else if (year === lastYear) {
         sumLastActual += amount;
+        hasLastActual = true;
       }
 
       // Populate Full Map
@@ -171,7 +175,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       // 1. Check Upcoming Dividends (Confirmed)
       if (sec.upcomingDividends && Array.isArray(sec.upcomingDividends)) {
         sec.upcomingDividends.forEach((ud: UpcomingDividendEntry) => {
-          const exDate = new Date(ud.exDate);
+          const exDate = parseCalendarDay(ud.exDate);
           if (exDate.getFullYear() === currentYear && exDate > new Date()) {
             let amount = ud.amount;
             // If amount is missing, infer from latest history
@@ -204,7 +208,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       // Only look for months > currentMonth.
       if (sec.dividendHistory && Array.isArray(sec.dividendHistory)) {
         sec.dividendHistory.forEach((dh: DividendHistoryEntry) => {
-          const dDate = new Date(dh.date);
+          const dDate = parseCalendarDay(dh.date);
           if (dDate.getFullYear() === lastYear) {
             // Check if this "slot" is in the future for current year
             // e.g. Last year paid on Sept 15. Today is Feb. 
@@ -216,7 +220,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
             // Better: check if `forecastEvents` already has an entry for this stock in this month.
 
             if (thisYearDate > new Date()) {
-              const hasUpcoming = forecastEvents.some(e => e.ticker === sec.symbol && e.date.getMonth() === dDate.getMonth());
+              const hasUpcoming = forecastEvents.some(e => e.ticker === (sec.symbol || sec.isin) && e.date.getMonth() === dDate.getMonth());
               if (!hasUpcoming) {
                 const totalPayout = dh.amount * shares;
                 const finalVal = convertToBaseLatest(totalPayout, secCurrency);
@@ -282,13 +286,13 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       const secTx = (txByIsin[isin] || []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       const events: EventEntry[] = [];
       secTx.forEach(t => {
-        events.push({ time: new Date(t.date).getTime(), type: 'Tx', data: t });
+        events.push({ time: parseCalendarDay(t.date).getTime(), type: 'Tx', data: t });
       });
       if (sec.splits) {
         const ignoredDates = splitIgnoreDates[isin];
         Object.entries(sec.splits).forEach(([d, r]) => {
           if (ignoredDates && ignoredDates.has(d)) return;
-          events.push({ time: new Date(d).getTime(), type: 'Split', ratio: r as number });
+          events.push({ time: parseCalendarDay(d).getTime(), type: 'Split', ratio: r as number });
         });
       }
       events.sort((a, b) => {
@@ -302,9 +306,11 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       // Optimization: Pre-filter dividends? Or just check date.
 
       sec.dividendHistory.forEach((dh: DividendHistoryEntry) => {
-        const dDate = new Date(dh.date);
+        const dDate = parseCalendarDay(dh.date);
         const month = dDate.getMonth();
         const year = dDate.getFullYear();
+        // Only paid dividends belong to the history; future ones are in the forecast
+        if (dDate > today) return;
 
         // CALCULATE SHARES AT DATE (dDate)
         // Sum buys/sells where date < dDate (Ex-Date usually determines entitlement, assuming dh.date is Ex-Date or Pay-Date close enough)
@@ -330,7 +336,8 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
         if (sharesAtDate <= 0.0001) return; // No shares held at this time
 
         const secCurrency = sec.currency || 'EUR';
-        const amount = convertToBase(dh.amount * sharesAtDate, secCurrency, dh.date);
+        // Yahoo's amounts are adjusted for later splits; the share count is the historic one
+        const amount = convertToBase(dh.amount * sharesAtDate * splitFactorAfter(sec.splits, dh.date), secCurrency, dh.date);
 
         // Populate Full Maps
         monthlyTheoreticalAllMap[`${year}-${month}`] = (monthlyTheoreticalAllMap[`${year}-${month}`] || 0) + amount;
@@ -370,12 +377,13 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       // Create 5-year values
       const yearsData = comparisonYears.map(year => {
         // Use Actual if available, otherwise Theoretical
-        const actual = monthlyHistoryMap[`${year}-${monthIndex}`] || 0;
-        const theoretical = monthlyTheoreticalMap[`${year}-${monthIndex}`] || 0;
+        // Booked dividends win, also when they net out negative (a reversal)
+        const key = `${year}-${monthIndex}`;
+        const theoretical = monthlyTheoreticalMap[key] || 0;
 
         return {
           year,
-          amount: actual > 0 ? actual : theoretical
+          amount: key in monthlyHistoryMap ? monthlyHistoryMap[key] : theoretical
         };
       });
 
@@ -423,8 +431,8 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     // Given we built `projectedAnnual` quite carefully:
     const sumCurrentTheoretical = annualTheoreticalAllMap[currentYear] || 0;
     const sumLastTheoretical = annualTheoreticalAllMap[lastYear] || 0;
-    const receivedCurrentYear = sumCurrentActual > 0 ? sumCurrentActual : sumCurrentTheoretical;
-    const receivedLastYear = sumLastActual > 0 ? sumLastActual : sumLastTheoretical;
+    const receivedCurrentYear = hasCurrentActual ? sumCurrentActual : sumCurrentTheoretical;
+    const receivedLastYear = hasLastActual ? sumLastActual : sumLastTheoretical;
 
     const totalProjected = (receivedCurrentYear + estimatedRest); // Mix of YTD actuals + Future Forecast
     // Or we can construct strict "Forward Annual Dividend" sum.
@@ -438,7 +446,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
 
     // 1. From Transactions
     dividends.forEach(d => {
-      const y = new Date(d.date).getFullYear();
+      const y = parseCalendarDay(d.date).getFullYear();
       const amount = convertDividendToBase(d.amount, d.currency, d.date);
       annualHistoryMap[y] = (annualHistoryMap[y] || 0) + amount;
       yearsSet.add(y);
@@ -456,7 +464,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     // Let's iterate over theoretical years
     Object.keys(annualTheoreticalAllMap).forEach(yStr => {
       const y = parseInt(yStr);
-      if (!annualHistoryMap[y]) {
+      if (!(y in annualHistoryMap)) {
         annualHistoryMap[y] = annualTheoreticalAllMap[y];
         yearsSet.add(y);
       }
@@ -480,9 +488,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       ...Object.keys(monthlyHistoryAllMap)
     ]);
     Array.from(combinedKeys).forEach(key => {
-      const actual = monthlyHistoryAllMap[key] || 0;
-      const theoretical = monthlyTheoreticalAllMap[key] || 0;
-      combinedMonthlyMap[key] = actual > 0 ? actual : theoretical;
+      combinedMonthlyMap[key] = key in monthlyHistoryAllMap ? monthlyHistoryAllMap[key] : (monthlyTheoreticalAllMap[key] || 0);
     });
 
     return {

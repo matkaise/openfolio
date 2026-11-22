@@ -1,7 +1,7 @@
 import { applyToCash, createCashState, sortForCash } from './cashModel';
 import { Transaction, Security, CurrencyHistory, CashAccount } from '../types/domain';
 import { getFxTable } from './domain/fx/rates';
-import { getRangeStartDate } from './dateUtils';
+import { getRangeStartDate, parseCalendarDay } from './dateUtils';
 
 export interface Holding {
     security: {
@@ -315,6 +315,8 @@ export function calculateHoldings(
                 if (ratio > 0 && h.quantity > 0) { // Only split if we have shares!
                     h.quantity = h.quantity * ratio;
                 }
+                // The last trade price is from before the split: bring it to the new share count
+                if (ratio > 0 && fallbackPriceByIsin[isin]) fallbackPriceByIsin[isin] /= ratio;
             } else if (event.type === 'Tx' && event.data) {
                 const tx = event.data;
                 if (!isBuyType(tx.type) && tx.type !== 'Sell') continue;
@@ -425,7 +427,8 @@ export function calculatePortfolioHistory(
     let firstTxDate: Date | null = null;
     if (transactions.length > 0) {
         const sortedTx = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        firstTxDate = new Date(sortedTx[0].date);
+        // Local midnight of the first booking day (UTC midnight is the previous day west of UTC)
+        firstTxDate = parseCalendarDay(sortedTx[0].date);
     }
 
     // Pre-calculate splits per ISIN for price adjustment
@@ -497,8 +500,12 @@ export function calculatePortfolioHistory(
         datePoints.push(new Date(now));
     }
 
-    // Sort and deduplicate (just in case)
+    // Sort and deduplicate: a month start can fall on a weekly point
     datePoints.sort((a, b) => a.getTime() - b.getTime());
+    const dayKeyOf = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    for (let i = datePoints.length - 1; i > 0; i--) {
+        if (dayKeyOf(datePoints[i]) === dayKeyOf(datePoints[i - 1])) datePoints.splice(i, 1);
+    }
 
     const priceTimelineCache: Record<string, { dates: string[]; times: number[]; idx: number }> = {};
     const txPriceTimelineCache: Record<string, { dates: string[]; times: number[]; prices: number[]; idx: number }> = {};
@@ -889,8 +896,9 @@ export function calculateTWRSeries(
     if (!historyData || historyData.length === 0) return [];
 
     const result: { date: string; value: number }[] = [];
+    // Received dividends are already in the value (as cash); without them it is the price return
     const getValue = (point: { value: number; dividend?: number }) =>
-        point.value + (includeDividends ? (point.dividend || 0) : 0);
+        point.value - (includeDividends ? 0 : (point.dividend || 0));
 
     // Start baseline
     result.push({ date: historyData[0].date, value: 0 });
@@ -912,8 +920,11 @@ export function calculateTWRSeries(
         const currValue = getValue(curr);
         const denominator = prevValue + cashFlow;
 
+        // Nothing (or less than nothing) invested at the start of the period, e.g. a withdrawal
+        // larger than the value after an intraday gain: no meaningful return, and chaining a
+        // -100 % or a negative factor would break the index for every later day.
         let periodicReturn = 0;
-        if (denominator !== 0) {
+        if (denominator > 0) {
             periodicReturn = (currValue - denominator) / denominator; // Raw scalar (e.g. 0.01 for 1%)
         }
 

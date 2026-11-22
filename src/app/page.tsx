@@ -91,7 +91,7 @@ export default function PortfolioApp() {
   const [rawSelectedPortfolioIds, setSelectedPortfolioIds] = useState<string[]>([]);
   const [selectedSecurity, setSelectedSecurity] = useState<{ isin: string; currency?: string } | null>(null);
   const [analysisCache, setAnalysisCache] = useState<AnalysisCache | null>(null);
-  const [includeDividendsInPerformance, setIncludeDividendsInPerformance] = useState(false);
+  const [includeDividendsInPerformance, setIncludeDividendsInPerformance] = useState(true);
   const [, startTransition] = useTransition();
 
   const [importTargetPortfolio, setImportTargetPortfolio] = useState<{ id: string; name: string; isNew: boolean } | null>(null);
