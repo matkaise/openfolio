@@ -19,6 +19,11 @@ export const createFlowStore = <T>(ttlMs: number, now: () => number = Date.now) 
             entries.set(id, { value, expiresAt: now() + ttlMs });
             return id;
         },
+        /** Returns the entry without using it up (to validate input first). */
+        peek(id: string): T | null {
+            prune();
+            return entries.get(id)?.value ?? null;
+        },
         /** Returns and removes the entry (each flow step can be used once). */
         take(id: string): T | null {
             prune();

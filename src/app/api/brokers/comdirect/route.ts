@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { completeComdirectLogin, ComdirectError, startComdirectLogin, type ComdirectLoginState } from '@/lib/brokers/comdirectClient';
 import { createFlowStore } from '@/lib/brokers/flowStore';
+import { isCrossSiteRequest, readJsonObject } from '@/lib/brokers/requestGuard';
 import { createLogger } from '@/lib/logger';
 import { type Messages, LANGUAGE_HEADER, MESSAGES, parseLanguage } from '@/lib/i18n';
 
@@ -22,12 +23,9 @@ const errorResponse = (t: Messages, error: unknown) => {
 
 export async function POST(req: NextRequest) {
     const t = MESSAGES[parseLanguage(req.headers.get(LANGUAGE_HEADER))];
-    let body: Record<string, unknown>;
-    try {
-        body = await req.json();
-    } catch {
-        return NextResponse.json({ error: t.services.invalidRequest }, { status: 400 });
-    }
+    if (isCrossSiteRequest(req)) return NextResponse.json({ error: t.services.crossSite }, { status: 403 });
+    const body = await readJsonObject(req);
+    if (!body) return NextResponse.json({ error: t.services.invalidRequest }, { status: 400 });
 
     if (body.action === 'start') {
         try {
@@ -44,7 +42,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === 'complete') {
-        const state = flows.take(String(body.flowId ?? ''));
+        const flowId = String(body.flowId ?? '');
+        const waiting = flows.peek(flowId);
+        if (!waiting) return NextResponse.json({ error: t.services.loginExpired }, { status: 400 });
+        // A mistyped TAN (wrong length) keeps the login open for another try
+        if (waiting.challengeType !== 'P_TAN_PUSH' && !/^\d{6}$/.test(typeof body.tan === 'string' ? body.tan : '')) {
+            return NextResponse.json({ error: t.services.comdirect.tanDigits }, { status: 400 });
+        }
+        const state = flows.take(flowId);
         if (!state) return NextResponse.json({ error: t.services.loginExpired }, { status: 400 });
         try {
             const data = await completeComdirectLogin(state, typeof body.tan === 'string' ? body.tan : undefined, { t });

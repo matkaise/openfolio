@@ -41,6 +41,18 @@ describe('parseComdirectData', () => {
     expect(statement(result.batch).some((m) => m.description?.includes('WP-KAUF'))).toBe(false);
   });
 
+  it('books taxes of the settlement account as taxes, not as withdrawals', () => {
+    const withTax: ComdirectData = {
+      ...data,
+      accountTransactions: [
+        ...data.accountTransactions,
+        { reference: 'TAX1', bookingStatus: 'BOOKED', bookingDate: '2024-01-02', amount: { value: '-12.34', unit: 'EUR' }, transactionType: { key: 'TAX', text: 'Steuern' }, remittanceInfo: '01Vorabpauschale 2023' }
+      ] as ComdirectData['accountTransactions']
+    };
+    const taxes = statement(parseComdirectData(withTax).batch).filter((m) => m.kind === 'tax').map((m) => m.amount);
+    expect(taxes).toEqual([-12.34]);
+  });
+
   it('imports idempotently and matches the depot positions', () => {
     const target = { id: 'cd', name: 'comdirect', isNew: true };
     const first = applyImportBatch(createEmptyProject(), result.batch, target);
