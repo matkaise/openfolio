@@ -40,12 +40,15 @@ export const CurrencyService = {
             if (!result.success) throw new Error('ECB Proxy returned error');
 
             log.info(`Received ${result.count} days of data`);
+            // Nothing arrived: keep the state as it is, so the next sync still picks the right mode
+            if (result.data.length === 0) return currentFx;
 
             // Merge data
             // We need to invert the structure: ECB gives [Date -> { USD: 1.1 }]
             // We want { USD: { Date: 1.1 } }
 
             const newRates: Record<string, CurrencyHistory> = { ...currentFx.rates };
+            const touched = new Set<string>();
 
             // Ensure all currencies exist in map
             // We assume EUR is base, so we don't store EUR->EUR = 1 explicitly in history usually, 
@@ -56,8 +59,10 @@ export const CurrencyService = {
                 Object.entries(day.rates).forEach(([currency, rate]) => {
                     if (currency === 'EUR') return; // Base
 
-                    if (!newRates[currency]) {
-                        newRates[currency] = {};
+                    // Copy a history before the first write: the old one belongs to the current state
+                    if (!touched.has(currency)) {
+                        newRates[currency] = { ...(newRates[currency] || {}) };
+                        touched.add(currency);
                     }
                     newRates[currency][date] = rate;
                 });

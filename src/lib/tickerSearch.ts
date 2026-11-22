@@ -52,7 +52,7 @@ export const resolveTicker = async (input: string, options?: { currency?: string
             })
         });
         if (!res.ok) return null;
-        return res.json();
+        return await res.json();
     } catch (e) {
         log.warn('Failed to resolve ticker', e);
         return null;

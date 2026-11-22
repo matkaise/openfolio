@@ -137,8 +137,21 @@ export const securityNeedsSync = (sec: Security, now: Date, options?: { force?: 
 
     if (!sec.lastSync) return true;
     const hoursSinceSync = (now.getTime() - new Date(sec.lastSync).getTime()) / HOURS;
+    if (!Number.isFinite(hoursSinceSync)) return true; // unreadable timestamp: sync again
     const missingHistory = !sec.priceHistory || Object.keys(sec.priceHistory).length === 0;
     return hoursSinceSync > RESYNC_AFTER_HOURS || missingHistory || hasMissingDividendData(sec);
+};
+
+/**
+ * Start of an incremental fetch: a few days before the last sync. A sync shortly after midnight
+ * UTC would otherwise skip the previous trading day of exchanges west of UTC; the overlap is
+ * harmless because prices are merged by date.
+ */
+const INCREMENTAL_LOOKBACK_DAYS = 5;
+export const incrementalFrom = (lastSync: string): string => {
+    const time = Date.parse(lastSync);
+    if (!Number.isFinite(time)) return '1970-01-01';
+    return new Date(time - INCREMENTAL_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
 };
 
 export const buildManualPriceHistory = (transactions: Transaction[], isin: string): Record<string, number> => {
@@ -179,7 +192,7 @@ const resolveSecuritySymbol = async (input: string, currency?: string, isin?: st
             body: JSON.stringify({ input, currency, isin, name })
         });
         if (!res.ok) return null;
-        return res.json();
+        return await res.json(); // awaited, so a non-JSON answer lands in the catch
     } catch (e) {
         log.warn('Resolve ticker failed', e);
         return null;
@@ -387,26 +400,47 @@ export const syncSecurityPatches = async (
             const fetchMissingHistory = !secForFetch.priceHistory || Object.keys(secForFetch.priceHistory).length === 0;
             const fetchMissingDividends = hasMissingDividendData(secForFetch);
             const requiresFullHistory = !secForFetch.lastSync || fetchMissingHistory || fetchMissingDividends;
-            const from = requiresFullHistory || !secForFetch.lastSync ? '1970-01-01' : secForFetch.lastSync.split('T')[0];
+            const from = requiresFullHistory || !secForFetch.lastSync ? '1970-01-01' : incrementalFrom(secForFetch.lastSync);
 
-            const { res, transient } = await fetchYahooWithRetry({ symbol: symbolToFetch, from }, retryDelaysMs);
+            let { res, transient } = await fetchYahooWithRetry({ symbol: symbolToFetch, from }, retryDelaysMs);
+            let fullHistory = requiresFullHistory;
 
-            if (res.ok) {
-                let data: YahooQuoteResponse | null = null;
+            const readQuote = async (response: Response): Promise<YahooQuoteResponse | null> => {
                 try {
-                    data = parseYahooQuoteResponse(await res.json());
+                    return parseYahooQuoteResponse(await response.json());
                 } catch (error) {
                     log.warn(`Unexpected answer for ${symbolToFetch}:`, error instanceof Error ? error.message : error);
+                    return null;
+                }
+            };
+
+            if (res.ok) {
+                let data = await readQuote(res);
+                // A split since the last sync: Yahoo's prices are split-adjusted backwards, so the
+                // stored older prices are now on the wrong scale. Reload the whole history instead
+                // of merging new (adjusted) prices onto old (unadjusted) ones.
+                const knownSplits = secForFetch.splits || {};
+                if (data && !fullHistory && Object.keys(data.splits || {}).some((date) => !(date in knownSplits))) {
+                    log.info(`New split for ${symbolToFetch}: reloading the full history`);
+                    ({ res, transient } = await fetchYahooWithRetry({ symbol: symbolToFetch, from: '1970-01-01' }, retryDelaysMs));
+                    data = res.ok ? await readQuote(res) : null;
+                    fullHistory = true;
                 }
                 if (data) {
                     const incomingDividendHistory = Array.isArray(data.dividendHistory) ? data.dividendHistory : [];
-                    const nextDividendHistory = requiresFullHistory
+                    const nextDividendHistory = fullHistory
                         ? incomingDividendHistory
                         : mergeDividendHistory(secForFetch.dividendHistory, incomingDividendHistory);
+                    // A part that failed on the server (quote / quoteSummary) keeps the stored values
+                    const quote = data.quoteOk !== false;
+                    const summary = data.summaryOk !== false;
+                    const keep = <K extends keyof Security>(key: K, value: Security[K], fresh: boolean): Security[K] => (
+                        fresh && value !== undefined ? value : secForFetch[key]
+                    );
 
                     securities[isin] = {
                         ...secForFetch,
-                        priceHistory: { ...(secForFetch.priceHistory || {}), ...data.history },
+                        priceHistory: fullHistory ? data.history : { ...(secForFetch.priceHistory || {}), ...data.history },
                         splits: { ...(secForFetch.splits || {}), ...data.splits },
                         currency: data.currency || secForFetch.currency,
                         symbol: data.symbol || symbolToFetch || secForFetch.symbol,
@@ -415,22 +449,22 @@ export const syncSecurityPatches = async (
                         symbolSource: secForFetch.symbolSource || 'yahoo',
                         symbolLastTried: secForFetch.symbolLastTried || now.toISOString(),
                         quoteType: mapYahooQuoteType(data.quoteType) || secForFetch.quoteType,
-                        marketCap: data.marketCap,
-                        trailingPE: data.trailingPE,
-                        dividendYield: data.dividendYield,
-                        fiftyTwoWeekHigh: data.fiftyTwoWeekHigh,
-                        fiftyTwoWeekLow: data.fiftyTwoWeekLow,
-                        totalRevenue: data.totalRevenue,
-                        forwardPE: data.forwardPE,
-                        epsTrailingTwelveMonths: data.epsTrailingTwelveMonths,
-                        epsForward: data.epsForward,
-                        earningsHistory: data.earningsHistory,
-                        country: data.country,
-                        sector: data.sector,
-                        industry: data.industry,
-                        annualDividendRate: data.annualDividendRate,
+                        marketCap: keep('marketCap', data.marketCap, quote),
+                        trailingPE: keep('trailingPE', data.trailingPE, quote),
+                        dividendYield: keep('dividendYield', data.dividendYield, quote || summary),
+                        fiftyTwoWeekHigh: keep('fiftyTwoWeekHigh', data.fiftyTwoWeekHigh, quote),
+                        fiftyTwoWeekLow: keep('fiftyTwoWeekLow', data.fiftyTwoWeekLow, quote),
+                        totalRevenue: keep('totalRevenue', data.totalRevenue, summary),
+                        forwardPE: keep('forwardPE', data.forwardPE, summary),
+                        epsTrailingTwelveMonths: keep('epsTrailingTwelveMonths', data.epsTrailingTwelveMonths, quote || summary),
+                        epsForward: keep('epsForward', data.epsForward, quote || summary),
+                        earningsHistory: summary ? data.earningsHistory : secForFetch.earningsHistory,
+                        country: keep('country', data.country, summary),
+                        sector: keep('sector', data.sector, summary),
+                        industry: keep('industry', data.industry, summary),
+                        annualDividendRate: keep('annualDividendRate', data.annualDividendRate, summary),
                         dividendHistory: nextDividendHistory,
-                        upcomingDividends: data.upcomingDividends || [],
+                        upcomingDividends: summary ? (data.upcomingDividends || []) : (secForFetch.upcomingDividends || []),
                         dividendHistorySynced: true,
                         lastSync: now.toISOString()
                     };

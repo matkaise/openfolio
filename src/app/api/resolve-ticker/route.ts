@@ -343,7 +343,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: 'error', message: 'Input required' } satisfies ResolveResult, { status: 400 });
     }
 
-    const kursliste = await loadKursliste();
+    // Every source is optional: a failing one falls through to the next instead of a 500
+    const kursliste = await loadKursliste().catch((error: unknown) => {
+      log.warn('Kursliste unavailable:', error instanceof Error ? error.message : error);
+      return null;
+    });
     let kurslisteMatch: { entry: KurslisteEntry; matchBy: ResolveResult['matchBy'] } | null = null;
 
     if (kursliste?.index) {
@@ -363,13 +367,17 @@ export async function POST(req: NextRequest) {
     }
 
     const fallbackEntry = kurslisteMatch?.entry;
-    const bodyIsin = body.isin && ISIN_REGEX.test(normalizeId(body.isin)) ? body.isin : undefined;
+    const normalizedBodyIsin = body.isin ? normalizeId(body.isin) : '';
+    const bodyIsin = ISIN_REGEX.test(normalizedBodyIsin) ? normalizedBodyIsin : undefined;
     const candidateIsin = fallbackEntry?.isin || bodyIsin;
     const isinCountry = toIsinCountry(candidateIsin);
     const openFigiValue = candidateIsin || input;
     const openFigiType = candidateIsin ? 'ID_ISIN' : inferIdType(openFigiValue);
 
-    const openFigi = await resolveViaOpenFigi(openFigiType, openFigiValue, body.currency, isinCountry);
+    const openFigi = await resolveViaOpenFigi(openFigiType, openFigiValue, body.currency, isinCountry).catch((error: unknown) => {
+      log.warn('OpenFIGI unavailable:', error instanceof Error ? error.message : error);
+      return null;
+    });
     if (openFigi?.symbol) {
       return NextResponse.json({
         status: 'resolved',
@@ -382,7 +390,10 @@ export async function POST(req: NextRequest) {
       } satisfies ResolveResult);
     }
 
-    const yahoo = await resolveViaYahooSearch(input);
+    const yahoo = await resolveViaYahooSearch(input).catch((error: unknown) => {
+      log.warn('Yahoo search unavailable:', error instanceof Error ? error.message : error);
+      return null;
+    });
     if (yahoo?.symbol) {
       return NextResponse.json({
         status: 'resolved',
@@ -404,7 +415,9 @@ export async function POST(req: NextRequest) {
       matchBy: kurslisteMatch?.matchBy
     } satisfies ResolveResult);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Resolve failed';
-    return NextResponse.json({ status: 'error', message } satisfies ResolveResult, { status: 500 });
+    // Details only in the server log (they can contain file paths)
+    log.error('Resolve failed:', error);
+    const status = error instanceof SyntaxError ? 400 : 500;
+    return NextResponse.json({ status: 'error', message: status === 400 ? 'Invalid request' : 'Resolve failed' } satisfies ResolveResult, { status });
   }
 }

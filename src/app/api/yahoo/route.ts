@@ -49,17 +49,21 @@ type YahooFinanceLike = {
 
 const SUMMARY_MODULES = ['financialData', 'defaultKeyStatistics', 'earnings', 'assetProfile', 'calendarEvents', 'summaryDetail'];
 
-/** 429, 5xx and network problems: worth retrying later, the symbol itself is fine. */
+/**
+ * 401/403 (expired crumb or consent), 429, 5xx and network problems: worth retrying later,
+ * the symbol itself is fine. Only a real "not found" marks a security as unresolved for a day.
+ */
 const isTransientYahooError = (error: unknown): boolean => {
     const status = (error as { code?: unknown })?.code;
-    if (typeof status === 'number') return status === 429 || status >= 500;
+    if (typeof status === 'number') return status === 401 || status === 403 || status === 429 || status >= 500;
     const message = error instanceof Error ? error.message : String(error);
-    return /too many requests|rate limit|timed? ?out|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|fetch failed|socket hang up/i.test(message);
+    return /too many requests|rate limit|timed? ?out|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|fetch failed|socket hang up|unauthori[sz]ed|forbidden|invalid crumb|consent/i.test(message);
 };
 
+/** Yahoo sends seconds; anything beyond year 5138 in seconds is already milliseconds. */
 const normalizeDate = (value: number | Date) => {
     if (value instanceof Date) return value;
-    const ts = value < 100000000000 ? value * 1000 : value;
+    const ts = Math.abs(value) < 1e11 ? value * 1000 : value;
     return new Date(ts);
 };
 
@@ -77,8 +81,11 @@ const createDateKeyFormatter = (timeZone: string | undefined) => {
         }
     }
 
-    return (value: number | Date) => {
+    /** Day key, or null for a missing or invalid date (Intl would throw a RangeError). */
+    return (value: number | Date | null | undefined): string | null => {
+        if (value === null || value === undefined) return null;
         const d = normalizeDate(value);
+        if (Number.isNaN(d.getTime())) return null;
         if (formatter) {
             const parts = formatter.formatToParts(d);
             const get = (type: string) => parts.find((p) => p.type === type)?.value;
@@ -170,10 +177,8 @@ export async function POST(req: NextRequest) {
         const toDateKey = createDateKeyFormatter(meta.exchangeTimezoneName);
 
         quotes.forEach((q) => {
-            if (q.date && q.close) {
-                const dateStr = toDateKey(q.date);
-                history[dateStr] = q.close;
-            }
+            const dateStr = q.close ? toDateKey(q.date) : null;
+            if (dateStr) history[dateStr] = q.close as number;
         });
 
         // Process Splits
@@ -185,7 +190,7 @@ export async function POST(req: NextRequest) {
                 const rawSplits = result.events.splits;
                 Object.values(rawSplits).forEach((s) => {
                     const dateStr = toDateKey(s.date);
-                    if (s.numerator && s.denominator) {
+                    if (dateStr && s.numerator && s.denominator) {
                         splits[dateStr] = s.numerator / s.denominator;
                     }
                 });
@@ -194,7 +199,7 @@ export async function POST(req: NextRequest) {
                 const rawDivs = result.events.dividends;
                 Object.values(rawDivs).forEach((d) => {
                     const dateStr = toDateKey(d.date);
-                    if (d.amount) {
+                    if (dateStr && d.amount) {
                         dividendHistory.push({ date: dateStr, amount: d.amount });
                     }
                 });
@@ -222,10 +227,11 @@ export async function POST(req: NextRequest) {
             // yahoo-finance2 types are tricky here.
             // However, calendarEvents often has 'exDividendDate' and 'dividendDate'
         }
-        if (calendarEvents.exDividendDate) {
+        const exDate = toDateKey(calendarEvents.exDividendDate);
+        if (exDate) {
             upcomingDividends.push({
-                exDate: toDateKey(calendarEvents.exDividendDate),
-                paymentDate: calendarEvents.dividendDate ? toDateKey(calendarEvents.dividendDate) : undefined,
+                exDate,
+                paymentDate: toDateKey(calendarEvents.dividendDate) ?? undefined,
                 amount: undefined // Often not provided in calendar events summary, or is in earnings
             });
         }
@@ -233,6 +239,9 @@ export async function POST(req: NextRequest) {
         const resolvedCurrency = meta.currency || quoteResult.currency || summaryDetail.currency;
 
         return NextResponse.json({
+            // Which optional parts arrived: a failed part must not erase stored fundamentals
+            quoteOk: quoteSettled.status === 'fulfilled',
+            summaryOk: summarySettled.status === 'fulfilled',
             history,
             splits,
             currency: resolvedCurrency,
@@ -249,8 +258,8 @@ export async function POST(req: NextRequest) {
             // Advanced Data from QuoteSummary
             totalRevenue: financialData.totalRevenue,
             forwardPE: keyStats.forwardPE,
-            epsTrailingTwelveMonths: keyStats.trailingEps || quoteResult.epsTrailingTwelveMonths,
-            epsForward: keyStats.forwardEps || quoteResult.epsForward,
+            epsTrailingTwelveMonths: keyStats.trailingEps ?? quoteResult.epsTrailingTwelveMonths,
+            epsForward: keyStats.forwardEps ?? quoteResult.epsForward,
             earningsHistory,
             // New Profile Data
             country: assetProfile.country,

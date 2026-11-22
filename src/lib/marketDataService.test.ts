@@ -90,7 +90,7 @@ describe('syncProjectQuotes', () => {
       const body = JSON.parse(bodyRaw) as { symbol?: string; from?: string };
 
       expect(body.symbol).toBe('TST');
-      expect(body.from).toBe('2025-01-10');
+      expect(body.from).toBe('2025-01-05'); // five days of overlap before the last sync
 
       return {
         ok: true,
@@ -119,6 +119,70 @@ describe('syncProjectQuotes', () => {
     expect(updated).not.toBe(project);
     expect(updated.securities[isin].priceHistory?.['2025-01-10']).toBe(100);
     expect(updated.securities[isin].priceHistory?.['2025-01-11']).toBe(101);
+  });
+
+  it('reloads the full history when an incremental sync reports a new split (H3)', async () => {
+    const isin = 'US0000000SPL';
+    const project: ProjectData = {
+      ...createEmptyProject(),
+      securities: {
+        [isin]: {
+          isin, name: 'Split Corp', symbol: 'SPL', currency: 'USD',
+          priceHistory: { '2025-01-08': 1000, '2025-01-10': 1000 }, splits: {},
+          dividendHistory: [], upcomingDividends: [], dividendHistorySynced: true,
+          lastSync: '2025-01-10T15:30:00.000Z'
+        }
+      }
+    };
+    const froms: string[] = [];
+    globalThis.fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { from: string };
+      froms.push(body.from);
+      const full = body.from === '1970-01-01';
+      return {
+        ok: true,
+        json: async () => ({
+          history: full ? { '2025-01-08': 100, '2025-01-10': 100, '2025-01-13': 101 } : { '2025-01-13': 101 },
+          splits: { '2025-01-12': 10 },
+          currency: 'USD', symbol: 'SPL', dividendHistory: [], upcomingDividends: []
+        })
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    const updated = await syncProjectQuotes(project, true, undefined, { maxPerRun: 0, maxTimeMs: 0, delayMs: 0 });
+    expect(froms).toEqual(['2025-01-05', '1970-01-01']);
+    // Old unadjusted prices are replaced, not mixed with the adjusted ones
+    expect(updated.securities[isin].priceHistory).toEqual({ '2025-01-08': 100, '2025-01-10': 100, '2025-01-13': 101 });
+    expect(updated.securities[isin].splits).toEqual({ '2025-01-12': 10 });
+  });
+
+  it('keeps stored fundamentals when quote or quoteSummary failed on the server (H11)', async () => {
+    const isin = 'US0000000FUN';
+    const project: ProjectData = {
+      ...createEmptyProject(),
+      securities: {
+        [isin]: {
+          isin, name: 'Fund Corp', symbol: 'FUN', currency: 'USD', priceHistory: {},
+          sector: 'Technology', country: 'United States', marketCap: 5e9, trailingPE: 20,
+          upcomingDividends: [{ exDate: '2025-02-01' }]
+        }
+      }
+    };
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        quoteOk: false, summaryOk: false,
+        history: { '2025-01-10': 10 }, splits: {}, currency: 'USD', symbol: 'FUN',
+        dividendHistory: [], upcomingDividends: []
+      })
+    } as Response)) as unknown as typeof fetch;
+
+    const updated = await syncProjectQuotes(project, true, undefined, { maxPerRun: 0, maxTimeMs: 0, delayMs: 0 });
+    expect(updated.securities[isin]).toMatchObject({
+      sector: 'Technology', country: 'United States', marketCap: 5e9, trailingPE: 20,
+      upcomingDividends: [{ exDate: '2025-02-01' }]
+    });
+    expect(updated.securities[isin].priceHistory).toEqual({ '2025-01-10': 10 });
   });
 
   it('keeps existing dividend history on incremental sync when API returns no new dividends', async () => {

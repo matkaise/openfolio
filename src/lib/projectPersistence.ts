@@ -317,9 +317,15 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
        VALUES (?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`
     );
-    stmt.run([key, normalizedValue]);
-    stmt.free();
+    try {
+      stmt.run([key, normalizedValue]);
+    } finally {
+      stmt.free();
+    }
   }
+
+  /** Section writes of the running transaction; they enter the snapshot only after COMMIT. */
+  private readonly pendingSnapshot = new Map<string, string>();
 
   private upsertSection(name: string, payload: string): void {
     const current = this.sectionSnapshot.get(name);
@@ -330,10 +336,13 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
        VALUES (?, ?)
        ON CONFLICT(name) DO UPDATE SET payload = excluded.payload`
     );
-    stmt.run([name, payload]);
-    stmt.free();
+    try {
+      stmt.run([name, payload]);
+    } finally {
+      stmt.free();
+    }
 
-    this.sectionSnapshot.set(name, payload);
+    this.pendingSnapshot.set(name, payload);
   }
 
   async saveProject(project: ProjectData): Promise<Uint8Array> {
@@ -362,15 +371,27 @@ class SqliteProjectSessionImpl implements SqliteProjectSession {
         this.upsertSection('security_price_history', JSON.stringify(securityPriceHistory));
       }
 
-      const fxRatesJson = JSON.stringify(project.fxData.rates || {});
-      if (!preserveUnknownHeavyData || fxRatesJson !== '{}') {
-        this.upsertSection('fx_rates', fxRatesJson);
+      const fxRates = project.fxData.rates || {};
+      if (!preserveUnknownHeavyData) {
+        this.upsertSection('fx_rates', JSON.stringify(fxRates));
+      } else if (Object.keys(fxRates).length > 0) {
+        // The stored history was never loaded (e.g. hydration failed) but a sync brought new
+        // days: add them to the stored years instead of replacing those with 90 days.
+        const stored = parseNumberRecordMap(this.readSection<unknown>('fx_rates', {}));
+        const merged: Record<string, Record<string, number>> = { ...stored };
+        Object.entries(fxRates).forEach(([currency, history]) => {
+          merged[currency] = { ...(stored[currency] || {}), ...history };
+        });
+        this.upsertSection('fx_rates', JSON.stringify(merged));
       }
 
       this.db.run('COMMIT');
+      this.pendingSnapshot.forEach((payload, name) => this.sectionSnapshot.set(name, payload));
     } catch (error) {
       this.db.run('ROLLBACK');
       throw error;
+    } finally {
+      this.pendingSnapshot.clear();
     }
 
     this.hasLazyPayload = this.detectHeavyPayload();
@@ -393,7 +414,13 @@ const toOpenedSqliteProject = (
   encryptionKey: ProjectEncryptionKey | null
 ): OpenedProjectFile => {
   const hasLazyPayload = session.hasLazyPayload;
-  const project = session.readProjectBase(hasLazyPayload);
+  let project: ProjectData;
+  try {
+    project = session.readProjectBase(hasLazyPayload);
+  } catch (error) {
+    session.close(); // free the sql.js database (WASM memory) of a file that could not be read
+    throw error;
+  }
   return {
     project,
     format: 'sqlite',
