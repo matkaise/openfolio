@@ -2,9 +2,10 @@ export type EcbDay = { date: string; rates: Record<string, number> };
 
 // Minimal parser for the ECB eurofxref feeds (daily, hist-90d, hist):
 // <Cube time="2023-10-27"> <Cube currency="USD" rate="1.05" /> ... </Cube>
+// The daily feed uses single quotes (<Cube time='2023-10-27'>), the history feeds double quotes.
 export const parseEcbXml = (xmlText: string): EcbDay[] => {
     const result: EcbDay[] = [];
-    const dateRegex = /<Cube time="(\d{4}-\d{2}-\d{2})">/g;
+    const dateRegex = /<Cube time=["'](\d{4}-\d{2}-\d{2})["']\s*>/g;
     let dateMatch: RegExpExecArray | null;
 
     while ((dateMatch = dateRegex.exec(xmlText)) !== null) {
@@ -13,13 +14,13 @@ export const parseEcbXml = (xmlText: string): EcbDay[] => {
 
         // The block runs until the next date or the end of the file
         const startIndex = dateMatch.index;
-        const nextDateMatch = xmlText.slice(startIndex + 1).match(/<Cube time="/);
+        const nextDateMatch = xmlText.slice(startIndex + 1).match(/<Cube time=["']/);
         const endIndex = nextDateMatch && nextDateMatch.index !== undefined
             ? (startIndex + 1 + nextDateMatch.index)
             : xmlText.length;
         const block = xmlText.slice(startIndex, endIndex);
 
-        const rateRegex = /currency="([A-Z]{3})" rate="([\d.]+)"/g;
+        const rateRegex = /currency=["']([A-Z]{3})["']\s+rate=["']([\d.]+)["']/g;
         let rateMatch;
         while ((rateMatch = rateRegex.exec(block)) !== null) {
             rates[rateMatch[1]] = parseFloat(rateMatch[2]);

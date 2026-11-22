@@ -18,6 +18,11 @@ export const ENCRYPTED_MAGIC = 'OFENC1';
 export const ENCRYPTION_FORMAT_VERSION = 1;
 export const KDF_PBKDF2_SHA256 = 1;
 export const DEFAULT_KDF_ITERATIONS = 600_000;
+/**
+ * The header is read before the password can be checked; a tampered file with ~4 billion
+ * iterations would freeze the tab. 20× today's default leaves room for stronger settings.
+ */
+export const MAX_KDF_ITERATIONS = 12_000_000;
 
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
@@ -132,7 +137,7 @@ export const readEncryptedHeader = (bytes: Uint8Array): EncryptedProjectHeader =
     if (version !== ENCRYPTION_FORMAT_VERSION) {
         throw new Error(getT().services.crypto.version(version));
     }
-    if (kdf !== KDF_PBKDF2_SHA256 || iterations <= 0) {
+    if (kdf !== KDF_PBKDF2_SHA256 || iterations <= 0 || iterations > MAX_KDF_ITERATIONS) {
         throw new Error(getT().services.crypto.unknownKdf);
     }
     return { version, kdf, iterations, salt, iv };

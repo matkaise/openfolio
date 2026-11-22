@@ -1,7 +1,8 @@
 import initSqlJs from 'sql.js';
 import { describe, expect, it } from 'vitest';
 import { createEmptyProject, type ProjectData } from '@/types/domain';
-import { createProjectKey, isEncryptedProjectBytes } from '../projectCrypto';
+import { createProjectKey, isEncryptedProjectBytes, readEncryptedHeader } from '../projectCrypto';
+import { parseNumberRecordMap } from '../schemas/project';
 import { openProjectFile, serializeProjectForFile } from '../projectPersistence';
 import { addTransactions } from '../domain/ledger/store';
 
@@ -75,6 +76,13 @@ describe('encrypted project files', () => {
     await expect(openProjectFile(toFile(tampered), 'correct horse')).rejects.toThrow('INVALID_PASSWORD');
   });
 
+  it('refuses an absurd iteration count before deriving a key (M7)', async () => {
+    const bytes = await saveEncrypted(makeProject(), 'correct horse');
+    const tampered = bytes.slice();
+    new DataView(tampered.buffer).setUint32(8, 0xFFFFFFFF); // magic (6) + version + kdf
+    expect(() => readEncryptedHeader(tampered)).toThrow();
+  });
+
   it('keeps saving encrypted with the key from opening, with a fresh IV each time', async () => {
     const first = await saveEncrypted(makeProject(), 'correct horse');
     const opened = await openProjectFile(toFile(first), 'correct horse');
@@ -136,5 +144,12 @@ describe('files from older versions', () => {
     opened.sqliteSession?.close();
     expect(opened.project.version).toBe(3);
     expect(opened.project.ledger).toEqual(project.ledger);
+  });
+});
+
+describe('lazy history sections', () => {
+  it('keeps the valid histories when one entry is broken (M3)', () => {
+    expect(parseNumberRecordMap({ USD: { '2024-01-01': 1.1 }, CHF: null, GBP: 'x' })).toEqual({ USD: { '2024-01-01': 1.1 } });
+    expect(parseNumberRecordMap(null)).toEqual({});
   });
 });

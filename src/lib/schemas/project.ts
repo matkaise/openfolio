@@ -83,10 +83,16 @@ export const parseProjectData = (value: unknown): ProjectData => {
     return result.data as unknown as ProjectData;
 };
 
-const numberRecordMap = z.record(numberRecord);
-
-/** Cleans lazily loaded { key: { date: number } } sections; unreadable sections become empty. */
+/**
+ * Cleans lazily loaded { key: { date: number } } sections. Checked per key: one broken entry
+ * (e.g. null) drops only that entry, not every price or FX history of the project.
+ */
 export const parseNumberRecordMap = (value: unknown): Record<string, Record<string, number>> => {
-    const result = numberRecordMap.safeParse(value);
-    return result.success ? result.data : {};
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const result: Record<string, Record<string, number>> = {};
+    Object.entries(value as Record<string, unknown>).forEach(([key, entry]) => {
+        const parsed = numberRecord.safeParse(entry);
+        if (parsed.success) result[key] = parsed.data;
+    });
+    return result;
 };
