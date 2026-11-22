@@ -3,7 +3,7 @@
 import React from 'react';
 import { useT } from '@/lib/i18n';
 
-export type ShellNavItem = { key: string; label: string; badge?: string | number };
+export type ShellNavItem = { key: string; label: string; icon?: React.ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean | 'true' }>; badge?: string | number };
 
 type Props = {
     items: ShellNavItem[];
@@ -14,7 +14,7 @@ type Props = {
     fileStatus: React.ReactNode;
 };
 
-/** Desktop navigation (design v2): logo, nav with dots and badges, sync card, file status. */
+/** Desktop navigation (design v2): logo, nav with icons and badges, sync card, file status. */
 export const AppSidebar = ({ items, activeKey, onNavigate, sync, fileStatus }: Props) => {
     const t = useT();
     return (
@@ -33,7 +33,9 @@ export const AppSidebar = ({ items, activeKey, onNavigate, sync, fileStatus }: P
                     className={item.key === activeKey ? 'app-nav-item is-active' : 'app-nav-item'}
                     aria-current={item.key === activeKey ? 'page' : undefined}
                 >
-                    <span className="app-nav-dot" aria-hidden="true" />
+                    {item.icon
+                        ? <item.icon size={18} aria-hidden="true" className="app-nav-icon" />
+                        : <span className="app-nav-dot" aria-hidden="true" />}
                     <span>{item.label}</span>
                     {item.badge !== undefined && item.badge !== '' && item.badge !== 0 && (
                         <span className="app-nav-badge">{item.badge}</span>

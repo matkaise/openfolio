@@ -8,7 +8,9 @@ import {
   Calendar,
   FileText,
   Database,
-  FolderSync
+  FolderSync,
+  Plus,
+  Settings
 } from 'lucide-react';
 import { useProjectActions, useProjectData } from '@/contexts/ProjectContext';
 import { FileStatusCard, MissingFxNotice, MobileSaveButton, StartupMarketSync, SyncButton } from '@/components/shell/ShellStatus';
@@ -19,7 +21,7 @@ import { ImportContent } from '@/components/ImportContent';
 import { MultiSelectDropdown } from '@/components/MultiSelectDropdown';
 import { TransactionModal } from '@/components/TransactionModal';
 import { SecurityDetailModal } from '@/components/SecurityDetailModal';
-import { applyThemePreference, resolveThemePreference, type ThemePreference } from '@/lib/theme';
+import { applyThemePreference, resolveThemePreference } from '@/lib/theme';
 import { useT } from '@/lib/i18n';
 import { useFormatters } from '@/components/ui/useFormatters';
 import { normalizeWealthGoalSettings } from '@/lib/wealthGoalUtils';
@@ -66,6 +68,10 @@ const TAB_PRELOAD_SEQUENCE: TabKey[] = [
 const HEADING_KEYS = ['Portfolio', 'Analyse', 'Dividenden', 'Transaktionen', 'Datenquellen', 'Broker', 'Einstellungen', 'Import'] as const;
 const hasHeading = (tab: TabKey): tab is (typeof HEADING_KEYS)[number] => (HEADING_KEYS as readonly string[]).includes(tab);
 
+/** Pages whose numbers follow the depot filter; elsewhere the filter is hidden to keep the bar calm. */
+const FILTERED_KEYS: readonly TabKey[] = ['Dashboard', 'Portfolio', 'Analyse', 'Dividenden', 'Transaktionen'];
+const usesPortfolioFilter = (tab: TabKey) => FILTERED_KEYS.includes(tab);
+
 const MOBILE_MAIN_KEYS = ['Dashboard', 'Portfolio', 'Dividenden', 'Transaktionen'] as const;
 
 export default function PortfolioApp() {
@@ -100,10 +106,6 @@ export default function PortfolioApp() {
   useEffect(() => {
     applyThemePreference(themePreference);
   }, [themePreference]);
-
-  const setThemePreference = useCallback((theme: ThemePreference) => {
-    updateProject((prev) => ({ ...prev, settings: { ...prev.settings, theme } }));
-  }, [updateProject]);
 
   useEffect(() => {
     if (!isLoaded || !project?.id) return;
@@ -233,9 +235,10 @@ export default function PortfolioApp() {
   const navItems: ShellNavItem[] = NAV_ITEMS.map((item) => ({
     key: item.key,
     label: t.shell.nav[item.key],
+    icon: item.icon,
     badge: item.key === 'Portfolio' ? holdingsCount : item.key === 'Broker' ? brokerConnections.length : undefined
   }));
-  navItems.push({ key: 'Einstellungen', label: t.shell.nav.Einstellungen });
+  navItems.push({ key: 'Einstellungen', label: t.shell.nav.Einstellungen, icon: Settings });
   const hour = shellNow.getHours();
   const greeting = hour < 11 ? t.shell.greeting.morning : hour < 18 ? t.shell.greeting.day : t.shell.greeting.evening;
   const mobileMainKeys: readonly TabKey[] = MOBILE_MAIN_KEYS;
@@ -277,7 +280,7 @@ export default function PortfolioApp() {
               securities={project?.securities || {}}
               onSelect={(isin) => setSelectedSecurity({ isin })}
             />
-            {project?.portfolios && project.portfolios.length > 0 && (
+            {project?.portfolios && project.portfolios.length > 0 && usesPortfolioFilter(activeTab) && (
               <MultiSelectDropdown
                 options={project.portfolios}
                 selectedIds={selectedPortfolioIds}
@@ -302,25 +305,16 @@ export default function PortfolioApp() {
               <option value="CHF">CHF</option>
               <option value="GBP">GBP</option>
             </select>
-            <div className="app-tgl glass app-hide-mobile" role="radiogroup" aria-label={t.shell.appearance}>
-              {(['dark', 'light', 'system'] as ThemePreference[]).map((theme) => (
-                <button
-                  type="button"
-                  key={theme}
-                  role="radio"
-                  aria-checked={themePreference === theme}
-                  onClick={() => setThemePreference(theme)}
-                >
-                  {t.theme[theme]}
-                </button>
-              ))}
-            </div>
             <SyncButton />
-            <button type="button" onClick={() => handleTabChange('Import')} className="md3-tonal-btn app-hide-mobile px-4 text-sm">
-              {t.shell.importButton}
-            </button>
-            <button type="button" onClick={() => handleTabChange('Import')} className="md3-filled-btn px-4 text-sm">
-              {t.shell.addTransaction}
+            <button
+              type="button"
+              onClick={() => handleTabChange('Import')}
+              className="md3-filled-btn app-add-btn px-4 text-sm"
+              title={t.shell.addEntriesTitle}
+              aria-current={activeTab === 'Import' ? 'page' : undefined}
+            >
+              <Plus size={16} strokeWidth={2.6} aria-hidden="true" />
+              <span>{t.shell.addTransaction}</span>
             </button>
           </div>
         </header>
@@ -391,7 +385,7 @@ export default function PortfolioApp() {
                   handleTabChange(item.key as TabKey);
                 }}
               >
-                <span className="app-nav-dot" aria-hidden="true" />
+                {item.icon ? <item.icon size={18} aria-hidden="true" className="app-nav-icon" /> : <span className="app-nav-dot" aria-hidden="true" />}
                 {item.label}
               </button>
             ))}

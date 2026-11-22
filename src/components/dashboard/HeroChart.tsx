@@ -5,6 +5,7 @@ import { Area, AreaChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } fro
 import type { Formatters } from '@/lib/format';
 import { parseDateOnlyUTC } from '@/lib/dateUtils';
 import { useT } from '@/lib/i18n';
+import { calendarTicks } from '@/lib/chartTicks';
 
 type Point = { date: string; value: number; invested?: number };
 
@@ -37,6 +38,8 @@ export const HeroChart = ({ data, mode, formatters, height = 260 }: {
         ? (parseDateOnlyUTC(data[data.length - 1].date).getTime() - parseDateOnlyUTC(data[0].date).getTime()) / 86_400_000
         : 0;
 
+    const ticks = calendarTicks(data.map((p) => p.date), spanDays);
+
     if (data.length < 2) {
         return <div className="hero-chart-empty" style={{ height }}>{t.charts.noPrices}</div>;
     }
@@ -62,7 +65,9 @@ export const HeroChart = ({ data, mode, formatters, height = 260 }: {
                         dataKey="date"
                         axisLine={false}
                         tickLine={false}
-                        minTickGap={48}
+                        ticks={ticks}
+                        interval={ticks ? 'preserveStartEnd' : undefined}
+                        minTickGap={ticks ? 16 : 48}
                         tick={{ fill: 'var(--text3)', fontSize: 11, fontWeight: 600 }}
                         tickFormatter={(value: string) => formatTick(formatters, value, spanDays)}
                     />

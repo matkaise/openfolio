@@ -25,7 +25,7 @@ const DividendListModal = ({
   isOpen: boolean;
   onClose: () => void;
   title: string;
-  items: { id: string; name: string; date: string; amount: number; type: string }[];
+  items: { id: string; isin?: string; name: string; date: string; amount: number; type: string }[];
 }) => {
   const formatters = useFormatters();
   const t = useT();
@@ -35,7 +35,7 @@ const DividendListModal = ({
         {items.map((item) => (
           <ListRow
             key={item.id}
-            leading={<Avatar seed={item.name} label={item.name} size={38} />}
+            leading={<Avatar seed={item.isin || item.name} label={item.name} size={38} />}
             title={item.name}
             meta={<span>{formatters.date(item.date)} · {t.dividends.types[item.type as DividendKind] ?? item.type}</span>}
             trailing={<span className="ui-row-value is-up">{formatters.money(item.amount, { sign: true })}</span>}
@@ -52,7 +52,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
   const [historyRange, setHistoryRange] = useState<'5Y' | 'MAX'>('5Y');
   const [dividendListModal, setDividendListModal] = useState<{
     title: string;
-    items: { id: string; name: string; date: string; amount: number; type: string }[];
+    items: { id: string; isin?: string; name: string; date: string; amount: number; type: string }[];
   } | null>(null);
   const [cumulativeRange, setCumulativeRange] = useState<'1M' | '6M' | 'YTD' | '1J' | '3J' | '5J' | 'MAX'>('1J');
   const baseCurrency = project?.settings.baseCurrency || 'EUR';
@@ -140,7 +140,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     );
 
     // --- FORECAST LOGIC (History & Upcoming Based) ---
-    const forecastEvents: { date: Date, amount: number, name: string, ticker: string, debug?: string }[] = [];
+    const forecastEvents: { date: Date, amount: number, name: string, ticker: string, isin: string, debug?: string }[] = [];
     const monthlyForecastMap: Record<number, number> = {}; // Month -> Amount
 
     holdings.forEach(h => {
@@ -189,6 +189,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
                 amount: finalVal,
                 name: sec.name,
                 ticker: sec.symbol || sec.isin,
+                isin: sec.isin,
                 debug: `${shares}x ~${amount.toFixed(2)} ${secCurrency}`
               });
               monthlyForecastMap[exDate.getMonth()] = (monthlyForecastMap[exDate.getMonth()] || 0) + finalVal;
@@ -225,6 +226,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
                   amount: finalVal,
                   name: sec.name,
                   ticker: sec.symbol || sec.isin,
+                  isin: sec.isin,
                   debug: `Hist(${dDate.toLocaleDateString()}): ${shares}x ${dh.amount} ${secCurrency}`
                 });
                 monthlyForecastMap[dDate.getMonth()] = (monthlyForecastMap[dDate.getMonth()] || 0) + finalVal;
@@ -247,7 +249,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
     const annualTheoreticalMap: Record<number, number> = {};  // Year -> Amount
     const monthlyTheoreticalAllMap: Record<string, number> = {}; // Full history map
     const annualTheoreticalAllMap: Record<number, number> = {};  // Full history map
-    const theoreticalRecent: { id: string; name: string; date: string; amount: number; type: string; sortKey: number }[] = [];
+    const theoreticalRecent: { id: string; isin: string; name: string; date: string; amount: number; type: string; sortKey: number }[] = [];
     const today = new Date();
 
     // 1. Identify all securities involved in transactions
@@ -344,6 +346,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
         if (dDate <= today) {
           theoreticalRecent.push({
             id: `${isin}-${dh.date}`,
+            isin,
             name: sec.name || isin,
             date: toDateKeyLocal(dDate),
             amount,
@@ -390,6 +393,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
         name: e.name,
         amount: e.amount,
         ticker: e.ticker,
+        isin: e.isin,
         type: 'forecast' as DividendKind,
         debug: e.debug
       }));
@@ -399,6 +403,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .map(d => ({
         id: d.id,
+        isin: d.isin || '',
         name: d.name || d.isin,
         date: toDateKeyLocal(new Date(d.date)),
         amount: convertDividendToBase(d.amount, d.currency, d.date),
@@ -593,17 +598,17 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
   const currentYear = new Date().getFullYear();
   const changeVsLastYear = receivedLastYear > 0 ? ((receivedCurrentYear - receivedLastYear) / receivedLastYear) * 100 : 0;
   const RANGE_OPTIONS = (['1M', '6M', 'YTD', '1J', '3J', '5J', 'MAX'] as const).map((value) => ({ value, label: t.ranges.short[value] }));
-  const showAll = (title: string, items: { id: string; name: string; date: string; amount: number; type: string }[]) => setDividendListModal({ title, items });
+  const showAll = (title: string, items: { id: string; isin?: string; name: string; date: string; amount: number; type: string }[]) => setDividendListModal({ title, items });
 
   const yearlyMax = Math.max(...yearlyDisplayData.map((d) => d.amount), 0) * 1.1 || 1;
   const monthlyMax = Math.max(...monthlyData.flatMap((d) => d.years.map((y) => y.amount)), 0) * 1.1 || 1;
 
-  const paymentRows = (items: { key: string; name: string; date: string; type: string; amount: number }[]) => (
+  const paymentRows = (items: { key: string; isin?: string; name: string; date: string; type: string; amount: number }[]) => (
     <div className="ui-rows">
       {items.map((item) => (
         <ListRow
           key={item.key}
-          leading={<Avatar seed={item.name} label={item.name} size={38} />}
+          leading={<Avatar seed={item.isin || item.name} label={item.name} size={38} />}
           title={item.name}
           meta={<span>{formatters.date(item.date)} · {t.dividends.types[item.type as DividendKind] ?? item.type}</span>}
           trailing={<span className="ui-row-value is-up">{formatters.money(item.amount, { sign: true })}</span>}
@@ -677,7 +682,9 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
             yearlyDisplayData.map((d) => (
               <div key={d.year} className="ui-bar-col">
                 <div className="ui-bar-group">
-                  <div className={`ui-bar is-wide${d.isCurrent ? ' is-current' : ''}`} style={{ height: `${(d.amount / yearlyMax) * 100}%` }} />
+                  <div className={`ui-bar is-wide${d.isCurrent ? ' is-current' : ''}`} style={{ height: `${(d.amount / yearlyMax) * 100}%` }}>
+                    {d.amount > 0 && <span className="ui-bar-value">{formatters.money(d.amount, { decimals: 0 })}</span>}
+                  </div>
                 </div>
                 <span className="ui-bar-label">{d.year}</span>
                 <div className="ui-bar-tip glass">
@@ -709,7 +716,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
         <GlassCard>
           <CardHeader title={t.dividends.upcoming}>
             {upcomingDividends.length > 5 && (
-              <button type="button" className="ui-link" onClick={() => showAll(t.dividends.upcoming, upcomingDividends.map((div, i) => ({ id: `${div.ticker}-${div.date}-${i}`, name: div.name, date: div.date, amount: div.amount, type: div.type })))}>
+              <button type="button" className="ui-link" onClick={() => showAll(t.dividends.upcoming, upcomingDividends.map((div, i) => ({ id: `${div.ticker}-${div.date}-${i}`, isin: div.isin, name: div.name, date: div.date, amount: div.amount, type: div.type })))}>
                 {t.dividends.showAll(upcomingDividends.length)}
               </button>
             )}
@@ -717,14 +724,14 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
           {upcomingDividends.length === 0 ? (
             <EmptyState icon={<CalendarCheck size={22} />} title={t.dividends.noUpcomingTitle} text={t.dividends.noUpcomingText} />
           ) : (
-            paymentRows(upcomingDividends.slice(0, 5).map((div, i) => ({ key: `${div.ticker}-${div.date}-${i}`, name: div.name, date: div.date, type: div.type, amount: div.amount })))
+            paymentRows(upcomingDividends.slice(0, 5).map((div, i) => ({ key: `${div.ticker}-${div.date}-${i}`, isin: div.isin, name: div.name, date: div.date, type: div.type, amount: div.amount })))
           )}
         </GlassCard>
 
         <GlassCard>
           <CardHeader title={t.dividends.history}>
             {recentDividends.length > 5 && (
-              <button type="button" className="ui-link" onClick={() => showAll(t.dividends.history, recentDividends.map((div) => ({ id: div.id, name: div.name || '', date: div.date, amount: div.amount, type: div.type })))}>
+              <button type="button" className="ui-link" onClick={() => showAll(t.dividends.history, recentDividends.map((div) => ({ id: div.id, isin: div.isin, name: div.name || '', date: div.date, amount: div.amount, type: div.type })))}>
                 {t.dividends.showAll(recentDividends.length)}
               </button>
             )}
@@ -732,7 +739,7 @@ export const DividendenContent = ({ selectedPortfolioIds }: { selectedPortfolioI
           {recentDividends.length === 0 ? (
             <EmptyState icon={<Coins size={22} />} title={t.dividends.noHistoryTitle} text={t.dividends.noHistoryText} />
           ) : (
-            paymentRows(recentDividends.slice(0, 5).map((div) => ({ key: div.id, name: div.name || '', date: div.date, type: div.type, amount: div.amount })))
+            paymentRows(recentDividends.slice(0, 5).map((div) => ({ key: div.id, isin: div.isin, name: div.name || '', date: div.date, type: div.type, amount: div.amount })))
           )}
         </GlassCard>
       </div>
