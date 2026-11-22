@@ -149,6 +149,33 @@ export const fileImportEn: typeof fileImportDe = {
         },
         dkb: {
             dkb: 'DKB PDF settlement'
+        },
+        consorsbank: {
+            consorsbank: 'Consorsbank / Cortal Consors PDF settlement'
+        },
+        wealthsimple: {
+            'performance-report': 'PDF performance report',
+            other: 'Other Wealthsimple document'
+        },
+        hargreaveslansdown: {
+            'contract-note': 'PDF contract note'
+        },
+        questrade: {
+            statement: 'PDF monthly statement',
+            'trade-confirmation': 'PDF trade confirmation report',
+            other: 'Other Questrade document'
+        },
+        robinhood: {
+            statement: 'PDF monthly statement',
+            other: 'Other Robinhood document'
+        },
+        zerodha: {
+            tradebook: 'Tradebook CSV (Console)'
+        },
+        fidelity: {
+            confirmation: 'PDF transaction confirmation (Fidelity Brokerage Services)',
+            'stock-plan': 'PDF confirmation Fidelity Stock Plan Services',
+            other: 'Other Fidelity document'
         }
     },
     guides: {
@@ -858,6 +885,224 @@ export const fileImportEn: typeof fileImportDe = {
                 'A settlement is only booked if market value, fees and taxes add up exactly to the final amount; otherwise it is listed as not imported.',
                 'The financial transaction tax is booked as a tax, not as a fee.',
                 'Only tested with synthetic PDFs based on publicly documented formats, not with current original settlements.'
+            ]
+        },
+        consorsbank: {
+            scope: 'Securities accounts at Consorsbank (BNP Paribas), including settlements from the Cortal Consors era.',
+            steps: [
+                'Log in on the Consorsbank website in a browser, not in the app.',
+                'Under "Mein Konto & Depot", open the "OnlineArchiv".',
+                'Choose the document type "Orderabrechnungen" and click "Suchen"; search for the matching dividend and income documents the same way.',
+                'Select all files, save them and drop the PDFs here together; each PDF is one document.'
+            ],
+            settings: [
+                'According to Parqet, PDFs from the order archive in the app cannot be read: download the same documents in a browser.',
+                'Use the original PDFs; do not print, scan or photograph them: Openfolio only reads the text layer, without text recognition.',
+                'For complete holdings, import all settlements since the account was opened.'
+            ],
+            accounts: 'Import per securities account. Settlements that were already imported are recognised by their order number; partial executions (…001, …002) stay separate.',
+            supported: [
+                'Orderabrechnung and Wertpapierabrechnung for buys, sells, subscriptions, sales of subscription rights and savings plans: amount in account currency, commission and charges as a fee, taxes as a separate booking.',
+                'Einlösung in units, as a sale.',
+                'Dividendengutschrift and Ertragsgutschrift gross in account currency with withholding tax and taxes; Zinsgutschrift as interest.',
+                'Vorabpauschale and Ertragsthesaurierung: the tax only. Nachträgliche Verlustverrechnung (later loss offset) as a tax booking.'
+            ],
+            unsupported: [
+                'Settlements without an ISIN (older documents only state the WKN): buys and sells are reported, because Openfolio does not make up an ISIN. Income is booked with name and amount, but not assigned to a security.',
+                'Bonds (nominal value, accrued interest); interest credits are booked, though.',
+                'Cancellations and reissued credits (Neuabrechnung): a credit that was already imported must be corrected by hand, otherwise it would be booked twice.',
+                'Credits to foreign currency accounts, transfers, exchanges, acquisition data, account statements and account closings.',
+                'Order and change confirmations and cost information are skipped without a booking; only the settlement proves an execution.'
+            ],
+            limits: [
+                'A settlement is only booked if market value, fees and taxes add up exactly to the final amount; otherwise it is listed as not imported.',
+                'The financial transaction tax is booked as a tax, not as a fee.',
+                'Only tested with synthetic PDFs based on publicly documented formats, not with current original settlements.'
+            ]
+        },
+        wealthsimple: {
+            scope: 'Managed Wealthsimple accounts in Canada (Wealthsimple Inc.): monthly and yearly performance reports as PDF. Not confirmed for self-directed accounts (Wealthsimple Trade), crypto or chequing.',
+            steps: [
+                'Log in to Wealthsimple on the web; statements of managed accounts are only available there.',
+                'Open the Profile menu at the bottom left and choose "Documents".',
+                'Open the statement in the "Statements" folder as PDF and save it. For many months: "Generate document" > "Bulk download monthly statements", format PDF, then choose the period and account.',
+                'Drop all PDFs here together; unzip the ZIP file first.'
+            ],
+            settings: [
+                'Choose PDF, not CSV: the CSV statement is not read here.',
+                'Use original PDFs, no scans: Openfolio only reads the text layer and runs no text recognition.',
+                'For a complete position history, import all statements since the account was opened.'
+            ],
+            accounts: 'Use one portfolio per account (for example TFSA and RRSP); a report with several accounts is refused. Monthly and yearly reports of the same period book nothing twice.',
+            supported: [
+                'Electronic funds transfers in and out as deposit and withdrawal.',
+                'Buys and sells under the symbol, in fractions, with no fee per trade.',
+                'Dividends in CAD under the symbol, non-resident tax as withholding tax.',
+                'Management fee, discounts and sales tax as separate fee bookings.'
+            ],
+            unsupported: [
+                'Dividends that only name a fund and no symbol are reported; assigning them would be a guess, so that cash is missing.',
+                'Sections or rows that are not among the known ones, such as interest or transfers, are reported.',
+                'Other Wealthsimple documents, such as trade confirmations of self-directed accounts, are reported.'
+            ],
+            limits: [
+                'A section is only booked if its rows add up to the "Total - …" line. Trade rows must match the Total column.',
+                'Reports name symbols, no ISIN. The security is looked up by symbol and currency at the next price update and can be completed there.',
+                'The public samples date from 2020. Whether current statements still look like this is not confirmed; a different PDF is reported, not booked.',
+                'Only tested with synthetic PDFs, not with current originals.'
+            ]
+        },
+        hargreaveslansdown: {
+            scope: 'Hargreaves Lansdown accounts in the UK (Fund & Share Account, ISA, SIPP): contract notes as PDF, one document per deal.',
+            steps: [
+                'Log in to your HL account online. HL provides contract notes there and lists them as online documents in its service terms.',
+                'Open the contract note of the deal and save it as PDF.',
+                'Drop all PDFs here together.'
+            ],
+            settings: [
+                'HL does not publish the exact menu item for contract notes, so none is named here. If you cannot find it, the HL helpdesk can help.',
+                'Use the PDF HL generates, not a web page print or scan: Openfolio only reads the text layer and runs no text recognition.'
+            ],
+            accounts: 'Use one portfolio per HL account (for example ISA and SIPP). A contract note is recognised by its number and never booked twice.',
+            supported: [
+                'Buys and sells of funds, ETFs and shares: consideration in GBP, commission as fee. The price in pence is not used; the quantity is on the note.',
+                'Stamp duty and PTM levy as their own tax booking when they are on the note and the total adds up.'
+            ],
+            unsupported: [
+                'Dividends, deposits, withdrawals, interest and fees are not on contract notes. Users report that HL issues no PDF for dividends.',
+                'Investment reports and other HL documents are reported, not booked.',
+                'Notes with unknown cost lines, such as FX charges, are reported.'
+            ],
+            limits: [
+                'A note is only booked when consideration and costs add up exactly to the settlement amount.',
+                'Stamp duty and PTM levy do not appear in the public samples; their labels are not confirmed by originals.',
+                'Only tested with synthetic PDFs based on publicly documented formats, not with current original notes.'
+            ]
+        },
+        questrade: {
+            scope: 'Questrade accounts in Canada (self-directed, Questwealth): monthly account statements and trade confirmation reports as PDF. The Excel export of the transaction history is not read here.',
+            steps: [
+                'Log in to Questrade.',
+                'Monthly statements: open the "Documents" page and save the statements under "Recent statements" as PDF.',
+                'Or trade confirmations: open the "Reports" page, choose "Trade confirmation", search by symbol or date and save the report as PDF.',
+                'Drop all PDFs here together.'
+            ],
+            settings: [
+                'Prefer monthly statements: only they hold distributions and contributions besides trades.',
+                'Use original PDFs, no scans: Openfolio only reads the text layer and runs no text recognition.',
+                'For a complete position history, import all statements since the account was opened.'
+            ],
+            accounts: 'Use one portfolio per Questrade account. The same booking in a statement and a report gets the same key if date, quantity and amount match. A statement may combine partial fills, though, so import only one of the two document types for the same period.',
+            supported: [
+                'Monthly statement: buys and sells in CAD and USD with commission, distributions (UNIT DIST) and contributions.',
+                'Trade confirmation report: buys and sells with commission and SEC fees as fee.'
+            ],
+            unsupported: [
+                'In statements, withdrawals, deposits other than "Contribution", withholding tax, interest, FX, transfers, corporate actions and fees are reported, not booked: no public sample exists for these rows.',
+                'Options and bonds (accrued interest) are reported.',
+                'Trades settling after month end are skipped and reported; they appear in the next statement.'
+            ],
+            limits: [
+                'A statement table is only booked if opening balance and rows add up exactly to the closing balance; otherwise the table is listed as not imported.',
+                'In a report, the rows must add up to the "Totals" row.',
+                'Statements and reports name symbols, no ISIN. The security is looked up by symbol and currency at the next price update and can be completed there.',
+                'Questrade documents where the documents are kept, not the download button; the guide dates from 2022.',
+                'Sales and USD rows in statements do not appear in the public samples; only tested with synthetic PDFs.'
+            ]
+        },
+        robinhood: {
+            scope: 'Robinhood brokerage accounts in the US: monthly statements as PDF. The CSV "account activity report" is not read here.',
+            steps: [
+                'Open "Account" in the app or on the web; in the app, open the menu (three bars) first.',
+                'Choose "Reports and statements", then "Monthly statements".',
+                'Choose the account type and download the PDF of the month you want.',
+                'Drop all months here together.'
+            ],
+            settings: [
+                'A month\'s statement is available within the first two weeks of the next month. Accounts without activity get a quarterly statement instead.',
+                'Use original PDFs, no scans: Openfolio only reads the text layer and runs no text recognition.',
+                'For a complete position history, import all statements since the account was opened.'
+            ],
+            accounts: 'Use one portfolio per Robinhood account (for example individual and IRA). Repeated imports book nothing twice; equal trades of one statement stay separate.',
+            supported: [
+                'Buys and sells (cash account) in USD.',
+                'Dividends (CDIV) gross and foreign withholding tax (DTAX) as its own booking.',
+                'ACH deposits and withdrawals, internal transfers (ITRF), credit card cash back (XENT_CC) as deposit.',
+                'Interest on swept cash (INT).'
+            ],
+            unsupported: [
+                'All other type codes, such as splits, options, margin, fees and account transfers, are reported with their code, not booked.',
+                'Trades pending settlement are skipped and reported; they appear in the next statement.',
+                'Sweep movements (Deposit Sweep Activity) are internal and not booked.',
+                'Crypto, futures and spending are not on the securities statement.'
+            ],
+            limits: [
+                'A statement is only booked if the rows add up to the "Total Funds Paid and Received" line, counting rows that were not booked. Otherwise the table is listed as not imported.',
+                'The statements do not separate debit and credit in the text; the direction follows from the type code.',
+                'Securities are booked under the ticker because dividends only name that. The CUSIP stays in the raw data. No ISIN is computed.',
+                'Transfers are only confirmed for the individual account.',
+                'Only tested with synthetic PDFs based on one public sample from January 2026, not with your own original statements.'
+            ]
+        },
+        zerodha: {
+            scope: 'Zerodha accounts in India: Console tradebook for equity and mutual funds as CSV. Not for F&O, currency and commodity.',
+            steps: [
+                'Log in to Console.',
+                'Open Reports > Tradebook.',
+                'Choose the segment, set the date range and click the arrow.',
+                'Use the button next to "Download" to save the CSV file, not XLSX.',
+                'Drop all files here together.'
+            ],
+            settings: [
+                'One tradebook download covers at most 365 days. For longer periods download each year separately; overlapping files are not booked twice.',
+                'Equity and mutual funds are separate segments and therefore separate downloads.',
+                'XLSX is not read. Do not edit the CSV in Excel: dates and numbers must stay unchanged.'
+            ],
+            accounts: 'Use one portfolio per Zerodha account. Each fill is a row with its own trade id and stays its own booking; partial fills of an order are not combined.',
+            supported: [
+                'Buys and sells of the EQ and MF segments in INR, value from quantity times price, security under the ISIN.'
+            ],
+            unsupported: [
+                'F&O, currency, commodity and unknown segments or trade types are reported row by row.',
+                'Charges and taxes (brokerage, STT, stamp duty) are not in the tradebook and are missing; they are not estimated.',
+                'Dividends, deposits and withdrawals are not in the tradebook.'
+            ],
+            limits: [
+                'According to Zerodha, external trades from corporate actions, IPOs, OFS, buybacks and transfers are only in separate external tradebooks. Without them positions will not match; their file format could not be checked.',
+                'Zerodha does not document the columns; they come from public sample exports.',
+                'If the ISIN is missing, the symbol is used and resolved at the next price update.',
+                'Only tested with synthetic files, not with your own original exports.'
+            ]
+        },
+        fidelity: {
+            scope: 'Only two document types from the US: transaction confirmations of Fidelity Brokerage Services and confirmations of Fidelity Stock Plan Services. This is not a full Fidelity integration: statements, the CSV export, NetBenefits plans and Fidelity International (UK) are not covered.',
+            steps: [
+                'Log in to Fidelity.com and open the "Statements" area. Trade confirmations are kept there, according to Fidelity also for stock plan sales.',
+                'Find the confirmation; it can be filtered by symbol, CUSIP, SEDOL or ISIN.',
+                'Open the PDF link next to the document and save the PDF.',
+                'Drop all PDFs here together.'
+            ],
+            settings: [
+                'Fidelity keeps confirmations online for ten years.',
+                'Use original PDFs, no scans: Openfolio only reads the text layer and runs no text recognition.'
+            ],
+            accounts: 'Use one portfolio per Fidelity account. A confirmation is recognised by its reference number and never booked twice; several trades in one PDF are booked one by one.',
+            supported: [
+                'Transaction confirmation: buys and sells with activity assessment fee as fee, fractions and several trades per PDF too.',
+                'Stock Plan Services: sales with total fees; ESPP purchases at the amount of accumulated contributions.'
+            ],
+            unsupported: [
+                'Other Fidelity documents are reported, not booked: statements, tax forms, dividends.',
+                'Options, bonds and confirmations with other cost lines, such as commission or accrued interest, are reported.',
+                'ESPP purchases book only the amount paid, not a discount to market value; its tax effects are left out.',
+                'RSU grants are not confirmations of this kind and are missing.'
+            ],
+            limits: [
+                'A confirmation is only booked if its amounts add up exactly.',
+                'US securities have no ISIN: they are booked under the symbol and resolved at the next price update; the CUSIP stays in the raw data.',
+                'The name "Fidelity" alone is not enough for detection: only the two issuers above are read.',
+                'Fidelity\'s help pages name the "Statements" area but no current click path; labels may differ.',
+                'Only tested with synthetic PDFs based on public samples from 2021 to 2023, not with current originals.'
             ]
         }
     } satisfies Record<string, ImportGuide>

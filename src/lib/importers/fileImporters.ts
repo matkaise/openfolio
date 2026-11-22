@@ -1,5 +1,6 @@
 import { avanzaFileImporter } from './avanza';
 import { comdirectFileImporter } from './comdirectPdf';
+import { consorsbankFileImporter } from './consorsbank';
 import { degiroFileImporter } from './degiroFile';
 import { directaFileImporter } from './directa';
 import { disnatFileImporter } from './disnat';
@@ -21,6 +22,12 @@ import { trading212FileImporter } from './trading212Csv';
 import { xtbFileImporter } from './xtb';
 import { yuhFileImporter } from './yuh';
 import { commSecFileImporter } from './commsec';
+import { wealthsimpleFileImporter } from './wealthsimple';
+import { hargreavesLansdownFileImporter } from './hargreavesLansdown';
+import { questradeFileImporter } from './questrade';
+import { robinhoodFileImporter } from './robinhood';
+import { zerodhaFileImporter } from './zerodha';
+import { fidelityFileImporter } from './fidelity';
 import { hasTextLayer, type PdfDocumentText } from '@/lib/pdf/pdfText';
 import {
     FileImportError,
@@ -57,7 +64,14 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     comdirectFileImporter,
     yuhFileImporter,
     commSecFileImporter,
-    dkbFileImporter
+    dkbFileImporter,
+    consorsbankFileImporter,
+    wealthsimpleFileImporter,
+    hargreavesLansdownFileImporter,
+    questradeFileImporter,
+    robinhoodFileImporter,
+    zerodhaFileImporter,
+    fidelityFileImporter
 ];
 
 export const findFileImporter = (id: string): BrokerFileImporter | undefined => (
