@@ -997,11 +997,14 @@ export const AnalysisContent = ({
       </button>
     );
   };
+  // "Unknown" only means missing metadata, not a concentration.
+  const largestKnown = <T extends { name: string }>(items: T[]) => items.find((item) => item.name !== t.common.unknown);
   const risks = [
-    { type: t.analysis.riskTypes.sector, data: sectorData[0] },
-    { type: t.analysis.riskTypes.region, data: regionData[0] },
-    { type: t.analysis.riskTypes.industry, data: industryData[0] }
+    { type: t.analysis.riskTypes.sector, data: largestKnown(sectorData) },
+    { type: t.analysis.riskTypes.region, data: largestKnown(regionData) },
+    { type: t.analysis.riskTypes.industry, data: largestKnown(industryData) }
   ]
+    .filter((item): item is { type: string; data: NonNullable<typeof item.data> } => item.data !== undefined)
     .filter((item) => item.data && item.data.value > 30)
     .sort((a, b) => b.data.value - a.data.value);
 

@@ -534,7 +534,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
             </div>
             <div className="hero-row">
               <Pill tone={toneOf(dayChangeValue)} title={t.dashboard.dayChangeTitle}>
-                {dayChangeValue >= 0 ? '↑' : '↓'} {formatters.money(Math.abs(dayChangeValue))}
+                {dayChangeValue > 0 ? '↑ ' : dayChangeValue < 0 ? '↓ ' : ''}{formatters.money(Math.abs(dayChangeValue))}
               </Pill>
               <Pill tone={toneOf(dayChangePercent)}>{t.dashboard.today(formatters.percent(dayChangePercent, { sign: true }))}</Pill>
               <Pill tone="neutral" title={performanceMethod === 'TWR' ? t.dashboard.twr : t.dashboard.mwr}>
@@ -657,7 +657,6 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
             {topHoldings.length === 0 ? (
               <p className="ui-sub">{t.dashboard.noPositions}</p>
             ) : topHoldings.map((holding) => {
-              const security = project?.securities?.[holding.security.isin];
               const weight = totalHoldingsValue > 0 ? (holding.value / totalHoldingsValue) * 100 : 0;
               return (
                 <button
@@ -666,7 +665,7 @@ export const DashboardContent = ({ timeRange, setTimeRange, selectedPortfolioIds
                   className="dash-pos"
                   onClick={() => onSelectSecurity(holding.security.isin, holding.currency)}
                 >
-                  <Avatar seed={holding.security.isin} label={security?.symbol && security.symbol !== holding.security.isin ? security.symbol : holding.security.name} />
+                  <Avatar seed={holding.security.isin} label={holding.security.name} />
                   <span style={{ minWidth: 0 }}>
                     <span className="dash-pos-name" style={{ display: 'block' }}>{holding.security.name}</span>
                     <span className="dash-pos-meta" style={{ display: 'block' }}>
