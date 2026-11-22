@@ -52,6 +52,15 @@ describe('comdirect settlements', () => {
         expect(batch.entries[0].fxRate).toBe(1.0806);
     });
 
+    it('books a foreign buy whose converted amount carries a trailing minus (H20)', async () => {
+        const withMinus = (text: string) => text.replace('EUR  4.425,22', 'EUR  4.425,22-');
+        const pages = docs.comdirectForeignBuy().map((page) => page.map((line) => (
+            typeof line === 'string' ? withMinus(line) : line.map(([x, text]) => [x, withMinus(text)] as [number, string])
+        )));
+        const { batch } = await parse(pages);
+        expect(summary(batch.entries)).toEqual([['2025-04-16', 'buy', 'US00CTEST024', 2, -4425.22, -18.93]]);
+    });
+
     it('reads the summary of partial executions and costs with a trailing minus', async () => {
         const { batch } = await parse(docs.comdirectPartialSell());
         expect(summary(batch.entries)).toEqual([['2025-03-10', 'sell', 'DE000CTEST36', -400, 8000, -40.64]]);

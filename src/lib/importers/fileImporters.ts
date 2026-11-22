@@ -59,7 +59,6 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     scalableFileImporter,
     flatexFileImporter,
     ingFileImporter,
-    comdirectFileImporter,
     yuhFileImporter,
     commSecFileImporter,
     dkbFileImporter,
@@ -69,7 +68,10 @@ export const FILE_IMPORTERS: BrokerFileImporter[] = [
     questradeFileImporter,
     robinhoodFileImporter,
     zerodhaFileImporter,
-    fidelityFileImporter
+    fidelityFileImporter,
+    // Last among the PDFs: it recognises any page that mentions comdirect, which also a
+    // statement of another bank can do (a transfer from a comdirect account)
+    comdirectFileImporter
 ];
 
 export const findFileImporter = (id: string): BrokerFileImporter | undefined => (

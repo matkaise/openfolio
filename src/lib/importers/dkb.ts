@@ -46,9 +46,16 @@ const TAX = /^(Kapitalertragsteuer|Solidarit.tszuschlag|Kirchensteuer|(?:\S+ )?F
 const WITHHOLDING = /^Einbehaltene Quellensteuer\b/;
 
 /** A deduction; "+" marks a refund. Without a sign (older documents) the amount is a deduction too. */
-const deductions = (rows: Row[], pattern: RegExp) => roundCents(rows
-    .filter((row) => pattern.test(row.label))
-    .reduce((sum, row) => sum + (row.sign === '+' ? -row.value : row.value), 0));
+/**
+ * Sum of the deduction rows matching `pattern`. Foreign settlements can print a cost twice,
+ * in the trading and in the settlement currency: then only the settlement currency counts.
+ */
+const deductions = (rows: Row[], pattern: RegExp, currency?: string) => {
+    const matching = rows.filter((row) => pattern.test(row.label));
+    const inCurrency = currency ? matching.filter((row) => row.currency === currency) : [];
+    const counted = inCurrency.length > 0 ? inCurrency : matching;
+    return roundCents(counted.reduce((sum, row) => sum + (row.sign === '+' ? -row.value : row.value), 0));
+};
 
 /** "Stück 29,2893 NAME ISIN (WKN)" and the next line; bonds print a currency instead of "Stück". */
 const securityOf = (lines: DocLine[]) => {
@@ -107,8 +114,8 @@ const trade = (lines: DocLine[], title: string, side: 'buy' | 'sell'): DocumentO
     if (!total || !gross || !date || gross.currency !== total.currency) return unsupported(title, at);
     const currency = total.currency;
     const direction = side === 'buy' ? -1 : 1;
-    const fee = deductions(rows, FEE);
-    const tax = deductions(rows, TAX);
+    const fee = deductions(rows, FEE, currency);
+    const tax = deductions(rows, TAX, currency);
     const signed = total.sign === '-' || (!total.sign && side === 'buy') ? -total.value : total.value;
     if (!reconciles([direction * gross.value, -fee, -tax], signed)) return unsupported(title, total.at);
 
@@ -170,9 +177,9 @@ const income = (lines: DocLine[], title: string, interest: boolean): DocumentOut
     if (!total) return unsupported(title, lines[0]);
     const currency = total.currency;
     const grossRows = rows.filter((row) => row.currency === currency && row.sign === '+' && INCOME_ROW.test(row.label));
-    const taxes = deductions(rows, TAX);
-    const withholding = deductions(rows, WITHHOLDING);
-    const fee = deductions(rows, FEE);
+    const taxes = deductions(rows, TAX, currency);
+    const withholding = deductions(rows, WITHHOLDING, currency);
+    const fee = deductions(rows, FEE, currency);
     const gross = roundCents(grossRows.reduce((sum, row) => sum + row.value, 0));
     if (!(gross > 0) || !reconciles([gross, -taxes, -withholding, -fee], total.value)) return unsupported(title, total.at);
 
@@ -198,7 +205,7 @@ const advanceTax = (lines: DocLine[], title: string): DocumentOutcome => {
     if (end < 0) return rowsOf(lines, 0, lines.length).some((row) => TAX.test(row.label)) ? unsupported(title, lines[0]) : ignored(title, lines[0]);
     const rows = rowsOf(lines, 0, end + 1);
     const total = rows.find((row) => row.at === lines[end]);
-    const tax = deductions(rows, TAX);
+    const tax = deductions(rows, TAX, total?.currency);
     if (!total || !reconciles([tax], total.value)) return unsupported(title, lines[end]);
     if (tax === 0) return ignored(title, lines[end]);
     const date = creditDate(lines);

@@ -51,3 +51,29 @@ describe('parseTrading212Data', () => {
     expect(reconcilePositions(first.project, 't2', result.positions)).toEqual([]);
   });
 });
+
+describe('Trading 212 costs in several currencies (M15)', () => {
+  it('keeps the first currency on the trade and books the others as fees of their own', () => {
+    const order = data.orders[0];
+    const withTwo: Trading212Data = {
+      ...data,
+      orders: [{
+        ...order,
+        fill: {
+          ...order.fill!,
+          walletImpact: {
+            ...order.fill!.walletImpact,
+            taxes: [
+              { name: 'STAMP_DUTY', quantity: -2.5, currency: 'GBP' },
+              { name: 'CURRENCY_CONVERSION_FEE', quantity: -0.45, currency: 'EUR' }
+            ]
+          }
+        }
+      }] as Trading212Data['orders']
+    };
+    const { batch } = parseTrading212Data(withTwo);
+    expect(trades(batch)[0]).toMatchObject({ fee: -2.5, feeCurrency: 'GBP' });
+    const extraFees = statement(batch).filter((e) => e.externalId?.includes(':fee:'));
+    expect(extraFees.map((e) => [e.kind, e.amount, e.currency])).toEqual([['fee', -0.45, 'EUR']]);
+  });
+});

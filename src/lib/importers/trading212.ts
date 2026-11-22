@@ -85,9 +85,18 @@ export const parseTrading212Data = (data: Trading212Data): Trading212ParseResult
 
         const isSell = order.side === 'SELL' || finite(fill.quantity) < 0;
         const value = quantity * price; // in instrument currency
-        // Taxes are costs (stamp duty, FX fee, ...); some are reported unsigned
-        const fees = (fill.walletImpact?.taxes || []).reduce((sum, tax) => sum - Math.abs(finite(tax.quantity)), 0);
-        const feeCurrency = fill.walletImpact?.taxes?.find((tax) => tax.currency)?.currency || fill.walletImpact?.currency;
+        // Taxes are costs (stamp duty, FX fee, ...); some are reported unsigned. Summed per
+        // currency: GBP stamp duty and an EUR FX fee cannot be added up.
+        const walletCurrency = fill.walletImpact?.currency;
+        const costs = new Map<string, number>();
+        (fill.walletImpact?.taxes || []).forEach((tax) => {
+            const cost = Math.abs(finite(tax.quantity));
+            if (!cost) return;
+            const currency = tax.currency || walletCurrency || '';
+            costs.set(currency, (costs.get(currency) || 0) + cost);
+        });
+        const [[feeCurrency, firstCost] = [walletCurrency, 0], ...otherCosts] = Array.from(costs.entries());
+        const fees = -firstCost;
         const instrument = order.instrument;
 
         batch.entries.push(tradeEntry({
@@ -102,9 +111,23 @@ export const parseTrading212Data = (data: Trading212Data): Trading212ParseResult
             amount: Math.round((isSell ? value : -value) * 1e8) / 1e8,
             currency: instrument?.currency || order.currency || 'EUR',
             fee: fees ? Math.round(fees * 1e8) / 1e8 : undefined,
-            feeCurrency,
+            feeCurrency: feeCurrency || undefined,
             raw: { source: 'trading212', ticker: order.ticker, pricePerShare: price || undefined }
         }));
+        // Costs in further currencies as fees of their own
+        otherCosts.forEach(([currency, cost]) => batch.entries.push(statementEntry({
+            source: 'Trading212',
+            externalId: `t212:fill:${fill.id ?? `${order.id}-${date}`}:fee:${currency}`,
+            orderId: order.id !== undefined ? String(order.id) : undefined,
+            date,
+            type: 'Fee',
+            amount: -Math.round(cost * 1e8) / 1e8,
+            currency,
+            description: `${instrument?.name || order.ticker || ''} (Trading 212)`.trim(),
+            isin: instrumentKey(instrument, order.ticker),
+            name: instrument?.name || order.ticker,
+            raw: { source: 'trading212', ticker: order.ticker }
+        })));
     });
 
     data.dividends.forEach((dividend) => {

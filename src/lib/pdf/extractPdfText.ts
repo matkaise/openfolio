@@ -41,7 +41,9 @@ const toItem = ({ str, transform, width, height }: RawTextItem): PdfTextItem => 
     y: transform[5],
     width,
     height,
-    ...(transform[1] !== 0 || transform[2] !== 0 ? { rotated: true } : {})
+    // Rotation turns the baseline (b ≠ 0); slanted (italic) text only shears it (c ≠ 0) and
+    // stays readable. Tiny values are float noise.
+    ...(Math.abs(transform[1]) > 1e-6 ? { rotated: true } : {})
 });
 
 const VERBOSITY_ERRORS = 0;

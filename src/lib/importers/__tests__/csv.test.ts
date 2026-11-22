@@ -90,6 +90,9 @@ describe('decimalSeparatorOf and parseLocaleNumber', () => {
     expect(decimalSeparatorOf(values('1.5', '2,25'))).toEqual({ line: 3 });
     expect(decimalSeparatorOf(values('1,234', '-'))).toEqual({ line: 2 });
     expect(decimalSeparatorOf(values('12', '-'))).toEqual({ separator: '.' });
+    // A separator used twice groups thousands (M15)
+    expect(decimalSeparatorOf(values('1,000,000', '2,500,000'))).toEqual({ separator: '.' });
+    expect(decimalSeparatorOf(values('1.000.000'))).toEqual({ separator: ',' });
   });
 
   it('reads thousands groups, spaces and parentheses, nothing else', () => {

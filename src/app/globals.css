@@ -709,7 +709,7 @@ body {
 .ui-seg.is-sm button { padding: 5px 10px; font-size: 11px; }
 .ui-seg button[aria-checked='true'] { background: var(--surface); color: var(--text); box-shadow: 0 2px 8px oklch(0 0 0 / 0.15); }
 
-.ui-chip { padding: 8px 14px; border-radius: 12px; font: inherit; font-weight: 700; font-size: 13px; color: var(--text2); cursor: pointer; background: var(--surface2); border: 0; }
+.ui-chip { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; padding: 8px 14px; border-radius: 12px; font: inherit; font-weight: 700; font-size: 13px; color: var(--text2); cursor: pointer; background: var(--surface2); border: 0; }
 .ui-chip.is-active { background: var(--text); color: var(--bg); }
 
 .ui-avatar { flex: none; border-radius: 14px; display: grid; place-items: center; font-weight: 800; font-size: 13px; color: oklch(0.99 0 0); }

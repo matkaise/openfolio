@@ -201,7 +201,9 @@ const parse = (text: string) => {
             }
             const gross = round(quantity * price);
             const signedGross = side === 'sell' ? gross : -gross;
-            const converted = rate !== 1 && accountCurrency !== currency;
+            // Converted whenever account and instrument currency differ; the rate column can be
+            // empty or 1 also then. Without a known account currency only the rate tells.
+            const converted = accountCurrency ? accountCurrency !== currency : rate !== 1;
             if (converted && !accountCurrency) {
                 unsupported.push({ line, label });
                 return;
