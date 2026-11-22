@@ -184,20 +184,26 @@ export const ledgerToTransactions = (entries: LedgerEntry[]): Transaction[] => {
     return result;
 };
 
+/** Source of DEGIRO bookings (historically named after its bank, flatex). */
+const DEGIRO_SOURCE = 'Flatex';
+
 /**
  * DEGIRO books a trade's fee twice: on the trade row and as a statement row. The trade keeps
  * it (cost basis); statement fee rows of a trade in the same portfolio are dropped. Runs on
  * import, whichever of the two files comes first.
  */
 export const dropDuplicateTradeFees = (entries: LedgerEntry[]): { entries: LedgerEntry[]; dropped: number } => {
+    // Only DEGIRO books a trade fee twice. Other brokers put extra fees of a trade (e.g. a
+    // second currency at Trading 212) into separate rows with the same order id; those are real.
+    const isDegiro = (entry: LedgerEntry) => entry.source === DEGIRO_SOURCE;
     const tradeOrders = new Set(
         entries
-            .filter((entry) => (entry.kind === 'buy' || entry.kind === 'sell') && entry.orderId)
+            .filter((entry) => isDegiro(entry) && (entry.kind === 'buy' || entry.kind === 'sell') && entry.orderId)
             .map((entry) => `${entry.portfolioId || ''}|${entry.orderId}`)
     );
     if (tradeOrders.size === 0) return { entries, dropped: 0 };
     const kept = entries.filter((entry) => !(
-        entry.kind === 'fee' && entry.orderId && tradeOrders.has(`${entry.portfolioId || ''}|${entry.orderId}`)
+        isDegiro(entry) && entry.kind === 'fee' && entry.orderId && tradeOrders.has(`${entry.portfolioId || ''}|${entry.orderId}`)
     ));
     return { entries: kept, dropped: entries.length - kept.length };
 };

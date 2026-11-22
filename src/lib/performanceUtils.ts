@@ -105,10 +105,11 @@ export const normalizeInvestedForExplicitCash = (
         if (timeline.idx < 0) return;
         const date = timeline.dates[timeline.idx];
         const balance = timeline.history[date] || 0;
-        if (Math.abs(balance) < 0.0000001) return;
+        // A snapshot on this day counts even when it is 0 (account emptied by a payout)
         if (Object.prototype.hasOwnProperty.call(timeline.history, point.date)) {
           hasCashSnapshotUpdate = true;
         }
+        if (Math.abs(balance) < 0.0000001) return;
 
         totalCashBase += convertCurrency(
           fxData,
@@ -184,8 +185,9 @@ export const buildMwrSeries = (
   if (periodData.length === 0) return [];
 
   const startPoint = periodData[0];
+  // Received dividends are already in the value (as cash); without them it is the price return
   const getValue = (point: { value: number; dividend?: number }) =>
-    point.value + (includeDividends ? (point.dividend || 0) : 0);
+    point.value - (includeDividends ? 0 : (point.dividend || 0));
 
   let startValue = getValue(startPoint);
   const startInvested = startPoint.invested || 0;
