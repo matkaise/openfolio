@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isCrossSiteRequest, readJsonObject } from '@/lib/brokers/requestGuard';
 import { fetchFlexStatement, FlexServiceError } from '@/lib/brokers/ibkrFlexClient';
 import { createLogger } from '@/lib/logger';
 import { LANGUAGE_HEADER, MESSAGES, parseLanguage } from '@/lib/i18n';
@@ -9,12 +10,9 @@ const log = createLogger('IBKR Flex');
 // and is never logged or echoed back.
 export async function POST(req: NextRequest) {
     const t = MESSAGES[parseLanguage(req.headers.get(LANGUAGE_HEADER))];
-    let body: { token?: unknown; queryId?: unknown };
-    try {
-        body = await req.json();
-    } catch {
-        return NextResponse.json({ error: t.services.invalidRequest }, { status: 400 });
-    }
+    if (isCrossSiteRequest(req)) return NextResponse.json({ error: t.services.crossSite }, { status: 403 });
+    const body: { token?: unknown; queryId?: unknown } | null = await readJsonObject(req);
+    if (!body) return NextResponse.json({ error: t.services.invalidRequest }, { status: 400 });
 
     try {
         const xml = await fetchFlexStatement({ token: String(body.token ?? ''), queryId: String(body.queryId ?? '') }, { t });

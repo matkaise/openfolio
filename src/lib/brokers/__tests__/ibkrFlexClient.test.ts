@@ -32,6 +32,26 @@ describe('fetchFlexStatement', () => {
     expect(sleep).toHaveBeenCalled();
   });
 
+  it('rides out a busy moment and an HTML page while polling (M12)', async () => {
+    const busy = { ok: false, status: 503, text: async () => '' } as Response;
+    const html = ok('<html><body>Maintenance</body></html>');
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(sendSuccess)
+      .mockResolvedValueOnce(busy)
+      .mockResolvedValueOnce(html)
+      .mockResolvedValueOnce(statement);
+
+    const xml = await fetchFlexStatement({ token: TOKEN, queryId: '987654' }, { fetchImpl, sleep: noSleep });
+    expect(xml).toContain('FlexQueryResponse');
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+  });
+
+  it('treats a rate limit as retryable', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce({ ok: false, status: 429, text: async () => '' } as Response);
+    await expect(fetchFlexStatement({ token: TOKEN, queryId: '987654' }, { fetchImpl, sleep: noSleep }))
+      .rejects.toMatchObject({ retryable: true });
+  });
+
   it('stops with a readable error for an invalid token, without leaking it', async () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce(fail(1015, 'Token is invalid.'));
     const error = await fetchFlexStatement({ token: TOKEN, queryId: '987654' }, { fetchImpl, sleep: noSleep }).catch((e) => e);

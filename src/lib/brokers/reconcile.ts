@@ -19,9 +19,18 @@ export const reconcilePositions = (
     positions: { isin: string; symbol?: string; quantity: number }[],
     tolerance = 0.0001
 ): PositionMismatch[] => {
+    // An unknown depot would fall back to "all depots" in the selector: nothing to compare then
+    if (!(project.portfolios || []).some((portfolio) => portfolio.id === portfolioId)) return [];
     const { holdings } = calculateProjectHoldings(project, selectCalculationTransactions(project, [portfolioId]));
     const actualByIsin = new Map(holdings.map((h) => [h.security.isin, h.quantity]));
-    const expectedByIsin = new Map(positions.map((p) => [p.isin, p]));
+    // One ISIN can come several times (accounts of a Flex query, custody places): add them up
+    const expectedByIsin = new Map<string, { isin: string; symbol?: string; quantity: number }>();
+    positions.forEach((position) => {
+        const known = expectedByIsin.get(position.isin);
+        expectedByIsin.set(position.isin, known
+            ? { ...known, quantity: known.quantity + position.quantity }
+            : { ...position });
+    });
 
     const mismatches: PositionMismatch[] = [];
     expectedByIsin.forEach((position, isin) => {

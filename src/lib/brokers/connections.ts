@@ -45,10 +45,12 @@ export const importFromConnection = (
     now: string
 ): { project: ProjectData; summary: ImportSummary } => {
     const { project: imported, summary } = applyImportBatch(project, batch, connectionTarget(project, connection));
+    // The connection as stored now: `connection` may be a snapshot from before the check
+    const stored = getBrokerConnections(project).find((item) => item.id === connection.id) ?? connection;
     const updated = updateBrokerConnection(imported, connection.id, {
         lastCheckedAt: now,
         lastImportAt: now,
-        lastFileModified: Math.max(connection.lastFileModified || 0, scan.newestModified),
+        lastFileModified: Math.max(stored.lastFileModified || 0, scan.newestModified),
         lastResult: {
             added: summary.addedTransactions + summary.addedMovements,
             duplicates: summary.duplicateTransactions + summary.duplicateMovements,
