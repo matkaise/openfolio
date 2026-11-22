@@ -74,7 +74,7 @@ const trade = (lines: DocLine[], title: string, verb: string, reference: string)
 
     // Traded in another currency: the settled gross follows the exchange rate as a line of its own
     let gross = total.value;
-    const rate = findLine(lines, /^Wechselkurs \d/);
+    const rate = findLine(lines, /^(?:Wechselkurs|Exchange rate|Taux de change|Tasso di cambio) \d/i);
     if (total.currency !== settled.currency) {
         const converted = rate ? findLine(lines, new RegExp(`^(?:Total )?${settled.currency} (${NUMBER})$`), rate.index) : null;
         if (!converted) return unsupported(title, total.at);

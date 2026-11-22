@@ -121,7 +121,8 @@ const trade = (lines: DocLine[], from: number, to: number, title: string, side: 
     const discount = rows.find((row) => DISCOUNT.test(row.label) && row.currency === currency);
     if (conversion ? conversion.match[2] !== currency : grossValue && grossValue.currency !== currency) return unsupported(title, at);
     const value = (() => {
-        if (conversion) return parseAmount(conversion.match[3], 'de') * (conversion.match[4] ? -1 : 1);
+        // The trailing minus only marks the debit of a purchase; the direction comes from the type
+        if (conversion) return Math.abs(parseAmount(conversion.match[3], 'de'));
         return grossValue ? roundCents(grossValue.value + (discount?.value ?? 0)) : Math.abs(total.value);
     })();
     if (!(value > 0) || !reconciles([direction * value, -fee], total.value)) return unsupported(title, total.at);

@@ -138,7 +138,13 @@ export const readDegiroTradesCsv = (text: string): DegiroFileRead => {
         }
 
         const quantity = num(row[6]);
+        const amount = num(row[9]);
         const fxRate = num(row[12]);
+        // A row without a readable quantity or value would book an empty or NaN trade
+        if (!Number.isFinite(quantity) || quantity === 0 || !Number.isFinite(amount)) {
+            notes.push({ line: lines[i], label: row[2] || row[0], status: 'unsupported' });
+            continue;
+        }
 
         // Order IDs repeat for partial fills, and identical fills can repeat inside one file.
         const baseKey = buildDegiroTradeKey(row);
@@ -154,8 +160,9 @@ export const readDegiroTradesCsv = (text: string): DegiroFileRead => {
             isin: row[3],
             name: row[2],
             quantity,
-            amount: num(row[9]), // sign from the CSV: negative for buys, positive for sells
-            currency: row[8],
+            amount, // value in the local currency; sign from the CSV: negative for buys, positive for sells
+            // The currency of that value (column 10). The price currency (8) can differ: GBX vs GBP
+            currency: (row[10] || row[8] || '').trim(),
             fee: num(row[14]),
             fxFee: num(row[13]),
             feeCurrency: accountCurrency,
@@ -244,13 +251,16 @@ export const parseFlatexCashBalancesCsv = (text: string): CashBalanceImportPoint
         const date = valueDate || bookingDate;
         if (!date) continue;
 
-        const currency = normalizeCurrency(row[9] || row[7]);
-        if (!currency) continue;
+        // Only the balance column; the change column (8) is no balance
+        const currency = normalizeCurrency(row[9]);
+        if (!currency || !(row[10] || '').trim()) continue;
 
-        const balance = parseNumberWithSeparator(row[10] || row[8], decimal);
+        const balance = parseNumberWithSeparator(row[10], decimal);
         if (!Number.isFinite(balance)) continue;
 
-        const timeMinutes = parseTimeMinutes(row[1]);
+        // Order within a value date by booking day and time (a Friday booking with value
+        // Monday is older than a Monday booking)
+        const timeMinutes = (bookingDate ? Date.parse(`${bookingDate}T00:00:00Z`) / 60000 : 0) + parseTimeMinutes(row[1]);
         const key = `${currency}|${date}`;
         const existing = dayEndPoints[key];
         const shouldReplace = !existing
@@ -484,9 +494,11 @@ export const readDegiroAccountCsv = (text: string): DegiroFileRead => {
             continue;
         }
 
-        // Rows without an amount column carry an unsigned amount in the text
-        if (found.type === 'Withdrawal' && amount > 0) amount = -amount;
-        if (found.type === 'Deposit' && amount < 0) amount = -amount;
+        // Rows without an amount column carry an unsigned amount in the text; a signed amount
+        // column is right as it is (a reversed deposit stays negative)
+        const unsigned = (row[8] || '').trim() === '' || !Number.isFinite(num(row[8]));
+        if (unsigned && found.type === 'Withdrawal' && amount > 0) amount = -amount;
+        if (unsigned && found.type === 'Deposit' && amount < 0) amount = -amount;
 
         // Partial fills of one order can produce identical rows; they stay separate bookings
         const orderId = (row[11] || '').trim();

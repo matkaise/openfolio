@@ -1,6 +1,7 @@
 import type { CashBalanceImportPoint } from '@/lib/csvParser';
 import { statementEntry, tradeEntry, type ImportEntry, type StatementType } from './entries';
 import { getT } from '@/lib/i18n';
+import { decimalSeparatorOf } from './csv';
 
 // Generic CSV import (any broker or bank): split the file, guess the column mapping and
 // build transactions or cash balances/movements from a mapping the user confirmed.
@@ -138,6 +139,7 @@ const detectDateFormatFromColumn = (rows: string[][], columnIdx: number): CsvDat
     let ymd = 0;
     let dmy = 0;
     let mdy = 0;
+    let ambiguous = 0;
 
     sample.forEach((row) => {
         const raw = (row[columnIdx] ?? '').trim();
@@ -150,19 +152,20 @@ const detectDateFormatFromColumn = (rows: string[][], columnIdx: number): CsvDat
         if (!match) return;
         const dayOrMonth = Number(match[1]);
         const monthOrDay = Number(match[2]);
+        // Only unambiguous values vote; "05/06/2025" says nothing about the order
         if (dayOrMonth > 12 && monthOrDay <= 12) {
             dmy += 1;
         } else if (monthOrDay > 12 && dayOrMonth <= 12) {
             mdy += 1;
         } else {
-            dmy += 1;
+            ambiguous += 1;
         }
     });
 
     if (ymd >= dmy && ymd >= mdy && ymd > 0) return 'ymd';
-    if (dmy >= mdy && dmy > 0) return 'dmy';
+    if (dmy > 0 && dmy >= mdy) return 'dmy';
     if (mdy > 0) return 'mdy';
-    return 'auto';
+    return ambiguous > 0 ? 'dmy' : 'auto'; // nothing decides: day first, as in Europe
 };
 
 const pickBestHeaderIndex = (
@@ -335,43 +338,80 @@ export const parseGenericCsv = (text: string): { headers: string[]; rows: string
     return { headers, rows };
 };
 
-const parseNumberFlexible = (value: string): number => {
-    if (!value) return 0;
-    let cleaned = value.replace(/[^\d,.-]/g, '');
-    if (cleaned.includes(',') && cleaned.includes('.')) {
-        if (cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
-            cleaned = cleaned.replace(/\./g, '').replace(',', '.');
-        } else {
-            cleaned = cleaned.replace(/,/g, '');
-        }
-    } else if (cleaned.includes(',')) {
-        cleaned = cleaned.replace(',', '.');
+type Separator = ',' | '.';
+
+/** Folded (lower case, no umlauts) words for refunds and reversals. */
+const REVERSAL = /refund|erstatt|gutschrift|rebate|storno|reversal|cancel|ruckbuch/;
+
+/**
+ * Splits a cell into sign and digits with separators: "(125.50)" and "125.50-" are negative,
+ * currency signs, codes and grouping spaces/apostrophes are dropped. Null if no digit is left.
+ */
+const numberParts = (value: string): { negative: boolean; body: string } | null => {
+    let raw = (value ?? '').trim();
+    if (!raw) return null;
+    let negative = false;
+    const parenthesized = /^\((.*)\)$/.exec(raw);
+    if (parenthesized) {
+        negative = true;
+        raw = parenthesized[1];
     }
-    const parsed = parseFloat(cleaned);
-    return Number.isFinite(parsed) ? parsed : 0;
+    raw = raw.replace(/[\s\u00a0\u202f'’]/g, '').replace(/[^\d,.+-]/g, '');
+    if (/^-|-$/.test(raw)) negative = true;
+    raw = raw.replace(/[+-]/g, '');
+    if (!/\d/.test(raw)) return null;
+    return { negative, body: raw };
 };
 
-const parseNumberStrict = (value: string): number => {
-    const raw = (value ?? '').trim();
-    if (!raw) return Number.NaN;
-
-    let cleaned = raw.replace(/[^\d,.-]/g, '');
-    if (!cleaned || cleaned === '-' || cleaned === '.' || cleaned === ',') {
-        return Number.NaN;
-    }
-
-    if (cleaned.includes(',') && cleaned.includes('.')) {
-        if (cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
-            cleaned = cleaned.replace(/\./g, '').replace(',', '.');
-        } else {
-            cleaned = cleaned.replace(/,/g, '');
+/**
+ * Number of a cell. `separator` is the decimal separator of the column if known; otherwise a
+ * value with both separators or a repeated one decides, and a lone separator before exactly
+ * three digits ("1,000", "2.500") groups thousands.
+ */
+const parseNumberValue = (value: string, separator?: Separator): number => {
+    const parts = numberParts(value);
+    if (!parts) return Number.NaN;
+    const { body } = parts;
+    let decimal: Separator | null = separator ?? null;
+    if (!decimal) {
+        const comma = body.lastIndexOf(',');
+        const dot = body.lastIndexOf('.');
+        if (comma >= 0 && dot >= 0) decimal = comma > dot ? ',' : '.';
+        else if (comma >= 0 || dot >= 0) {
+            const mark: Separator = comma >= 0 ? ',' : '.';
+            const repeated = body.indexOf(mark) !== body.lastIndexOf(mark);
+            const groupsThousands = /^\d{1,3}[.,]\d{3}$/.test(body) && !/^0[.,]/.test(body);
+            decimal = repeated || groupsThousands ? (mark === ',' ? '.' : ',') : mark;
         }
-    } else if (cleaned.includes(',')) {
-        cleaned = cleaned.replace(',', '.');
     }
+    const grouping = decimal === ',' ? /\./g : /,/g;
+    const normalized = body.replace(grouping, '').replace(',', '.');
+    if (!/^\d*\.?\d+$|^\d+\.?$/.test(normalized)) return Number.NaN;
+    const number = Number(normalized);
+    if (!Number.isFinite(number)) return Number.NaN;
+    return parts.negative ? -number : number;
+};
 
-    const parsed = parseFloat(cleaned);
-    return Number.isFinite(parsed) ? parsed : Number.NaN;
+/** Single cells without column context (mapping guess). */
+const parseNumberStrict = (value: string): number => parseNumberValue(value);
+
+/**
+ * Reads numbers column by column: the decimal separator is decided once per column from all
+ * its values, so "1,000" next to "2,500.75" is a thousand and "12,5" next to "3,75" a decimal.
+ */
+const createNumberReader = (rows: string[][]) => {
+    const separators = new Map<number, Separator | undefined>();
+    return (columnIdx: number, raw: string): number => {
+        if (!separators.has(columnIdx)) {
+            const values = rows
+                .map((row, line) => ({ raw: numberParts(row[columnIdx] ?? '')?.body ?? '', line }))
+                .filter((item) => item.raw);
+            const result = decimalSeparatorOf(values);
+            // Undecided or contradicting column: each value decides for itself
+            separators.set(columnIdx, 'separator' in result && values.some((v) => /[.,]/.test(v.raw)) ? result.separator : undefined);
+        }
+        return parseNumberValue(raw, separators.get(columnIdx));
+    };
 };
 
 const parseDateValue = (value: string, format: CsvDateFormat): string | null => {
@@ -382,19 +422,26 @@ const parseDateValue = (value: string, format: CsvDateFormat): string | null => 
         const match = /^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/.exec(val);
         if (!match) return null;
         const [, y, m, d] = match;
-        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        return validDay(y, m, d);
+    };
+    const validDay = (y: string, m: string, d: string) => {
+        const month = Number(m);
+        const day = Number(d);
+        if (month < 1 || month > 12 || day < 1) return null;
+        const daysInMonth = new Date(Date.UTC(Number(y), month, 0)).getUTCDate();
+        return day <= daysInMonth ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` : null;
     };
     const tryDmy = (val: string) => {
         const match = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/.exec(val);
         if (!match) return null;
         const [, d, m, y] = match;
-        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        return validDay(y, m, d);
     };
     const tryMdy = (val: string) => {
         const match = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/.exec(val);
         if (!match) return null;
         const [, m, d, y] = match;
-        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        return validDay(y, m, d);
     };
 
     if (format === 'ymd') return tryYmd(trimmed);
@@ -426,6 +473,8 @@ export const buildGenericTransactions = (input: GenericCsvInput): { entries: Imp
     const nameIdx = detectNameHeaderIndex(headers, usedIdx);
 
     const entries: ImportEntry[] = [];
+    const numberIn = createNumberReader(rows);
+    const occurrences = new Map<string, number>();
 
     rows.forEach((row, index) => {
         const dateRaw = row[dateIdx] ?? '';
@@ -434,7 +483,7 @@ export const buildGenericTransactions = (input: GenericCsvInput): { entries: Imp
 
         const dateValue = parseDateValue(dateRaw, dateFormat);
         const identifierValue = identifierRaw.trim().toUpperCase();
-        const sharesValue = parseNumberFlexible(sharesRaw);
+        const sharesValue = numberIn(sharesIdx, sharesRaw);
         if (!identifierValue || !dateValue || !sharesValue) {
             errors.push(getT().services.csv.missingFields(index + 2));
             return;
@@ -443,7 +492,7 @@ export const buildGenericTransactions = (input: GenericCsvInput): { entries: Imp
         const currencyValue = currencyIdx >= 0 ? (row[currencyIdx] ?? '').trim().toUpperCase() : defaultCurrency;
         const nameValue = nameIdx >= 0 ? (row[nameIdx] ?? '').trim() : '';
         const priceRaw = priceIdx >= 0 ? (row[priceIdx] ?? '').toString().trim() : '';
-        const priceValue = priceIdx >= 0 ? parseNumberFlexible(row[priceIdx] ?? '') : 0;
+        const priceValue = priceIdx >= 0 ? numberIn(priceIdx, row[priceIdx] ?? '') : Number.NaN;
         const isSell = sharesValue < 0;
         const absShares = Math.abs(sharesValue);
         if (!absShares) {
@@ -451,17 +500,22 @@ export const buildGenericTransactions = (input: GenericCsvInput): { entries: Imp
             return;
         }
 
-        const hasExplicitPrice = priceRaw.length > 0;
-        if (!hasExplicitPrice) {
+        // A price like "N/A" must not become a trade worth 0
+        if (!priceRaw.length || !Number.isFinite(priceValue)) {
             errors.push(getT().services.csv.invalidPriceOrShares(index + 2));
             return;
         }
 
-        const signedAmount = isSell ? absShares * (priceValue || 0) : -(absShares * priceValue);
+        const signedAmount = isSell ? absShares * priceValue : -(absShares * priceValue);
 
-        // No id in a generic file: applyImportBatch dedupes by content
+        // The row is the id; a repeated identical row is a second trade (#2), and importing
+        // the same file again still finds every row as a duplicate
+        const rowKey = row.join('|');
+        const occurrence = (occurrences.get(rowKey) || 0) + 1;
+        occurrences.set(rowKey, occurrence);
         entries.push(tradeEntry({
             source: 'CSV',
+            externalId: occurrence > 1 ? `${rowKey}#${occurrence}` : rowKey,
             date: dateValue,
             side: isSell ? 'sell' : 'buy',
             isin: identifierValue,
@@ -689,14 +743,17 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
             .replace(/\u00e2\u20ac\u2122/g, "'");
     };
 
+    // Taxes and fees first: "Dividendensteuer" is a tax, "Deposit fee" a fee
+    const numberIn = createNumberReader(rows);
+    const movementOccurrences = new Map<string, number>();
     const resolveTypeFromToken = (token: string): StatementType | null => {
         if (!token) return null;
+        if (token.includes('tax') || token.includes('steuer')) return 'Tax';
+        if (token.includes('fee') || token.includes('gebuhr') || token.includes('kommission') || token.includes('commission') || token.includes('cost')) return 'Fee';
         if (token.includes('deposit') || token.includes('einzahlung')) return 'Deposit';
         if (token.includes('withdrawal') || token.includes('auszahlung')) return 'Withdrawal';
         if (token.includes('dividend') || token.includes('dividende')) return 'Dividend';
         if (token.includes('interest') || token.includes('zinsen')) return 'Interest';
-        if (token.includes('tax') || token.includes('steuer')) return 'Tax';
-        if (token.includes('fee') || token.includes('gebuhr') || token.includes('kommission') || token.includes('commission') || token.includes('cost')) return 'Fee';
         if (token.includes('transfer') || token.includes('uberweisung') || token.includes('wahrungswechsel')) return 'Transfer';
         if (token.includes('adjust') || token.includes('korrektur') || token.includes('anpass')) return 'Adjustment';
         return null;
@@ -765,7 +822,7 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
             if (!currencyValue) return;
 
             const amountRaw = row[amountIdx] ?? '';
-            const amountValue = parseNumberStrict(amountRaw);
+            const amountValue = numberIn(amountIdx, amountRaw);
             if (!Number.isFinite(amountValue) || Math.abs(amountValue) < 0.0000001) return;
 
             const description = descriptionIdx >= 0 ? (row[descriptionIdx] ?? '').trim() : '';
@@ -773,10 +830,14 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
             const classification = classifyMovement(description, rawType, amountValue);
             if (!classification) return;
 
+            // Unsigned files get the sign of the type; a refund or reversal keeps its own sign
+            const reversal = REVERSAL.test(foldMovementText(`${rawType} ${description}`));
             let normalizedAmount = amountValue;
-            if (classification.type === 'Withdrawal' && normalizedAmount > 0) normalizedAmount = -normalizedAmount;
-            if (classification.type === 'Deposit' && normalizedAmount < 0) normalizedAmount = Math.abs(normalizedAmount);
-            if ((classification.type === 'Tax' || classification.type === 'Fee') && normalizedAmount > 0) normalizedAmount = -normalizedAmount;
+            if (!reversal) {
+                if (classification.type === 'Withdrawal' && normalizedAmount > 0) normalizedAmount = -normalizedAmount;
+                if (classification.type === 'Deposit' && normalizedAmount < 0) normalizedAmount = Math.abs(normalizedAmount);
+                if ((classification.type === 'Tax' || classification.type === 'Fee') && normalizedAmount > 0) normalizedAmount = -normalizedAmount;
+            }
 
             const orderRef = orderIdIdx >= 0 ? (row[orderIdIdx] ?? '').trim() : '';
             const timeRaw = timeIdx >= 0 ? (row[timeIdx] ?? '').trim() : '';
@@ -790,9 +851,13 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
                 row.join('|')
             ];
 
+            // Two identical rows are two bookings: count them, like the trades
+            const baseId = sourceParts.join('|');
+            const occurrence = (movementOccurrences.get(baseId) || 0) + 1;
+            movementOccurrences.set(baseId, occurrence);
             entries.push(statementEntry({
                 source: 'CSV',
-                externalId: sourceParts.join('|'),
+                externalId: occurrence > 1 ? `${baseId}#${occurrence}` : baseId,
                 date: dateValue,
                 type: classification.type,
                 amount: normalizedAmount,
@@ -835,7 +900,7 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
                 return;
             }
             const balanceRaw = row[balanceIdx] ?? '';
-            const balanceValue = parseNumberStrict(balanceRaw);
+            const balanceValue = numberIn(balanceIdx, balanceRaw);
             if (!Number.isFinite(balanceValue)) {
                 errors.push(getT().services.csv.invalidBalance(index + 2));
                 return;
@@ -888,7 +953,7 @@ export const buildGenericCashBalances = (input: GenericCsvInput): { cashPoints: 
             return;
         }
         const amountRaw = row[amountIdx] ?? '';
-        const amountValue = parseNumberStrict(amountRaw);
+        const amountValue = numberIn(amountIdx, amountRaw);
         if (!Number.isFinite(amountValue)) {
             errors.push(getT().services.csv.invalidAmount(index + 2));
             return;

@@ -206,3 +206,34 @@ describe('DEGIRO CSV quoting', () => {
     expect(parseDegiroTradesCsv(tradeWithName('"ACME, INC"'))[0].name).toBe('ACME, INC');
   });
 });
+
+describe('DEGIRO audit fixes (H19)', () => {
+  const tradesHeader = 'Datum,Uhrzeit,Produkt,ISIN,Referenzbörse,Ausführungsort,Anzahl,Kurs,,Wert in Lokalwährung,,Wert EUR,Wechselkurs,AutoFX-Gebühr,Transaktionsgebühren und/oder Fremdkosten,Gesamt EUR,Order-ID,';
+
+  it('books the local value in the local currency, not the price currency', () => {
+    const csv = [tradesHeader, '05-11-2024,11:00,BRIT PLC,GB0000000003,LSE,XLON,10,250.0000,GBX,-25.00,GBP,-29.10,0.8590,-0.07,-3.00,-32.17,,55555555-5555-4555-8555-555555555555'].join('\n');
+    expect(parseDegiroTradesCsv(csv)[0]).toMatchObject({ amount: -25, currency: 'GBP' });
+  });
+
+  it('skips trade rows without a readable quantity', () => {
+    const csv = [tradesHeader, '05-11-2024,11:00,X,GB0000000003,LSE,XLON,,250.0000,GBX,-25.00,GBP,-29.10,0.8590,,-3.00,-32.17,,1'].join('\n');
+    expect(parseDegiroTradesCsv(csv)).toHaveLength(0);
+  });
+
+  it('takes balances only from the balance column', () => {
+    const csv = [
+      'Datum,Uhrzeit,Valutadatum,Produkt,ISIN,Beschreibung,FX,Änderung,,Saldo,,Order-ID',
+      '03-01-2024,10:00,03-01-2024,,,Einzahlung,,EUR,1000.00,EUR,1000.00,',
+      '03-01-2024,11:00,03-01-2024,,,Zinsen,,EUR,5.00,EUR,,'
+    ].join('\n');
+    expect(parseFlatexCashBalancesCsv(csv)).toEqual([{ currency: 'EUR', date: '2024-01-03', balance: 1000 }]);
+  });
+
+  it('keeps a reversed deposit negative (low 7)', () => {
+    const csv = [
+      'Datum,Uhrzeit,Valutadatum,Produkt,ISIN,Beschreibung,FX,Änderung,,Saldo,,Order-ID',
+      '03-01-2024,10:00,03-01-2024,,,Einzahlung,,EUR,-500.00,EUR,0.00,'
+    ].join('\n');
+    expect(parseDegiroAccountCsv(csv)[0]).toMatchObject({ amount: -500 });
+  });
+});

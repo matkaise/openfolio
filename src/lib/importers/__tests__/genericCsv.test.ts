@@ -101,3 +101,59 @@ describe('generic CSV import', () => {
     expect(second.summary).toMatchObject({ addedTransactions: 0, duplicateTransactions: 3 });
   });
 });
+
+describe('generic CSV numbers, dates and cash types (H18)', () => {
+  const build = (csv: string) => {
+    const { headers, rows } = parseGenericCsv(csv);
+    const { mapping, dateFormat } = guessCsvMapping(headers, rows, 'security');
+    return { ...buildGenericTransactions({ headers, rows, mapping, dateFormat, defaultCurrency: 'USD' }), dateFormat };
+  };
+
+  it('reads US dates and thousands separators per column', () => {
+    const { entries, dateFormat } = build([
+      'Date,ISIN,Name,Quantity,Price,Currency',
+      '01/25/2025,US0000000001,ACME,"1,000",12.5,USD',
+      '02/03/2025,US0000000001,ACME,"2,500","1,234.75",USD'
+    ].join('\n'));
+    expect(dateFormat).toBe('mdy');
+    expect(entries.map((e) => [e.date, e.quantity, e.amount])).toEqual([
+      ['2025-01-25', 1000, -12500],
+      ['2025-02-03', 2500, -3086875]
+    ]);
+  });
+
+  it('rejects a non-numeric price instead of booking a trade worth 0', () => {
+    const { entries, errors } = build('Date,ISIN,Quantity,Price\n2025-01-02,US0000000001,10,N/A');
+    expect(entries).toHaveLength(0);
+    expect(errors).toHaveLength(1);
+  });
+
+  it('keeps two identical rows as two trades', () => {
+    const { entries } = build('Date,ISIN,Quantity,Price\n2025-01-02,US0000000001,10,5\n2025-01-02,US0000000001,10,5');
+    const { summary } = applyImportBatch(createEmptyProject(), { ...emptyImportBatch('CSV'), entries }, { id: 'p', name: 'P', isNew: true });
+    expect(summary.addedTransactions).toBe(2);
+  });
+
+  it('classifies taxes and fees before deposits and dividends and keeps refunds positive', () => {
+    const csv = [
+      'Datum;Beschreibung;Betrag;Währung',
+      '02.01.2025;Dividendensteuer;-3,10;EUR',
+      '03.01.2025;Deposit Fee;-5,00;EUR',
+      '04.01.2025;Steuererstattung;25,00;EUR',
+      '05.01.2025;(Gebühr);(1,50);EUR',
+      '06.01.2025;Einzahlung;100,00;EUR',
+      '06.01.2025;Einzahlung;100,00;EUR'
+    ].join('\n');
+    const { headers, rows } = parseGenericCsv(csv);
+    const { mapping, dateFormat } = guessCsvMapping(headers, rows, 'cash');
+    const { entries } = buildGenericCashBalances({ headers, rows, mapping, dateFormat, defaultCurrency: 'EUR' });
+    expect(entries.map((e) => [e.kind, e.amount])).toEqual([
+      ['withholding_tax', -3.1], // a tax on dividends
+      ['fee', -5],
+      ['tax', 25],
+      ['fee', -1.5],
+      ['deposit', 100],
+      ['deposit', 100]
+    ]);
+  });
+});

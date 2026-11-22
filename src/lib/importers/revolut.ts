@@ -23,11 +23,12 @@ const currencyCode = (value: string) => (value.trim() === 'GBp' ? 'GBX' : value.
 
 /** "$1,500", "-$30.93", "€50", "USD 12.00", "12,50 €": the currency sign is dropped, a lone decimal comma accepted. */
 const parseMoney = (value: string): number => {
-    const raw = value.trim().replace(/^([-+]?)\s*(?:[$€£]|[A-Z]{3}\s)\s*/, '$1').replace(/\s*(?:[$€£]|\s[A-Z]{3})$/, '');
+    const raw = value.trim().replace(/^([-+]?)\s*(?:[$€£]|[A-Za-z]{3}\s)\s*/, '$1').replace(/\s*(?:[$€£]|\s[A-Za-z]{3})$/, '');
     if (!raw) return 0;
     const us = parseUsNumber(raw);
     if (Number.isFinite(us)) return us;
-    return /^[-+]?\d+,\d{1,2}$/.test(raw) ? Number(raw.replace(',', '.')) : Number.NaN;
+    // European notation: "1.500,25", "12,3456"
+    return /^[-+]?(?:\d{1,3}(?:\.\d{3})+|\d+),\d+$/.test(raw) ? Number(raw.replace(/\./g, '').replace(',', '.')) : Number.NaN;
 };
 
 /**

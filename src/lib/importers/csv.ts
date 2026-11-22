@@ -119,7 +119,10 @@ export const decimalSeparatorOf = (values: { raw: string; line: number }[]): { s
         if (comma < 0 && dot < 0) continue;
         let separator: DecimalSeparator | null;
         if (comma >= 0 && dot >= 0) separator = comma > dot ? ',' : '.';
-        else {
+        else if (value.indexOf(comma >= 0 ? ',' : '.') !== Math.max(comma, dot)) {
+            // The same separator twice ("1,000,000") groups thousands: the decimal is the other
+            separator = comma >= 0 ? '.' : ',';
+        } else {
             const position = Math.max(comma, dot);
             separator = value.length - position - 1 === 3 ? null : comma >= 0 ? ',' : '.';
         }
