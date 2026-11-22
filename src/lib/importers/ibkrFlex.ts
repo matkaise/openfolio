@@ -1,5 +1,5 @@
 import { statementEntry, tradeEntry, type StatementType } from './entries';
-import type { ImportRowNote } from './fileImport';
+import { batchPeriod, FileImportError, type FileImporter, type ImportRowNote } from './fileImport';
 import { emptyImportBatch, type ImportBatch } from './importBatch';
 
 // Interactive Brokers Activity Flex Query (XML). Bookings come from Trades, CashTransactions
@@ -347,6 +347,42 @@ export const parseIbkrFlexXml = (xml: string): FlexParseResult => {
         ignored,
         unsupported
     };
+};
+
+/** The same Flex XML as the Flex Web Service delivers, saved by hand from Client Portal. */
+export const ibkrFlexFileImporter: FileImporter = {
+    id: 'ibkr',
+    broker: 'Interactive Brokers',
+    formats: ['XML'],
+    accept: '.xml',
+    sources: [
+        { label: 'IBKR Guides: Activity Flex Query', url: 'https://www.ibkrguides.com/orgportal/performanceandstatements/activityflex.htm' },
+        { label: 'IBKR Guides: Run a Flex Query', url: 'https://www.ibkrguides.com/orgportal/performanceandstatements/runflex.htm' },
+        { label: 'IBKR Reporting Reference: Trades', url: 'https://www.ibkrguides.com/reportingreference/reportguide/tradesfq.htm' },
+        { label: 'Portfolio Performance: IBFlexStatementExtractor', url: 'https://github.com/portfolio-performance/portfolio/tree/de1e4645b68b76f33b577a187295c4f4304d0204/name.abuchen.portfolio/src/name/abuchen/portfolio/datatransfer/ibflex' }
+    ],
+    verified: '2026-10-30',
+    detect: (text) => {
+        const root = /<FlexQueryResponse\b([^>]*)>/.exec(text);
+        if (!root || !/<FlexStatement[\s>]/.test(text)) return null;
+        const type = /\btype="([^"]*)"/.exec(root[1])?.[1];
+        return !type || type === 'AF' ? 'activity' : null; // AF = Activity Flex, TCF = Trade Confirmation Flex
+    },
+    parse: (text) => {
+        const parsed = parseIbkrFlexXml(text);
+        if (parsed.accounts.length > 1) throw new FileImportError('severalAccounts');
+        return {
+            batch: parsed.batch,
+            report: {
+                importerId: 'ibkr',
+                variant: 'activity',
+                period: parsed.period ? { from: parsed.period.from, to: parsed.period.to } : batchPeriod(parsed.batch),
+                rows: parsed.rows,
+                ignored: parsed.ignored,
+                unsupported: parsed.unsupported
+            }
+        };
+    }
 };
 
 // --- Flex Web Service answers ---

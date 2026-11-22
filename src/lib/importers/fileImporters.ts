@@ -9,6 +9,7 @@ import { etoroFileImporter } from './etoro';
 import { finpensionFileImporter } from './finpension';
 import { flatexFileImporter } from './flatex';
 import { freetradeFileImporter } from './freetrade';
+import { ibkrFlexFileImporter } from './ibkrFlex';
 import { ingFileImporter } from './ing';
 import { investEngineFileImporter } from './investengine';
 import { revolutFileImporter } from './revolut';
@@ -42,6 +43,7 @@ import {
 /** Every broker file importer, in the order the import dialog lists them. */
 export const FILE_IMPORTERS: BrokerFileImporter[] = [
     degiroFileImporter,
+    ibkrFlexFileImporter,
     swissquoteFileImporter,
     tradeRepublicFileImporter,
     trading212FileImporter,

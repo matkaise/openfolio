@@ -46,8 +46,8 @@ const NoteList = ({ notes }: { notes: ImportRowNote[] }) => {
     const t = useT();
     return (
         <ul className="mt-1 space-y-0.5 text-xs md3-text-muted">
-            {notes.slice(0, NOTE_LIMIT).map((note) => (
-                <li key={`${note.file || ''}:${note.page || 0}:${note.line}`}>{t.fileImport.preview.note(note.line, note.label, note.file, note.page)}</li>
+            {notes.slice(0, NOTE_LIMIT).map((note, index) => (
+                <li key={`${note.file || ''}:${note.page || 0}:${note.line}:${index}`}>{t.fileImport.preview.note(note.line, note.label, note.file, note.page)}</li>
             ))}
             {notes.length > NOTE_LIMIT && <li>{t.fileImport.preview.more(notes.length - NOTE_LIMIT)}</li>}
         </ul>
