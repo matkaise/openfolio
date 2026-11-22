@@ -29,6 +29,15 @@ const routes = (overrides: Record<string, Response[]> = {}) => {
 };
 
 describe('fetchTrading212Data', () => {
+  it('ends at an empty next path and does not stop on items without a date (M11)', async () => {
+    const fetchImpl = routes({
+      '/api/v0/equity/history/orders?limit=50': [json({ items: [{ order: {} }], nextPagePath: '/api/v0/equity/history/orders?limit=50&cursor=1' })],
+      '/api/v0/equity/history/orders?limit=50&cursor=1': [json({ items: [{ fill: { filledAt: '2024-09-10T16:00:00Z' } }], nextPagePath: '' })]
+    });
+    const data = await fetchTrading212Data({ apiKey: KEY, apiSecret: SECRET, environment: 'demo' }, { fetchImpl, sleep: noSleep, since: '2024-06-01' });
+    expect(data.orders).toHaveLength(2);
+  });
+
   it('pages through all history endpoints with Basic auth', async () => {
     const fetchImpl = routes();
     const data = await fetchTrading212Data({ apiKey: KEY, apiSecret: SECRET, environment: 'demo' }, { fetchImpl, sleep: noSleep });

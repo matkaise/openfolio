@@ -27,4 +27,13 @@ describe('reconcilePositions', () => {
       { isin: 'DE0000000002', expected: 0, actual: 20 }
     ]);
   });
+
+  it('adds up an ISIN reported for several accounts (H16)', () => {
+    const split = positions.flatMap((p) => [{ ...p, quantity: p.quantity / 2 }, { ...p, quantity: p.quantity / 2 }]);
+    expect(reconcilePositions(project, 'ib', split)).toEqual([]);
+  });
+
+  it('compares nothing for a depot that no longer exists', () => {
+    expect(reconcilePositions(project, 'gone', [{ isin: 'US0000000001', quantity: 1 }])).toEqual([]);
+  });
 });

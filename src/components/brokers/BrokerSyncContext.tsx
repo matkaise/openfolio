@@ -28,7 +28,10 @@ import { parseComdirectData, type ComdirectData } from '@/lib/importers/comdirec
 import type { ComdirectChallenge } from '@/lib/brokers/comdirectClient';
 import { applyImportBatch, type ImportBatch, type ImportSummary } from '@/lib/importers/importBatch';
 import type { BrokerConnection, ProjectData } from '@/types/domain';
+import { createLogger } from '@/lib/logger';
 import { getT, LANGUAGE_HEADER, languageStore } from '@/lib/i18n';
+
+const log = createLogger('BrokerSync');
 
 export type ConnectionStatus =
     | { state: 'idle' }
@@ -42,6 +45,8 @@ export type ConnectionStatus =
     | { state: 'error'; message: string };
 
 export type PendingImport = {
+    /** Project the bookings were fetched for; never shown or imported in another one. */
+    projectId: string;
     connection: BrokerConnection;
     batch: ImportBatch;
     summary: ImportSummary;
@@ -78,7 +83,7 @@ const hasSecrets = (connection: BrokerConnection, secrets: ConnectionSecrets) =>
     }
 };
 
-export type TanRequest = { connection: BrokerConnection; flowId: string; challenge: ComdirectChallenge };
+export type TanRequest = { projectId: string; connection: BrokerConnection; flowId: string; challenge: ComdirectChallenge };
 
 interface BrokerSyncContextType {
     /** Folder access (DEGIRO watcher) is available in this browser. */
@@ -187,8 +192,13 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
     const isHydratingProject = useProjectStore((state) => state.isHydratingProject);
     const encryptionStatus = useProjectStore((state) => state.encryptionStatus);
     const [statuses, setStatuses] = useState<Record<string, ConnectionStatus>>({});
-    const [pending, setPending] = useState<PendingImport | null>(null);
-    const [tanRequest, setTanRequest] = useState<TanRequest | null>(null);
+    // Previews wait in line: two brokers checked at once must not overwrite each other
+    const [pendingQueue, setPendingQueue] = useState<PendingImport[]>([]);
+    const [storedTanRequest, setTanRequest] = useState<TanRequest | null>(null);
+    // Only what belongs to the open project counts; results of a closed one are ignored
+    const pending = pendingQueue.find((item) => item.projectId === project?.id) ?? null;
+    const tanRequest = storedTanRequest && storedTanRequest.projectId === project?.id ? storedTanRequest : null;
+    const tanRequestRef = useRef<TanRequest | null>(null);
     // Only rendered after a project is open (client side), so no hydration mismatch
     const [supported] = useState(() => supportsFolderAccess());
     const autoCheckedProjectRef = useRef<string | null>(null);
@@ -204,6 +214,14 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         projectRef.current = project;
     }, [project]);
+    useEffect(() => {
+        tanRequestRef.current = storedTanRequest;
+    }, [storedTanRequest]);
+
+    /** The open project, if it is still the one a check was started for. */
+    const projectFor = useCallback((projectId: string): ProjectData | null => (
+        projectRef.current?.id === projectId ? projectRef.current : null
+    ), []);
 
     const setStatus = useCallback((id: string, status: ConnectionStatus) => {
         setStatuses((prev) => ({ ...prev, [id]: status }));
@@ -228,11 +246,23 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             : [];
         const hasNew = applied.summary.addedTransactions + applied.summary.addedMovements > 0;
 
+        if (!hasNew && batch.cashBalances.length > 0) {
+            // Only account balances changed: take them over without a preview, so the file
+            // is not marked as read while its balances are dropped
+            updateProject((prev) => (prev.id !== current.id ? prev : importFromConnection(prev, connection, batch, source, now).project));
+            setStatus(connection.id, {
+                state: 'ok',
+                message: getT().brokers.sync.nothingNew(describeSummary(applied.summary)),
+                ...(warnings.length + notes.length > 0 ? { warnings: [...notes, ...warnings] } : {})
+            });
+            return;
+        }
+
         if (!hasNew) {
-            updateProject((prev) => updateBrokerConnection(prev, connection.id, {
+            updateProject((prev) => (prev.id !== current.id ? prev : updateBrokerConnection(prev, connection.id, {
                 lastCheckedAt: now,
                 ...(source.newestModified > (connection.lastFileModified || 0) ? { lastFileModified: source.newestModified } : {})
-            }));
+            })));
             setStatus(connection.id, {
                 state: 'ok',
                 message: source.files.length > 0 ? getT().brokers.sync.nothingNew(describeSummary(applied.summary)) : getT().brokers.sync.noNewExports,
@@ -242,7 +272,9 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         }
 
         setStatus(connection.id, { state: 'ok', message: getT().brokers.sync.found(describeSummary(applied.summary)) });
-        setPending({ connection, batch, summary: applied.summary, source, warnings, notes });
+        const item: PendingImport = { projectId: current.id, connection, batch, summary: applied.summary, source, warnings, notes };
+        // A newer check of the same connection replaces its older preview
+        setPendingQueue((queue) => [...queue.filter((other) => other.connection.id !== connection.id), item]);
     }, [setStatus, updateProject]);
 
     /**
@@ -252,6 +284,12 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
     const runCheck = useCallback(async (connection: BrokerConnection, interactive: boolean) => {
         const current = projectRef.current;
         if (!current) return;
+        const projectId = current.id;
+        // Results go only into the project the check was started for
+        const deliver = (...args: Parameters<typeof handleBatch> extends [ProjectData, ...infer Rest] ? Rest : never) => {
+            const latest = projectFor(projectId);
+            if (latest) handleBatch(latest, ...args);
+        };
         setStatus(connection.id, { state: 'checking' });
         try {
             if (connection.kind === 'comdirect') {
@@ -267,7 +305,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
                     return;
                 }
                 const parsed = parseTrading212Data(await fetchTrading212(secrets, connection.environment || 'live', sinceDate(connection.lastCheckedAt)));
-                handleBatch(projectRef.current || current, connection, parsed.batch, { files: ['Trading 212 API'], newestModified: 0 }, parsed.positions);
+                deliver(connection, parsed.batch, { files: ['Trading 212 API'], newestModified: 0 }, parsed.positions);
                 return;
             }
 
@@ -279,7 +317,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
                 }
                 const parsed = parseIbkrFlexXml(await fetchIbkrStatement(token, connection.queryId));
                 const label = parsed.period ? getT().brokers.sync.flexPeriod(parsed.period.from, parsed.period.to) : getT().brokers.sync.flexQueryShort;
-                handleBatch(projectRef.current || current, connection, parsed.batch, { files: [label], newestModified: 0 }, parsed.positions, flexReportNotes(parsed.unsupported));
+                deliver(connection, parsed.batch, { files: [label], newestModified: 0 }, parsed.positions, flexReportNotes(parsed.unsupported));
                 return;
             }
 
@@ -294,12 +332,12 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
             const scan = await scanDegiroFolder(handle, { modifiedAfter: connection.lastFileModified });
-            handleBatch(projectRef.current || current, connection, scan.batch, { files: scan.files, newestModified: scan.newestModified });
+            deliver(connection, scan.batch, { files: scan.files, newestModified: scan.newestModified });
         } catch (error) {
             const message = error instanceof Error ? error.message : getT().brokers.sync.unknownError;
             setStatus(connection.id, { state: 'error', message });
         }
-    }, [handleBatch, secretsOf, setStatus]);
+    }, [handleBatch, projectFor, secretsOf, setStatus]);
 
     // Check every connection once per opened project (after lazy data is loaded)
     useEffect(() => {
@@ -320,13 +358,25 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             autoCheckedProjectRef.current = null;
             sessionSecretsRef.current = {};
         }
+        // A login waiting for a TAN belongs to the project it was started in: end it on the server
+        const waiting = tanRequestRef.current;
+        if (waiting && waiting.projectId !== project?.id) {
+            tanRequestRef.current = null;
+            void comdirectRequest({ action: 'cancel', flowId: waiting.flowId }).catch(() => undefined);
+        }
     }, [project]);
+
+    const removePending = useCallback((item: PendingImport) => {
+        setPendingQueue((queue) => queue.filter((other) => other !== item));
+    }, []);
 
     const confirmPending = useCallback(() => {
         const current = projectRef.current;
-        if (!pending || !current) return;
+        if (!pending || !current || pending.projectId !== current.id) return;
         const now = new Date().toISOString();
-        const apply = (prev: ProjectData) => importFromConnection(prev, pending.connection, pending.batch, pending.source, now).project;
+        const apply = (prev: ProjectData) => (prev.id !== pending.projectId
+            ? prev
+            : importFromConnection(prev, pending.connection, pending.batch, pending.source, now).project);
         updateProject(apply);
         void syncMarket(true, { full: true });
         setStatus(pending.connection.id, {
@@ -334,8 +384,8 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             message: getT().brokers.sync.imported(describeSummary(pending.summary)),
             ...(pending.warnings.length + pending.notes.length > 0 ? { warnings: [...pending.notes, ...pending.warnings] } : {})
         });
-        setPending(null);
-    }, [pending, setStatus, syncMarket, updateProject]);
+        removePending(pending);
+    }, [pending, removePending, setStatus, syncMarket, updateProject]);
 
     const connectDegiroFolder = useCallback(async (target: PortfolioTarget) => {
         const handle = await pickFolder();
@@ -429,7 +479,9 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
                 username: secrets.username,
                 pin
             });
-            setTanRequest({ connection, flowId, challenge });
+            const projectId = projectRef.current?.id;
+            if (!projectId) return;
+            setTanRequest({ projectId, connection, flowId, challenge });
             setStatus(connection.id, { state: 'awaiting-tan' });
         } catch (error) {
             setStatus(connection.id, { state: 'error', message: error instanceof Error ? error.message : getT().brokers.sync.loginFailed });
@@ -444,13 +496,13 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
         try {
             const { data } = await comdirectRequest<{ data: ComdirectData }>({ action: 'complete', flowId: request.flowId, tan });
             const parsed = parseComdirectData(data);
-            const current = projectRef.current;
+            const current = projectFor(request.projectId);
             if (!current) return;
             handleBatch(current, request.connection, parsed.batch, { files: [getT().brokers.sync.depot(data.depot.depotDisplayId || '')], newestModified: 0 }, parsed.positions, parsed.warnings);
         } catch (error) {
             setStatus(request.connection.id, { state: 'error', message: error instanceof Error ? error.message : getT().brokers.sync.fetchFailedShort });
         }
-    }, [handleBatch, setStatus, tanRequest]);
+    }, [handleBatch, projectFor, setStatus, tanRequest]);
 
     const cancelTan = useCallback(() => {
         const request = tanRequest;
@@ -475,8 +527,13 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
     }, [canStoreTokens, runCheck, updateProject]);
 
     const removeConnection = useCallback(async (connection: BrokerConnection) => {
-        if (connection.kind === 'degiro-folder') await deleteFolderHandle(connection.id);
+        if (connection.kind === 'degiro-folder') {
+            // A failing browser store must not keep the connection in the project
+            await deleteFolderHandle(connection.id).catch((error: unknown) => log.warn('Could not delete the folder handle', error));
+        }
         delete sessionSecretsRef.current[connection.id];
+        setPendingQueue((queue) => queue.filter((item) => item.connection.id !== connection.id));
+        setTanRequest((request) => (request?.connection.id === connection.id ? null : request));
         updateProject((prev) => removeBrokerConnection(prev, connection.id));
         setStatuses((prev) => {
             const next = { ...prev };
@@ -505,7 +562,7 @@ export const BrokerSyncProvider = ({ children }: { children: ReactNode }) => {
             checkConnection,
             removeConnection,
             confirmPending,
-            dismissPending: () => setPending(null)
+            dismissPending: () => { if (pending) removePending(pending); }
         }}>
             {children}
         </BrokerSyncContext.Provider>

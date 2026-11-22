@@ -76,17 +76,22 @@ export const fetchTrading212Data = async (credentials: Credentials, deps: Deps =
     const paginate = async <T>(endpoint: string): Promise<T[]> => {
         const items: T[] = [];
         let path: string | null = `${endpoint}?limit=${PAGE_LIMIT}`;
+        const seenPaths = new Set<string>([path]);
         for (let page = 0; path && page < MAX_PAGES; page += 1) {
             if (page > 0) await sleep(PAGE_DELAY_MS);
             const body = await getJson(path) as { items?: T[]; nextPagePath?: string | null };
             const pageItems = body.items || [];
             items.push(...pageItems);
-            const next = body.nextPagePath ?? null;
+            // An empty path is the end of the list, like null
+            const next = body.nextPagePath || null;
             if (next !== null && !next.startsWith(`${endpoint}?`)) {
                 throw new Trading212Error(t.unexpectedPage, 0);
             }
-            const reachedSince = deps.since && pageItems.length > 0
-                && pageItems.every((item) => itemDate(item as Record<string, unknown>) < deps.since!);
+            if (next !== null && seenPaths.has(next)) break; // the API repeats itself: stop
+            if (next !== null) seenPaths.add(next);
+            // Items without a date say nothing about the period: they do not end the paging
+            const dated = pageItems.map((item) => itemDate(item as Record<string, unknown>)).filter(Boolean);
+            const reachedSince = deps.since && dated.length > 0 && dated.every((date) => date < deps.since!);
             path = reachedSince ? null : next;
         }
         return items;

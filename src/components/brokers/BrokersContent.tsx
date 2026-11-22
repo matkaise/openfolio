@@ -119,11 +119,10 @@ const CredentialsPrompt = ({ connection }: { connection: BrokerConnection }) => 
             className="ui-inline-panel"
             onSubmit={(e) => {
                 e.preventDefault();
-                provideSecrets(
-                    connection,
-                    isComdirect ? { clientId, clientSecret, username } : isT212 ? { apiKey, apiSecret } : { token },
-                    remember
-                );
+                const secrets = isComdirect ? { clientId, clientSecret, username } : isT212 ? { apiKey, apiSecret } : { token };
+                // Incomplete: keep what was typed instead of clearing some fields
+                if (Object.values(secrets).some((value) => !value.trim())) return;
+                provideSecrets(connection, secrets, remember);
                 setToken('');
                 setApiKey('');
                 setApiSecret('');
@@ -247,9 +246,10 @@ export const BrokersContent = () => {
         }
     };
 
-    const handleConnectIbkr = (e: React.FormEvent) => {
+    /** Returns whether the connection was created (the dialog stays open otherwise). */
+    const handleConnectIbkr = (e: React.FormEvent): boolean => {
         e.preventDefault();
-        if (!ibkrToken.trim() || !ibkrQueryId.trim()) return;
+        if (!ibkrToken.trim() || !ibkrQueryId.trim()) return false;
         connectIbkrFlex(resolveTarget(project, ibkrTarget, ibkrName, 'Interactive Brokers'), {
             token: ibkrToken,
             queryId: ibkrQueryId,
@@ -257,11 +257,12 @@ export const BrokersContent = () => {
         });
         setIbkrToken('');
         setIbkrQueryId('');
+        return true;
     };
 
-    const handleConnectT212 = (e: React.FormEvent) => {
+    const handleConnectT212 = (e: React.FormEvent): boolean => {
         e.preventDefault();
-        if (!t212Key.trim() || !t212Secret.trim()) return;
+        if (!t212Key.trim() || !t212Secret.trim()) return false;
         connectTrading212(resolveTarget(project, t212Target, t212Name, 'Trading 212'), {
             apiKey: t212Key,
             apiSecret: t212Secret,
@@ -270,11 +271,12 @@ export const BrokersContent = () => {
         });
         setT212Key('');
         setT212Secret('');
+        return true;
     };
 
-    const handleConnectComdirect = (e: React.FormEvent) => {
+    const handleConnectComdirect = (e: React.FormEvent): boolean => {
         e.preventDefault();
-        if (!cdClientId.trim() || !cdClientSecret.trim() || !/^\d{8}$/.test(cdUsername)) return;
+        if (!cdClientId.trim() || !cdClientSecret.trim() || !/^\d{8}$/.test(cdUsername)) return false;
         connectComdirect(resolveTarget(project, cdTarget, cdName, 'comdirect'), {
             clientId: cdClientId,
             clientSecret: cdClientSecret,
@@ -282,6 +284,7 @@ export const BrokersContent = () => {
             remember: cdRemember
         });
         setCdClientSecret('');
+        return true;
     };
 
     const closeConnect = () => {
@@ -397,7 +400,7 @@ export const BrokersContent = () => {
                     </>
                 )}
             >
-                <form id="connect-ibkr" className="ui-stack" onSubmit={(e) => { handleConnectIbkr(e); closeConnect(); }}>
+                <form id="connect-ibkr" className="ui-stack" onSubmit={(e) => { if (handleConnectIbkr(e)) closeConnect(); }}>
                     <p className="ui-modal-text">{t.brokers.ibkrText}</p>
                     <div className="ui-grid-2">
                         <TargetPicker project={project} targetId={ibkrTarget} setTargetId={setIbkrTarget} newName={ibkrName} setNewName={setIbkrName} />
@@ -432,7 +435,7 @@ export const BrokersContent = () => {
                     </>
                 )}
             >
-                <form id="connect-t212" className="ui-stack" onSubmit={(e) => { handleConnectT212(e); closeConnect(); }}>
+                <form id="connect-t212" className="ui-stack" onSubmit={(e) => { if (handleConnectT212(e)) closeConnect(); }}>
                     <p className="ui-modal-text">{t.brokers.t212Text}</p>
                     <div className="ui-grid-2">
                         <TargetPicker project={project} targetId={t212Target} setTargetId={setT212Target} newName={t212Name} setNewName={setT212Name} />
@@ -473,7 +476,7 @@ export const BrokersContent = () => {
                     </>
                 )}
             >
-                <form id="connect-comdirect" className="ui-stack" onSubmit={(e) => { handleConnectComdirect(e); closeConnect(); }}>
+                <form id="connect-comdirect" className="ui-stack" onSubmit={(e) => { if (handleConnectComdirect(e)) closeConnect(); }}>
                     <p className="ui-modal-text">{t.brokers.comdirectText}</p>
                     <div className="ui-grid-2">
                         <TargetPicker project={project} targetId={cdTarget} setTargetId={setCdTarget} newName={cdName} setNewName={setCdName} />

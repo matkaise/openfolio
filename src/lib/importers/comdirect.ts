@@ -71,6 +71,8 @@ const classifyAccountBooking = (category: string, text: string, value: number): 
         return /dividend|ertrag|aussch(ü|ue)ttung/i.test(text) ? 'Dividend' : 'Interest';
     }
     if (normalized.includes('gebühr') || normalized.includes('fee')) return 'Fee';
+    // Taxes (also the advance lump sum) are no withdrawals: they reduce the return
+    if (/steuer|\btax|vorabpauschale|kapitalertrag|solidarit/i.test(`${normalized} ${text}`)) return 'Tax';
     if (normalized.includes('devisen') || normalized.includes('currency')) return 'Transfer';
     if (normalized.includes('storno') || normalized.includes('cancellation') || normalized.includes('sonstig') || normalized.includes('misc')) return 'Adjustment';
     // Transfers, direct debits, cash, cards: money entering or leaving the account

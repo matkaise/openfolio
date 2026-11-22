@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isCrossSiteRequest, readJsonObject } from '@/lib/brokers/requestGuard';
 import { fetchTrading212Data, Trading212Error } from '@/lib/brokers/trading212Client';
 import { createLogger } from '@/lib/logger';
 import { LANGUAGE_HEADER, MESSAGES, parseLanguage } from '@/lib/i18n';
@@ -9,12 +10,9 @@ const log = createLogger('Trading 212');
 // forwarded to Trading 212 and are never logged or echoed back.
 export async function POST(req: NextRequest) {
     const t = MESSAGES[parseLanguage(req.headers.get(LANGUAGE_HEADER))];
-    let body: { apiKey?: unknown; apiSecret?: unknown; environment?: unknown; since?: unknown };
-    try {
-        body = await req.json();
-    } catch {
-        return NextResponse.json({ error: t.services.invalidRequest }, { status: 400 });
-    }
+    if (isCrossSiteRequest(req)) return NextResponse.json({ error: t.services.crossSite }, { status: 403 });
+    const body: { apiKey?: unknown; apiSecret?: unknown; environment?: unknown; since?: unknown } | null = await readJsonObject(req);
+    if (!body) return NextResponse.json({ error: t.services.invalidRequest }, { status: 400 });
 
     const since = typeof body.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.since) ? body.since : undefined;
     try {

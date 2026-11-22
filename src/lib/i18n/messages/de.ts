@@ -709,6 +709,7 @@ export const de = {
 
     services: {
         invalidRequest: 'Ungültige Anfrage.',
+        crossSite: 'Anfrage von einer fremden Seite abgelehnt.',
         fetchFailed: 'Abruf fehlgeschlagen.',
         unknownAction: 'Unbekannte Aktion.',
         loginExpired: 'Die Anmeldung ist abgelaufen. Bitte neu starten.',

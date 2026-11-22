@@ -44,13 +44,13 @@ export const PendingImportDialog = () => {
             {pending.notes.length > 0 && (
                 <div className="ui-notice is-warn">
                     <strong>{t.brokers.pending.notes}</strong>
-                    <ul>{pending.notes.map((note) => <li key={note}>{note}</li>)}</ul>
+                    <ul>{pending.notes.map((note, index) => <li key={`${index}-${note}`}>{note}</li>)}</ul>
                 </div>
             )}
             {pending.warnings.length > 0 && (
                 <div className="ui-notice is-warn">
                     <strong>{t.brokers.pending.holdingsDiffer}</strong>
-                    <ul>{pending.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+                    <ul>{pending.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul>
                     <span>{t.brokers.pending.holdingsHint}</span>
                 </div>
             )}

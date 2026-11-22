@@ -707,6 +707,7 @@ export const en: Messages = {
 
     services: {
         invalidRequest: 'Invalid request.',
+        crossSite: 'Request from another site refused.',
         fetchFailed: 'Fetch failed.',
         unknownAction: 'Unknown action.',
         loginExpired: 'The sign-in has expired. Please start again.',

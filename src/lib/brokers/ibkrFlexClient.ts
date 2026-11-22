@@ -49,7 +49,8 @@ export const fetchFlexStatement = async (
         } catch {
             throw new FlexServiceError(t.unreachable, 0, true);
         }
-        if (!res.ok) throw new FlexServiceError(t.http(res.status), res.status, res.status >= 500);
+        // Rate limits and server errors are worth another try later
+        if (!res.ok) throw new FlexServiceError(t.http(res.status), res.status, res.status === 429 || res.status >= 500);
         return res.text();
     };
 
@@ -60,9 +61,24 @@ export const fetchFlexStatement = async (
     let lastError: FlexServiceError | null = null;
     for (let attempt = 0; attempt < maxPolls; attempt += 1) {
         await sleep(POLL_DELAYS_MS[Math.min(attempt, POLL_DELAYS_MS.length - 1)]);
-        const body = await request(flexUrl('GetStatement', token, sent.referenceCode));
+        let body: string;
+        try {
+            body = await request(flexUrl('GetStatement', token, sent.referenceCode));
+        } catch (error) {
+            // One busy moment while polling is no reason to give up the whole request
+            if (error instanceof FlexServiceError && error.retryable) {
+                lastError = error;
+                continue;
+            }
+            throw error;
+        }
         const answer = parseFlexStatementResponse(body);
-        if (!answer) return body; // the statement itself
+        if (!answer) {
+            // The statement itself, not e.g. an HTML maintenance page answered with 200
+            if (/<FlexQueryResponse[\s>]/.test(body)) return body;
+            lastError = new FlexServiceError(t.unexpected, 0, true);
+            continue;
+        }
         if (answer.status === 'success') continue;
         lastError = new FlexServiceError(`IBKR: ${answer.message} (Code ${answer.code})`, answer.code, answer.retryable);
         if (!answer.retryable) throw lastError;
