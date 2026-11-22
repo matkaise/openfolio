@@ -37,7 +37,12 @@ export const SimpleAreaChart = ({
     tooltipLabel?: string,
     markers?: { date: string, label?: string, color?: string, type?: 'Buy' | 'Sell' }[]
 }) => {
-    const gradientId = `colorGradient-${React.useId().replace(/:/g, '')}`;
+    // Per-instance ids: hidden (preloaded) tabs keep their charts in the DOM, and a shared id
+    // would make every chart use the first chart's gradient.
+    const instanceId = React.useId().replace(/:/g, '');
+    const gradientId = `colorGradient-${instanceId}`;
+    const splitStrokeId = `splitStroke-${instanceId}`;
+    const splitFillId = `splitFill-${instanceId}`;
     const t = useT();
     const formatters = useFormatters();
 
@@ -95,11 +100,11 @@ export const SimpleAreaChart = ({
                             <stop offset="5%" stopColor={color} stopOpacity={0.3} />
                             <stop offset="95%" stopColor={color} stopOpacity={0} />
                         </linearGradient>
-                        <linearGradient id="splitStroke" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id={splitStrokeId} x1="0" y1="0" x2="0" y2="1">
                             <stop offset={off} stopColor="var(--gain)" stopOpacity={1} />
                             <stop offset={off} stopColor="var(--loss)" stopOpacity={1} />
                         </linearGradient>
-                        <linearGradient id="splitFill" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id={splitFillId} x1="0" y1="0" x2="0" y2="1">
                             <stop offset={off} stopColor="var(--gain)" stopOpacity={0.3} />
                             <stop offset={off} stopColor="var(--loss)" stopOpacity={0.3} />
                         </linearGradient>
@@ -132,12 +137,16 @@ export const SimpleAreaChart = ({
                             fontSize: '12px',
                             boxShadow: 'var(--shadow)'
                         }}
-                        itemStyle={{ color: isPercentage ? (Number(data[0]?.value) > 0 ? 'var(--gain)' : 'var(--loss)') : color }}
+                        itemStyle={{ color: isPercentage ? 'var(--text)' : color }}
                         labelStyle={{ color: 'var(--md3-on-surface-variant)' }}
                         formatter={(value: number | string | undefined) => {
                             if (value === undefined) return ['', ''];
+                            const numeric = Number(value);
                             return [
-                                isPercentage ? formatters.percent(Number(value), { sign: true }) : formatters.number(Number(value), 2),
+                                isPercentage
+                                    // Colour by the hovered value, not by the first point of the series
+                                    ? <span style={{ color: numeric >= 0 ? 'var(--gain)' : 'var(--loss)' }}>{formatters.percent(numeric, { sign: true })}</span>
+                                    : currency ? formatters.moneyIn(numeric, currency) : formatters.number(numeric, 2),
                                 isPercentage ? (tooltipLabel || t.charts.performance) : (tooltipLabel || t.charts.price)
                             ];
                         }}
@@ -150,11 +159,13 @@ export const SimpleAreaChart = ({
                     <Area
                         type="monotone"
                         dataKey="value"
-                        stroke={isPercentage ? "url(#splitStroke)" : color}
+                        stroke={isPercentage ? `url(#${splitStrokeId})` : color}
                         strokeWidth={2}
-                        fill={isPercentage ? "url(#splitFill)" : `url(#${gradientId})`}
+                        fill={isPercentage ? `url(#${splitFillId})` : `url(#${gradientId})`}
                     />
                     {markers.map((m, i) => {
+                        // Trades outside the shown range would pile up at its edge
+                        if (m.date < data[0].date || m.date > data[data.length - 1].date) return null;
                         const direct = data.find(d => d.date === m.date);
                         let point = direct;
 

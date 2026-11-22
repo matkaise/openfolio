@@ -61,7 +61,8 @@ export interface ProjectActions {
     closeProject: () => Promise<boolean>;
     updateProject: (updater: (prev: ProjectData) => ProjectData) => void;
     syncFx: () => Promise<void>;
-    syncMarket: (force?: boolean, options?: { full?: boolean; projectOverride?: ProjectData }) => Promise<void>;
+    /** Syncs the current project; call it after updateProject (the store updates synchronously). */
+    syncMarket: (force?: boolean, options?: { full?: boolean }) => Promise<void>;
     syncAll: (forceMarket?: boolean) => Promise<void>;
 }
 
@@ -450,8 +451,10 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [performSync, store]);
 
-    const syncMarket = useCallback(async (force: boolean = false, options?: { full?: boolean; projectOverride?: ProjectData }) => {
-        const target = options?.projectOverride || store.getState().project;
+    const syncMarket = useCallback(async (force: boolean = false, options?: { full?: boolean }) => {
+        // Always the store's state: a separately computed copy would hold other objects than the
+        // store, and applySecurityPatches would take its fresh fields for edits and drop the results.
+        const target = store.getState().project;
         if (target) {
             await performMarketSync(target, force, Boolean(options?.full));
         } else {

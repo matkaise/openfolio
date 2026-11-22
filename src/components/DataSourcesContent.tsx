@@ -192,7 +192,7 @@ export const DataSourcesContent = () => {
         };
 
         updateProject(applyTicker);
-        void syncMarket(true, { projectOverride: applyTicker(project) });
+        void syncMarket(true);
     };
 
     const handleIgnoreSecurity = (sec: Security) => {
@@ -329,7 +329,11 @@ export const DataSourcesContent = () => {
             <div className="ui-grid-2" style={{ alignItems: 'start' }}>
                 <GlassCard>
                     <CardHeader title={t.dataSources.ecbTitle}>
-                        {isSyncing ? <Pill tone="accent"><Loader2 size={12} className="animate-spin" />{t.dataSources.updating}</Pill> : <Pill tone="up"><CheckCircle size={12} />{t.dataSources.upToDate}</Pill>}
+                        {isSyncing
+                            ? <Pill tone="accent"><Loader2 size={12} className="animate-spin" />{t.dataSources.updating}</Pill>
+                            : project?.fxData.lastUpdated
+                                ? <Pill tone="up"><CheckCircle size={12} />{t.dataSources.upToDate}</Pill>
+                                : <Pill>{t.dataSources.never}</Pill>}
                     </CardHeader>
                     <p className="ui-text">{t.dataSources.ecbText}</p>
                     <div className="ui-status-row">

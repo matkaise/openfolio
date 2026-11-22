@@ -46,13 +46,13 @@ export const SecurityDetailModal = ({ isOpen, onClose, security, transactions, c
     // Prepare Markers
     const markers = useMemo(() => {
         return transactions
-            .filter(tx => tx.isin === security.isin && (tx.type === 'Buy' || tx.type === 'Sell'))
+            .filter(tx => tx.isin === security.isin && (tx.type === 'Buy' || tx.type === 'Sparplan_Buy' || tx.type === 'Sell'))
             .filter(tx => (normalizedCurrencyFilter ? (tx.currency || '').trim().toUpperCase() === normalizedCurrencyFilter : true))
             .map(tx => ({
                 date: tx.date.split('T')[0],
-                label: tx.type === 'Buy' ? t.security.buy : t.security.sell,
-                color: tx.type === 'Buy' ? 'var(--gain)' : 'var(--loss)',
-                type: tx.type as 'Buy' | 'Sell'
+                label: tx.type === 'Sell' ? t.security.sell : t.security.buy,
+                color: tx.type === 'Sell' ? 'var(--loss)' : 'var(--gain)',
+                type: (tx.type === 'Sell' ? 'Sell' : 'Buy') as 'Buy' | 'Sell'
             }));
     }, [transactions, security.isin, normalizedCurrencyFilter, t]);
 

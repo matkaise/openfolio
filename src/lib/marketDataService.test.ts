@@ -367,6 +367,22 @@ describe('patch-based market sync (B4)', () => {
     expect(merged.securities[isin].priceHistory?.['2025-01-11']).toBe(51);
   });
 
+  it('applies results to a security whose reset fields are other but equally empty objects', () => {
+    // A reset security (import, ticker change) gets fresh {} / [] on every run of its updater
+    const reset = (p: ProjectData): ProjectData => ({
+      ...p,
+      securities: { ...p.securities, [isin]: { ...p.securities[isin], priceHistory: {}, splits: {}, dividendHistory: [] } }
+    });
+    const before = reset(snapshot());
+    const current = reset(snapshot());
+    const merged = applySecurityPatches(current, {
+      [isin]: { priceHistory: { '2025-01-10': 50 }, splits: { '2025-01-05': 2 }, dividendHistory: [{ date: '2025-01-02', amount: 1 }] }
+    }, before.securities);
+    expect(merged.securities[isin].priceHistory).toEqual({ '2025-01-10': 50 });
+    expect(merged.securities[isin].splits).toEqual({ '2025-01-05': 2 });
+    expect(merged.securities[isin].dividendHistory).toHaveLength(1);
+  });
+
   it('drops patches for securities deleted during the sync', () => {
     const before = snapshot();
     const current = { ...before, securities: { [otherIsin]: before.securities[otherIsin] } };

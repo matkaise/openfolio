@@ -43,6 +43,8 @@ export const addTransactions = <P extends WithLedger>(project: P, transactions: 
     addEntries(project, transactions.map(entryFromTransaction))
 );
 
+const EDITABLE_FIELDS = ['savingsPlan', 'isin', 'name', 'quantity', 'fee', 'fxFee', 'feeCurrency', 'fxRate', 'portfolioId'] as const satisfies readonly (keyof LedgerEntry)[];
+
 /**
  * Applies an edited transaction to its entry. Fields the form does not show (source row,
  * order id, description) stay, and so does a withholding tax when the type is still "Tax".
@@ -60,7 +62,11 @@ export const updateTransaction = <P extends WithLedger>(project: P, updated: Tra
         ...(keepKind ? { kind: existing.kind } : {}),
         ...(edited.raw === undefined && existing.raw !== undefined ? { raw: existing.raw } : {})
     };
-    if (!edited.savingsPlan) delete next.savingsPlan;
+    // Fields the transaction owns: a value cleared in the form (fee reset to 0, quantity of a
+    // former buy, ...) must disappear instead of surviving from the old entry.
+    EDITABLE_FIELDS.forEach((key) => {
+        if (edited[key] === undefined) delete next[key];
+    });
     const copy = [...ledger];
     copy[index] = next;
     return withLedger(project, sortLedger(copy));
